@@ -37,9 +37,29 @@ add_custom_target(
   USES_TERMINAL
   VERBATIM)
 add_custom_target(
+  provision_selftest
+  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/provision.py" --selftest
+  DEPENDS discdump
+  USES_TERMINAL
+  VERBATIM)
+add_custom_target(
+  oracle_boot_check
+  COMMAND
+    "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/provision.py"
+    --discdump "$<TARGET_FILE:discdump>"
+  COMMAND "$<TARGET_FILE:oracle_spike>"
+  COMMAND
+    "${Python3_EXECUTABLE}" "${PSXPORT_DIR}/tools/oracle/crossvalidate_crt0.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
+    --build "${CMAKE_BINARY_DIR}/psxport_build"
+    --steps 400000
+  DEPENDS crt0_extract discdump oracle_spike oracle_trace
+  USES_TERMINAL
+  VERBATIM)
+add_custom_target(
   verify
   COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/psxport_sync.py" --check
   COMMAND "$<TARGET_FILE:psxport_smoke>"
-  DEPENDS cpp_policy psxport_smoke
+  DEPENDS cpp_policy provision_selftest psxport_smoke
   USES_TERMINAL
   VERBATIM)

@@ -14,18 +14,20 @@ names an honest remaining gap; `todo` is not started. No hacks are tracked.
 - notes: All disc-derived files remain gitignored. The target hash is over the complete 0x7E000-byte PS-X EXE, including its 0x800-byte header.
 
 ### CTR-02 — Provision the selected disc and executable reproducibly
-- status: todo
+- status: re-verified
 - deps: CTR-01
-- evidence: Not started.
-- where: future project-local provisioning tool; gitignored `.env` or root drop-in input
-- gap: Implement CLI argument > `PSXPORT_CTR_DISC` > `.env` > root-drop-in resolution, extract `SCUS_944.26` to `scratch/`, and verify its SHA-256 before any recompilation.
+- evidence: C002/I002. `tools/provision.py` resolved the real CTR USA CHD, extracted `SYSTEM.CNF` and `SCUS_944.26` transactionally, and verified the recorded 516096-byte size, SHA-256, PS-X EXE entry/load/text/stack fields. The hermetic selftest accepted a matching fixture and rejected a one-byte mutation and wrong `SYSTEM.CNF`; a real unrelated Spider-Man 2 CHD was also refused before replacing the valid output.
+- where: `tools/provision.py`; gitignored `scratch/raw/ctr/{SYSTEM.CNF,SCUS_944.26}`; CMake `provision_selftest` target
+- gap: None for reproducible executable provisioning. CTR-03 is now RE-ready; no boot or generated-substrate claim follows from provisioning alone.
+- notes: Resolution order is CLI > PSXPORT_CTR_DISC > PSXPORT_DISC > .env game/generic key > deterministic sorted root *.chd drop-in. An invalid higher-priority input refuses instead of silently falling through.
 
 ### CTR-03 — Bring up a deterministic psxport/oracle boot harness
-- status: todo
+- status: re-partial
 - deps: CTR-02
-- evidence: Not started; `ctr_scaffold` only links `psxport_smoke` and runs no CTR code.
-- where: future `game/core/`, generated substrate, and project-owned gate
-- gap: Build the first game seam and oracle driver, then prove the harness reports both an intentional agreement and an intentional disagreement on permanent fixtures.
+- evidence: C003/I003. The asset-gated `oracle_boot_check` re-provisioned the measured executable, ran the independent oracle's 22-check positive/negative/stepping/mirroring fixture, then executed the real CTR crt0 in the vendored Beetle/Mednafen CPU. The execution left mapped text at the InitHeap boundary after 92,378 steps and agreed with the independent symbolic decoder on 7 of 7 comparable fields.
+- where: CMake `oracle_boot_check`; framework `oracle_trace` and `crossvalidate_crt0.py`; gitignored boundary trace
+- gap: Emit the CTR resident substrate from the measured entry and add the port-side trace comparator. The current cross-check compares two independent readings of CTR's real crt0; it does not yet compare a PC port execution because no generated substrate or game seam exists.
+- notes: The asset-gated target is deliberately separate from normal verification. Its oracle fixture demonstrates both a clean executed program and a named hardware-stop answer before the real executable is accepted as evidence.
 
 ### CTR-04 — Recompile through the first real divergence
 - status: todo

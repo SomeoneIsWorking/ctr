@@ -19,20 +19,22 @@ The selected target is the supplied USA disc image (NTSC-U/C). Its `SYSTEM.CNF` 
 The framework's shipping crt0 decoder also measured a complete 8-of-8 boot group: BSS
 `[0x8008D668, 0x8009F6FC)`, GP `0x8008CF6C`, stack top `0x807FFFF8`, heap base `0x8009F6FC`, heap
 size `0x007588FC`, and libc initialiser `0x80080620`. These values are evidence for the future game
-seam; none is wired into shipping code yet.
+seam; none is wired into shipping game code yet. The independent Beetle/Mednafen CPU subsequently
+executed the real crt0 to its InitHeap boundary and agreed with the symbolic decoder on all seven
+comparable fields: GP, libc target, BIOS function, InitHeap `a0`, planned SP, planned `a0`, and planned
+`a1` heap size.
 
 ## Reproduce the measurement
 
-After the root README's Clang configure, set `CTR_DISC` to the untracked CHD, then run:
+After the root README's normal verifier has built the shipping `discdump`, run:
 
 ```sh
-CCACHE_DISABLE=1 cmake --build build --target discdump crt0_extract
-build/psxport_build/tools/discdump list "$CTR_DISC"
-build/psxport_build/tools/discdump get SYSTEM.CNF "$CTR_DISC" scratch/raw/ctr
-build/psxport_build/tools/discdump get SCUS_944.26 "$CTR_DISC" scratch/raw/ctr
-sha256sum scratch/raw/ctr/SCUS_944.26
-build/psxport_build/tools/crt0_extract scratch/raw/ctr/SCUS_944.26
+python3 tools/provision.py /path/to/CTR-USA.chd
 ```
 
-No disc-derived file belongs in git. This measurement does not establish that a CTR port boots or
-that a recompiled substrate exists.
+Omit the argument to use `PSXPORT_CTR_DISC`, `PSXPORT_DISC`, `.env`, or a root `*.chd` drop-in. The
+provisioner reproduces and verifies every executable field above plus the `SYSTEM.CNF` boot target.
+No disc-derived file belongs in git, and this does not establish that a CTR port boots.
+
+To reproduce the independent execution after configuring the Clang build, use the root README's
+`oracle_boot_check` target. It provisions and verifies this exact executable before the oracle runs.
