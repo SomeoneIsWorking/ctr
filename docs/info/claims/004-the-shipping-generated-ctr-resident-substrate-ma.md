@@ -5,7 +5,7 @@ status: holds
 created: 2026-08-21
 tags: ctr-04,recompiler,differential
 depends: CMakeLists.txt, game/core/crt0_port_trace.cpp, tools/compare_crt0_trace.py, tools/emit_substrate.py
-verified_at: 2026-08-21 03:40:57
+verified_at: 2026-08-21 11:21:05
 reconfirmed: 2026-08-21
 ---
 
@@ -34,3 +34,7 @@ the forced opposite is accepted as agreement; or malformed input/non-entry targe
 ## Re-confirmed 2026-08-21
 
 Post-landing ctr04_check passed oracle-versus-generated 34/34 fields at 0x80080620; forced gp=0 produced the required named 33/34 disagreement.
+
+## Re-confirmed 2026-08-21
+
+Post-landing Clang build and ctr04_check preserved generated-versus-oracle 34/34 with forced 33/34.

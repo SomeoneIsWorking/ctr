@@ -6,7 +6,7 @@ created: 2026-08-20
 tags: target,executable,ctr-01
 depends: titles/ctr/README.md
 reconfirmed: 2026-08-21
-verified_at: 2026-08-21 03:40:57
+verified_at: 2026-08-21 11:21:05
 ---
 
 ## Claim
@@ -24,3 +24,7 @@ A fresh extraction from the selected USA disc changes SYSTEM.CNF, size, SHA-256,
 ## Re-confirmed 2026-08-21
 
 Post-landing real USA provisioning selected SCUS_944.26 and re-verified the recorded SHA-256 and PS-X EXE identity.
+
+## Re-confirmed 2026-08-21
+
+Post-landing verify reprovisioned the selected USA executable and passed the complete identity manifest on psxport 9f1bb927.

@@ -6,7 +6,7 @@ created: 2026-08-21
 tags: ctr-03,oracle,boot
 depends: CMakeLists.txt, tools/provision.py
 reconfirmed: 2026-08-21
-verified_at: 2026-08-21 03:40:57
+verified_at: 2026-08-21 11:21:05
 ---
 
 ## Claim
@@ -37,3 +37,7 @@ agreed with the oracle on 34/34 register/PC fields.
 ## Re-confirmed 2026-08-21
 
 Post-landing oracle_boot_check passed the 22/22 oracle fixture and real CTR crt0 symbolic-versus-executed comparison 7/7 at the InitHeap boundary.
+
+## Re-confirmed 2026-08-21
+
+Post-landing oracle boot gate preserved the deterministic pre-BIOS 34/34 boundary and explicit InitHeap continuation.
