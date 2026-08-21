@@ -5,7 +5,8 @@ status: holds
 created: 2026-08-21
 tags: ctr-04,recompiler,differential
 depends: CMakeLists.txt, game/core/crt0_port_trace.cpp, tools/compare_crt0_trace.py, tools/emit_substrate.py
-verified_at: 2026-08-21
+verified_at: 2026-08-21 03:40:57
+reconfirmed: 2026-08-21
 ---
 
 ## Claim
@@ -29,3 +30,7 @@ and the tracer refused a target absent from the generated registry. The emitter 
 The executable identity, shipping emitter, seed manifest, generated tracer, framework loader, oracle,
 or comparison code changes and the complete real-disc gate is not rerun; any one of 34 fields differs;
 the forced opposite is accepted as agreement; or malformed input/non-entry targets cease to refuse.
+
+## Re-confirmed 2026-08-21
+
+Post-landing ctr04_check passed oracle-versus-generated 34/34 fields at 0x80080620; forced gp=0 produced the required named 33/34 disagreement.

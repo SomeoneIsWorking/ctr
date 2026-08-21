@@ -5,6 +5,8 @@ status: holds
 created: 2026-08-20
 tags: target,executable,ctr-01
 depends: titles/ctr/README.md
+reconfirmed: 2026-08-21
+verified_at: 2026-08-21 03:40:57
 ---
 
 ## Claim
@@ -18,3 +20,7 @@ SYSTEM.CNF extracted from the provisioned disc names cdrom:\SCUS_944.26;1; discd
 ## What would falsify it
 
 A fresh extraction from the selected USA disc changes SYSTEM.CNF, size, SHA-256, pc0, t_addr, or t_size, or proves this image is not the intended retail region.
+
+## Re-confirmed 2026-08-21
+
+Post-landing real USA provisioning selected SCUS_944.26 and re-verified the recorded SHA-256 and PS-X EXE identity.
