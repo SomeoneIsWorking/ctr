@@ -6,7 +6,7 @@ created: 2026-08-20
 tags: target,executable,ctr-01
 depends: titles/ctr/README.md
 reconfirmed: 2026-08-21
-verified_at: 2026-08-21 11:21:05
+verified_at: 2026-08-21 13:12:20
 ---
 
 ## Claim
@@ -28,3 +28,7 @@ Post-landing real USA provisioning selected SCUS_944.26 and re-verified the reco
 ## Re-confirmed 2026-08-21
 
 Post-landing verify reprovisioned the selected USA executable and passed the complete identity manifest on psxport 9f1bb927.
+
+## Re-confirmed 2026-08-21
+
+Post-landing ce2c83ad asset gate reprovisioned the real USA executable and revalidated the complete identity contract.

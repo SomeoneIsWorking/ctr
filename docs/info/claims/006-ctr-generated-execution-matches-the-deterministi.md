@@ -6,7 +6,7 @@ created: 2026-08-21
 tags:
 depends: tools/resident_replay.py#build_replay, tools/compare_crt0_trace.py#main, game/core/crt0_port_trace.cpp#restoreResidentState, CMakeLists.txt
 reconfirmed: 2026-08-21
-verified_at: 2026-08-21 13:11:03
+verified_at: 2026-08-21 13:12:21
 ---
 
 ## Claim
@@ -32,3 +32,7 @@ refusal, `cpp_policy` passed format/size/clang-tidy 1/1, and normal `verify` pas
 ## Re-confirmed 2026-08-21
 
 Re-verified after framework deterministic CD pacing landed at exact ce2c83ad: two original oracle runs and two canonical --capture-call 1 replay runs remained deterministic; generated execution agreed 34/34 at 0x800779E4 with ra=0x8003C5B0; forced resident.gp=0 produced 33/34; replay selftest passed 11/11; cpp_policy passed format/size/clang-tidy 1/1; normal verify confirmed the build and recorded pin are ce2c83ad.
+
+## Re-confirmed 2026-08-21
+
+Post-landing bounded resident replay selftest passed 11/11 and real generated/oracle execution agreed 34/34 at 0x800779E4; forced resident gp reported 33/34.
