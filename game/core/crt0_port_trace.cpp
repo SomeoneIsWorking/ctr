@@ -47,6 +47,9 @@ struct Boundary {
 struct BoundaryReached final {};
 
 Boundary *g_boundary = nullptr;
+Boundary *g_preModel = nullptr;
+Boundary *g_modeledReturn = nullptr;
+bool g_modeledReturnReached = false;
 
 uint32_t readLe32(const std::array<uint8_t, kExeHeaderSize> &header, std::size_t offset) {
   return static_cast<uint32_t>(header[offset]) | (static_cast<uint32_t>(header[offset + 1]) << 8U) |
@@ -103,38 +106,77 @@ bool parseAddress(std::string_view text, uint32_t &value) {
   return result.ec == std::errc{} && result.ptr == text.data() + text.size();
 }
 
+void captureCore(Core *core, Boundary &boundary) {
+  std::copy(std::begin(core->r), std::end(core->r), boundary.registers.begin());
+  boundary.pc = core->pc;
+  boundary.lo = core->lo;
+  boundary.hi = core->hi;
+}
+
 void captureBoundary(Core *core) {
   if (g_boundary == nullptr) {
     std::fprintf(stderr, "ctr_crt0_port_trace: REFUSING — boundary override fired while capture was not armed.\n");
     std::abort();
   }
-  std::copy(std::begin(core->r), std::end(core->r), g_boundary->registers.begin());
-  g_boundary->pc = core->pc;
-  g_boundary->lo = core->lo;
-  g_boundary->hi = core->hi;
+  captureCore(core, *g_boundary);
   throw BoundaryReached{};
 }
 
-void printBoundary(uint32_t target, const Boundary &boundary) {
-  std::printf("# PORT-CAPTURED-CALL target=0x%08X ra=0x%08X\n", target, boundary.registers[31]);
-  std::printf("# PORT-CALL-BOUNDARY-REGS pc=0x%08X\n", boundary.pc);
-  for (std::size_t index = 1; index < boundary.registers.size(); ++index) {
-    std::printf("# PORT-CALL-BOUNDARY-REG %s=0x%08X\n", kRegisterNames[index], boundary.registers[index]);
+void modelInitHeapReturn(Core *core) {
+  if (g_preModel == nullptr || g_modeledReturn == nullptr || g_modeledReturnReached) {
+    std::fprintf(stderr, "ctr_crt0_port_trace: REFUSING — InitHeap model fired outside its one-shot boundary.\n");
+    std::abort();
   }
-  std::printf("# PORT-CALL-BOUNDARY-REG lo=0x%08X\n", boundary.lo);
-  std::printf("# PORT-CALL-BOUNDARY-REG hi=0x%08X\n", boundary.hi);
+
+  captureCore(core, *g_preModel);
+
+  // CTR's independently observed three-instruction thunk selects A(39h):
+  //   addiu t2,zero,0xA0; jr t2; addiu t1,zero,0x39
+  // The shipping framework's explicit leaf contract sets v0=0 and preserves v1. This consumer-owned
+  // policy corresponds to oracle_trace's modeled return; it is not a claim that vector code executed.
+  core->r[10] = 0xA0u;
+  core->r[9] = 0x39u;
+  core->r[2] = 0;
+  core->pc = core->r[31];
+  captureCore(core, *g_modeledReturn);
+  g_modeledReturnReached = true;
+}
+
+void printRegisterBlock(const char *tag, const Boundary &boundary) {
+  std::printf("# %s-REGS pc=0x%08X\n", tag, boundary.pc);
+  for (std::size_t index = 1; index < boundary.registers.size(); ++index) {
+    std::printf("# %s-REG %s=0x%08X\n", tag, kRegisterNames[index], boundary.registers[index]);
+  }
+  std::printf("# %s-REG lo=0x%08X\n", tag, boundary.lo);
+  std::printf("# %s-REG hi=0x%08X\n", tag, boundary.hi);
+}
+
+void printTaggedBoundary(const char *captureTag, const char *registerTag, uint32_t target, const Boundary &boundary) {
+  std::printf("# %s target=0x%08X ra=0x%08X\n", captureTag, target, boundary.registers[31]);
+  printRegisterBlock(registerTag, boundary);
+}
+
+void printBoundary(uint32_t target, const Boundary &boundary) {
+  printTaggedBoundary("PORT-CAPTURED-CALL", "PORT-CALL-BOUNDARY", target, boundary);
 }
 
 } // namespace
 
 int main(int argc, char **argv) {
-  if (argc != 4 || std::string_view(argv[2]) != "--target") {
-    std::fprintf(stderr, "usage: ctr_crt0_port_trace <PS-X EXE> --target 0xADDR\n");
+  const bool firstBoundaryOnly = argc == 4 && std::string_view(argv[2]) == "--target";
+  const bool postInitHeap = argc == 7 && std::string_view(argv[2]) == "--target" &&
+                            std::string_view(argv[4]) == "--model-init-heap-return" &&
+                            std::string_view(argv[5]) == "--post-target";
+  if (!firstBoundaryOnly && !postInitHeap) {
+    std::fprintf(stderr,
+                 "usage: ctr_crt0_port_trace <PS-X EXE> --target 0xADDR "
+                 "[--model-init-heap-return --post-target 0xADDR]\n");
     return 2;
   }
 
   ExeLayout layout{};
   uint32_t target = 0;
+  uint32_t postTarget = 0;
   if (!readLayout(argv[1], layout)) {
     return 2;
   }
@@ -142,20 +184,36 @@ int main(int argc, char **argv) {
     std::fprintf(stderr, "ctr_crt0_port_trace: REFUSING — invalid nonzero hexadecimal call target.\n");
     return 2;
   }
-  if (rec_func_index(layout.entry) < 0 || rec_func_index(target) < 0) {
+  if (postInitHeap && (!parseAddress(argv[6], postTarget) || postTarget == 0 || postTarget == target)) {
+    std::fprintf(stderr, "ctr_crt0_port_trace: REFUSING — invalid distinct hexadecimal post-return target.\n");
+    return 2;
+  }
+  if (rec_func_index(layout.entry) < 0 || rec_func_index(target) < 0 ||
+      (postInitHeap && rec_func_index(postTarget) < 0)) {
     std::fprintf(stderr,
-                 "ctr_crt0_port_trace: REFUSING — entry 0x%08X and observed target 0x%08X must both exist in the "
-                 "shipping generated registry.\n",
+                 "ctr_crt0_port_trace: REFUSING — entry 0x%08X, observed target 0x%08X, and any post-return "
+                 "target 0x%08X must exist in the shipping generated registry.\n",
                  layout.entry,
-                 target);
+                 target,
+                 postTarget);
     return 2;
   }
 
   auto core = std::make_unique<Core>();
   load_exe(argv[1], core.get());
   Boundary boundary{};
+  Boundary preModel{};
+  Boundary modeledReturn{};
   g_boundary = &boundary;
-  shard_set_override(target, captureBoundary);
+  if (postInitHeap) {
+    g_preModel = &preModel;
+    g_modeledReturn = &modeledReturn;
+    g_modeledReturnReached = false;
+    shard_set_override(target, modelInitHeapReturn);
+    shard_set_override(postTarget, captureBoundary);
+  } else {
+    shard_set_override(target, captureBoundary);
+  }
   bool reached = false;
   try {
     main_dispatch(core.get(), layout.entry);
@@ -163,14 +221,31 @@ int main(int argc, char **argv) {
     reached = true;
   }
   shard_set_override(target, nullptr);
+  if (postInitHeap) {
+    shard_set_override(postTarget, nullptr);
+  }
   g_boundary = nullptr;
+  g_preModel = nullptr;
+  g_modeledReturn = nullptr;
 
-  if (!reached || boundary.pc != target) {
+  const uint32_t expectedBoundary = postInitHeap ? postTarget : target;
+  if (!reached || boundary.pc != expectedBoundary || (postInitHeap && !g_modeledReturnReached)) {
     std::fprintf(stderr,
                  "ctr_crt0_port_trace: REFUSING — generated execution did not reach the independently observed "
-                 "first-call boundary.\n");
+                 "%s boundary.\n",
+                 postInitHeap ? "modeled return and subsequent call" : "first-call");
     return 2;
   }
-  printBoundary(target, boundary);
+  if (firstBoundaryOnly) {
+    printBoundary(target, boundary);
+  } else {
+    printBoundary(target, preModel);
+    std::printf("# PORT-MODELED-BIOS-RETURN table=A function=0x39 target=0x000000A0 ra=0x%08X "
+                "v0=0x00000000 v1=0x%08X\n",
+                modeledReturn.registers[31],
+                modeledReturn.registers[3]);
+    printRegisterBlock("PORT-MODELED-RETURN", modeledReturn);
+    printTaggedBoundary("PORT-POST-RETURN-CAPTURED-CALL", "PORT-POST-RETURN-CALL-BOUNDARY", postTarget, boundary);
+  }
   return 0;
 }

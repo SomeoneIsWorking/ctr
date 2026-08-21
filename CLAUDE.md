@@ -15,6 +15,7 @@ reading game state; do not reconstruct pictures from GTE/OT/GP0 output. Establis
 measurable base before enhancements.
 
 CTR-04 owns one narrow game module: `game/core/crt0_port_trace.cpp` executes the gitignored shipping
-substrate only to the oracle-observed first-call boundary. `tools/emit_substrate.py` is the
-identity-gated emitter entry point and `tools/compare_crt0_trace.py` owns the cross-process diff.
-Neither is a game loop or permission to guess later addresses.
+substrate through the oracle-observed first call, an explicit consumer-owned A(39h) InitHeap return,
+and the first subsequent call. `tools/emit_substrate.py` is the identity-gated emitter entry point and
+`tools/compare_crt0_trace.py` owns the repeat-oracle cross-process diff. Neither is a game loop or
+permission to guess later addresses; the modeled external leaf is separate from generated game code.

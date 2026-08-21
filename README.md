@@ -5,9 +5,9 @@ PC-native PlayStation port of Crash Team Racing, built on
 
 Current status: the USA target executable is measured, its reproducible provisioner is verified on
 real media, and an independent Beetle/Mednafen CPU has executed and cross-checked its crt0. The
-shipping recompiler now emits the gitignored resident substrate, and the first port-side comparator
-agrees with the oracle on all 34 call-boundary fields. There is still no game seam or port boot, and
-no hardware-dependent execution or enhancement is claimed.
+shipping recompiler emits the gitignored resident substrate; the pre-BIOS boundary agrees on 34/34
+fields, and an explicit A(39h) return continuation agrees through the next call on 108/108 fields.
+There is still no game seam or port boot, and no broader hardware-dependent execution is claimed.
 
 ## Configure the framework scaffold
 
@@ -62,12 +62,20 @@ CCACHE_DISABLE=1 cmake -S . -B build \
   -DCMAKE_CXX_COMPILER=/usr/bin/clang++
 PSXPORT_CTR_DISC=/path/to/CTR-USA.chd \
   CCACHE_DISABLE=1 cmake --build build --target ctr04_check
+PSXPORT_CTR_DISC=/path/to/CTR-USA.chd \
+  CCACHE_DISABLE=1 cmake --build build --target ctr04_post_init_heap_check
 ```
 
 `ctr04_check` re-provisions the executable, executes the oracle to its first call, supplies that
 observed target to the generated registry, and compares the PC plus all 31 mutable GPRs and `lo`/`hi`.
 It then forces one captured `gp` value to the opposite answer and requires a named disagreement. The
 generated trace executable also refuses a target absent from the generated registry.
+
+`ctr04_post_init_heap_check` depends on that pre-BIOS proof, then runs the independent oracle twice,
+requires identical step/state evidence, applies only the framework's explicit A(39h) `v0=0` leaf contract, and compares the initial
+call, modeled return, and first subsequent call against generated execution. The real CTR image agrees
+on 108/108 fields at post-return call `0x8003C58C`; the opposite-answer pass forces `post.gp=0` and
+requires the named 107/108 disagreement.
 
 ## Cross-check the first boot window in the independent oracle
 
@@ -88,6 +96,5 @@ media.
 launch Crash Team Racing. See `titles/ctr/README.md` for the measured target and
 `docs/re-frontier.md` for the ordered work required before a boot claim is possible.
 
-Disc images and extracted executables are never committed. The remaining boot frontier is a
-generated CTR substrate compared against this independent trace; executing crt0 in the oracle does
-not claim that the PC port boots.
+Disc images and extracted executables are never committed. The remaining boot frontier begins inside
+the post-InitHeap callee `0x8003C58C`; this bounded continuation does not claim that the PC port boots.

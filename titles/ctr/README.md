@@ -24,7 +24,10 @@ executed the real crt0 to its InitHeap boundary and agreed with the symbolic dec
 comparable fields: GP, libc target, BIOS function, InitHeap `a0`, planned SP, planned `a0`, and planned
 `a1` heap size. The shipping generated substrate subsequently executed the header entry to that same
 first-call boundary and agreed with the oracle on the boundary PC, all 31 mutable GPRs, and `lo`/`hi`
-(34/34 fields). This remains a pre-BIOS boundary result, not a port boot.
+(34/34 fields). The next gate preserves that proof, independently repeats the oracle twice, explicitly
+models the observed A(39h) return, and reaches the first subsequent call at `0x8003C58C`; the initial,
+modeled-return, and post-return states agree with generated execution on 108/108 fields. This remains a
+bounded crt0 continuation, not a port boot.
 
 ## Reproduce the measurement
 

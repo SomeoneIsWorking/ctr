@@ -92,6 +92,31 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generated/rec_sources.cmake")
     DEPENDS ctr_crt0_port_trace discdump oracle_trace
     USES_TERMINAL
     VERBATIM)
+
+  # This gate deliberately depends on ctr04_check: the pre-BIOS 34-field proof remains a separate
+  # prerequisite, then this continuation models only the external A(39h) leaf and advances both CPUs
+  # to the first subsequent call. The comparator runs the true oracle twice before trusting it.
+  add_custom_target(
+    ctr04_post_init_heap_check
+    COMMAND
+      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
+      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
+      --oracle-trace "$<TARGET_FILE:oracle_trace>"
+      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
+      --steps 400000
+      --post-init-heap
+    COMMAND
+      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
+      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
+      --oracle-trace "$<TARGET_FILE:oracle_trace>"
+      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
+      --steps 400000
+      --post-init-heap
+      --force-port-field post:gp=0
+      --expect-difference
+    DEPENDS ctr04_check ctr_crt0_port_trace oracle_trace
+    USES_TERMINAL
+    VERBATIM)
 else()
   message(STATUS
     "CTR-04 generated trace target is unavailable: emit generated/ from the verified USA executable "
