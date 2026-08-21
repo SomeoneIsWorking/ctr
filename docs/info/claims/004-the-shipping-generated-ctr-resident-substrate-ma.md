@@ -5,7 +5,7 @@ status: holds
 created: 2026-08-21
 tags: ctr-04,recompiler,differential
 depends: CMakeLists.txt, game/core/crt0_port_trace.cpp, tools/compare_crt0_trace.py, tools/emit_substrate.py
-verified_at: 2026-08-21 11:21:05
+verified_at: 2026-08-21 13:11:01
 reconfirmed: 2026-08-21
 ---
 
@@ -38,3 +38,7 @@ Post-landing ctr04_check passed oracle-versus-generated 34/34 fields at 0x800806
 ## Re-confirmed 2026-08-21
 
 Post-landing Clang build and ctr04_check preserved generated-versus-oracle 34/34 with forced 33/34.
+
+## Re-confirmed 2026-08-21
+
+Re-verified after framework deterministic CD pacing landed at exact ce2c83ad: Clang 22.1.8 rebuilt the shipping generated trace substrate; ctr04_check re-provisioned the identity-bound USA executable, preserved 34/34 oracle/generated first-call agreement, and the forced gp=0 control produced exactly one named disagreement at 33/34.

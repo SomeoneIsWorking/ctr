@@ -27,7 +27,9 @@ first-call boundary and agreed with the oracle on the boundary PC, all 31 mutabl
 (34/34 fields). The next gate preserves that proof, independently repeats the oracle twice, explicitly
 models the observed A(39h) return, and reaches the first subsequent call at `0x8003C58C`; the initial,
 modeled-return, and post-return states agree with generated execution on 108/108 fields. This remains a
-bounded crt0 continuation, not a port boot.
+bounded crt0 continuation, not a port boot. Independent disassembly then proved the exact first
+resident prefix has no RAM reads before its call. The canonical oracle and generated execution agree
+there on 34/34 fields at `0x800779E4` (`ra=0x8003C5B0`), with a 33/34 forced-opposite control.
 
 ## Reproduce the measurement
 

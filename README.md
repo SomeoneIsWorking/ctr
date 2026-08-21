@@ -6,8 +6,9 @@ PC-native PlayStation port of Crash Team Racing, built on
 Current status: the USA target executable is measured, its reproducible provisioner is verified on
 real media, and an independent Beetle/Mednafen CPU has executed and cross-checked its crt0. The
 shipping recompiler emits the gitignored resident substrate; the pre-BIOS boundary agrees on 34/34
-fields, and an explicit A(39h) return continuation agrees through the next call on 108/108 fields.
-There is still no game seam or port boot, and no broader hardware-dependent execution is claimed.
+fields, an explicit A(39h) return continuation agrees through the next call on 108/108 fields, and
+the first resident function prefix agrees at its call to `0x800779E4` on 34/34 fields. There is still
+no game seam or port boot, and no broader hardware-dependent execution is claimed.
 
 ## Configure the framework scaffold
 
@@ -64,6 +65,8 @@ PSXPORT_CTR_DISC=/path/to/CTR-USA.chd \
   CCACHE_DISABLE=1 cmake --build build --target ctr04_check
 PSXPORT_CTR_DISC=/path/to/CTR-USA.chd \
   CCACHE_DISABLE=1 cmake --build build --target ctr04_post_init_heap_check
+PSXPORT_CTR_DISC=/path/to/CTR-USA.chd \
+  CCACHE_DISABLE=1 cmake --build build --target ctr04_resident_next_call_check
 ```
 
 `ctr04_check` re-provisions the executable, executes the oracle to its first call, supplies that
@@ -76,6 +79,15 @@ requires identical step/state evidence, applies only the framework's explicit A(
 call, modeled return, and first subsequent call against generated execution. The real CTR image agrees
 on 108/108 fields at post-return call `0x8003C58C`; the opposite-answer pass forces `post.gp=0` and
 requires the named 107/108 disagreement.
+
+`ctr04_resident_next_call_check` proves the next, deliberately narrow window. Independent Ghidra
+disassembly established that `0x8003C58C..0x8003C5AC` has no RAM reads before its first call, only
+register arithmetic and stack stores. The replay builder refuses unless those exact original bytes
+still match, restores the complete true-oracle register state in an original aligned zero run, and
+uses canonical `oracle_trace --capture-call 1`—not a CTR call parser—to discover `0x800779E4`. Two
+oracle replays are identical and generated execution agrees on all 34 boundary fields; forced
+`resident.gp=0` is detected as 33/34. The proof ends at that call because later code may read RAM
+whose post-crt0 contents have not been replayed.
 
 ## Cross-check the first boot window in the independent oracle
 
@@ -96,5 +108,5 @@ media.
 launch Crash Team Racing. See `titles/ctr/README.md` for the measured target and
 `docs/re-frontier.md` for the ordered work required before a boot claim is possible.
 
-Disc images and extracted executables are never committed. The remaining boot frontier begins inside
-the post-InitHeap callee `0x8003C58C`; this bounded continuation does not claim that the PC port boots.
+Disc images and extracted executables are never committed. The remaining boot frontier begins in
+callee `0x800779E4`; this bounded continuation does not claim that the PC port boots.

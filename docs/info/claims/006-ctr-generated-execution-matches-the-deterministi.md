@@ -1,0 +1,34 @@
+---
+id: C006
+kind: claim
+status: holds
+created: 2026-08-21
+tags:
+depends: tools/resident_replay.py#build_replay, tools/compare_crt0_trace.py#main, game/core/crt0_port_trace.cpp#restoreResidentState, CMakeLists.txt
+reconfirmed: 2026-08-21
+verified_at: 2026-08-21 13:11:03
+---
+
+## Claim
+
+CTR generated execution matches the deterministic true oracle at the first resident call inside 0x8003C58C, reaching 0x800779E4 with 34/34 boundary fields.
+
+## Evidence
+
+On the identity-bound USA executable, the comparator reproduced post-InitHeap state twice, built an exact-register replay only after validating the Ghidra-proven store-only original prefix, and used canonical oracle_trace --capture-call 1 twice to discover 0x800779E4. Generated execution agreed 34/34; forced resident.gp=0 produced exactly one named disagreement, 33/34.
+
+## What would falsify it
+
+Falsify if the executable identity or exact 0x8003C58C..0x8003C5AC prefix changes, either repeat oracle differs, canonical capture reaches a different boundary, or any of 34 generated boundary fields diverges.
+
+## Re-confirmed 2026-08-21
+
+Re-verified in a clean Clang 22.1.8 configure against recorded psxport pin 9f1bb927: two original
+oracle runs and two canonical `--capture-call 1` replay runs were deterministic, generated execution
+agreed 34/34 at `0x800779E4` with `ra=0x8003C5B0`, forced `resident.gp=0` produced 33/34, the
+production replay selftest passed 11/11 including main-RAM alias exclusion and missing-zero-run
+refusal, `cpp_policy` passed format/size/clang-tidy 1/1, and normal `verify` passed.
+
+## Re-confirmed 2026-08-21
+
+Re-verified after framework deterministic CD pacing landed at exact ce2c83ad: two original oracle runs and two canonical --capture-call 1 replay runs remained deterministic; generated execution agreed 34/34 at 0x800779E4 with ra=0x8003C5B0; forced resident.gp=0 produced 33/34; replay selftest passed 11/11; cpp_policy passed format/size/clang-tidy 1/1; normal verify confirmed the build and recorded pin are ce2c83ad.

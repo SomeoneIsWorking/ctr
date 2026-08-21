@@ -7,8 +7,11 @@ import argparse
 import dataclasses
 import pathlib
 import re
+import struct
 import subprocess
 import sys
+
+from resident_replay import ReplayRefusal, build_replay, write_replay
 
 
 REGISTER_NAMES = (
@@ -16,6 +19,13 @@ REGISTER_NAMES = (
     "t6", "t7", "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "t8", "t9", "k0",
     "k1", "gp", "sp", "fp", "ra", "lo", "hi",
 )
+
+RESIDENT_RESUME_TARGET = 0x8003C58C
+RESIDENT_PREFIX_WORDS = (
+    0x27BDFFC0, 0xAFBF0038, 0xAFB50034, 0xAFB40030, 0xAFB3002C,
+    0xAFB20028, 0xAFB10024, 0x0C01DE79, 0xAFB00020,
+)
+RESIDENT_PREFIX = struct.pack(f"<{len(RESIDENT_PREFIX_WORDS)}I", *RESIDENT_PREFIX_WORDS)
 
 
 class Refusal(RuntimeError):
@@ -198,7 +208,7 @@ def compare_post_init_heap(
     return rows
 
 
-def print_rows(rows: list[tuple[str, int, int]], post_init_heap: bool) -> int:
+def print_rows(rows: list[tuple[str, int, int]], label: str) -> int:
     differences = 0
     print("  field              oracle       generated     verdict")
     print("  " + "-" * 60)
@@ -206,7 +216,6 @@ def print_rows(rows: list[tuple[str, int, int]], post_init_heap: bool) -> int:
         verdict = "AGREE" if oracle == port else "DISAGREE"
         differences += oracle != port
         print(f"  {name:<15}  0x{oracle:08X}   0x{port:08X}   {verdict}")
-    label = "ctr04 post-InitHeap compare" if post_init_heap else "ctr04 compare"
     print(f"{label}: {len(rows) - differences}/{len(rows)} fields agree; {differences} differ")
     return differences
 
@@ -289,6 +298,73 @@ def selftest() -> int:
         checks.append(("capture metadata/register disagreement refuses", True))
     else:
         checks.append(("capture metadata/register disagreement refuses", False))
+
+    synthetic = bytearray(0x800 + 0x800)
+    synthetic[:8] = b"PS-X EXE"
+    struct.pack_into("<I", synthetic, 0x10, 0x80010000)
+    struct.pack_into("<I", synthetic, 0x18, 0x80010000)
+    struct.pack_into("<I", synthetic, 0x1C, 0x800)
+    prefix_offset = 0x300
+    synthetic[0x800 + prefix_offset:0x800 + prefix_offset + len(RESIDENT_PREFIX)] = RESIDENT_PREFIX
+    replay_registers = tuple([0, *range(1, 26), 0, 0, 28, 29, 30, 31])
+    replay_a = build_replay(
+        bytes(synthetic), resume_target=0x80010000 + prefix_offset,
+        registers=replay_registers, lo=0x12345678, hi=0x9ABCDEF0,
+        expected_prefix=RESIDENT_PREFIX,
+    )
+    replay_b = build_replay(
+        bytes(synthetic), resume_target=0x80010000 + prefix_offset,
+        registers=replay_registers, lo=0x12345678, hi=0x9ABCDEF0,
+        expected_prefix=RESIDENT_PREFIX,
+    )
+    checks.append(
+        (
+            "resident replay construction is deterministic",
+            replay_a == replay_b and struct.unpack_from("<I", replay_a.data, 0x10)[0] == replay_a.trampoline,
+        )
+    )
+    aliased = build_replay(
+        bytes(synthetic), resume_target=0x80010000 + prefix_offset,
+        registers=replay_registers, lo=0x12345678, hi=0x9ABCDEF0,
+        expected_prefix=RESIDENT_PREFIX,
+        forbidden_ranges=(
+            range(replay_a.trampoline + 0x200000, replay_a.trampoline + 0x200000 + replay_a.size),
+        ),
+    )
+    checks.append(("main-RAM alias exclusion moves the trampoline", aliased.trampoline != replay_a.trampoline))
+    changed = bytearray(synthetic)
+    changed[0x800 + prefix_offset] ^= 1
+    try:
+        build_replay(
+            bytes(changed), resume_target=0x80010000 + prefix_offset,
+            registers=replay_registers, lo=0, hi=0, expected_prefix=RESIDENT_PREFIX,
+        )
+    except ReplayRefusal:
+        checks.append(("changed resident prefix refuses", True))
+    else:
+        checks.append(("changed resident prefix refuses", False))
+    no_zero_run = bytearray(synthetic)
+    no_zero_run[0x800:] = bytes([0xA5]) * 0x800
+    no_zero_run[0x800 + prefix_offset:0x800 + prefix_offset + len(RESIDENT_PREFIX)] = RESIDENT_PREFIX
+    try:
+        build_replay(
+            bytes(no_zero_run), resume_target=0x80010000 + prefix_offset,
+            registers=replay_registers, lo=0, hi=0, expected_prefix=RESIDENT_PREFIX,
+        )
+    except ReplayRefusal:
+        checks.append(("missing aligned zero run refuses", True))
+    else:
+        checks.append(("missing aligned zero run refuses", False))
+    no_scratch = tuple([0, *range(1, 32)])
+    try:
+        build_replay(
+            bytes(synthetic), resume_target=0x80010000 + prefix_offset,
+            registers=no_scratch, lo=0, hi=0, expected_prefix=RESIDENT_PREFIX,
+        )
+    except ReplayRefusal:
+        checks.append(("missing exact scratch register refuses", True))
+    else:
+        checks.append(("missing exact scratch register refuses", False))
     for label, passed in checks:
         print(f"  {'PASS' if passed else 'FAIL'} {label}")
     failed = sum(not passed for _, passed in checks)
@@ -304,8 +380,10 @@ def parse_forced_field(text: str, default_stage: str) -> tuple[str, str, int]:
         stage, name = field.split(":", 1)
     else:
         stage, name = default_stage, field
-    if stage not in {"first", "modeled", "post"} or name not in REGISTER_NAMES:
-        raise Refusal("--force-port-field must name first, modeled, or post and one boundary register")
+    if stage not in {"first", "modeled", "post", "resident"} or name not in REGISTER_NAMES:
+        raise Refusal(
+            "--force-port-field must name first, modeled, post, or resident and one boundary register"
+        )
     try:
         return stage, name, int(raw_value, 0)
     except ValueError as error:
@@ -340,6 +418,24 @@ def force_field(evidence: PostInitHeapEvidence, stage: str, name: str, value: in
     )
 
 
+def capture_deterministic_post_init(
+    base_command: list[str], output: pathlib.Path, repeat_output: pathlib.Path
+) -> PostInitHeapEvidence:
+    command = [*base_command, "--model-bios-return", "A:0x39:0"]
+    run([*command, "--out", str(output)], "oracle post-InitHeap trace A")
+    run([*command, "--out", str(repeat_output)], "oracle post-InitHeap trace B")
+    first = parse_post_init_heap(output.read_text(encoding="utf-8"), port=False)
+    repeat = parse_post_init_heap(repeat_output.read_text(encoding="utf-8"), port=False)
+    if first != repeat:
+        raise Refusal("two independent oracle runs produced different boundary state or step counts")
+    return first
+
+
+def resident_state_arguments(boundary: Boundary) -> str:
+    values = [boundary.registers[name] for name in REGISTER_NAMES]
+    return ",".join(f"0x{value:08X}" for value in values)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("exe", nargs="?")
@@ -347,6 +443,7 @@ def main() -> int:
     parser.add_argument("--port-trace")
     parser.add_argument("--steps", type=int, default=400000)
     parser.add_argument("--post-init-heap", action="store_true")
+    parser.add_argument("--resident-next-call", action="store_true")
     parser.add_argument("--force-port-field", help="test-only post-capture mutation, [STAGE:]NAME=VALUE")
     parser.add_argument("--expect-difference", action="store_true")
     parser.add_argument("--selftest", action="store_true")
@@ -360,6 +457,8 @@ def main() -> int:
         raise Refusal("an executable, --oracle-trace, and --port-trace are all required")
     if arguments.steps <= 0:
         raise Refusal("--steps must be positive; an empty run is not agreement")
+    if arguments.post_init_heap and arguments.resident_next_call:
+        raise Refusal("--post-init-heap and --resident-next-call are distinct evidence windows")
 
     exe = pathlib.Path(arguments.exe)
     oracle_tool = pathlib.Path(arguments.oracle_trace)
@@ -376,15 +475,93 @@ def main() -> int:
         "--summary-only",
     ]
 
-    if arguments.post_init_heap:
+    if arguments.resident_next_call:
         oracle_repeat_output = scratch / "ctr04-oracle-boundary-repeat.trace"
-        modeled_command = [*base_oracle_command, "--model-bios-return", "A:0x39:0"]
-        run([*modeled_command, "--out", str(oracle_output)], "oracle post-InitHeap trace A")
-        run([*modeled_command, "--out", str(oracle_repeat_output)], "oracle post-InitHeap trace B")
-        oracle = parse_post_init_heap(oracle_output.read_text(encoding="utf-8"), port=False)
-        oracle_repeat = parse_post_init_heap(oracle_repeat_output.read_text(encoding="utf-8"), port=False)
-        if oracle != oracle_repeat:
-            raise Refusal("two independent oracle runs produced different boundary state or step counts")
+        post = capture_deterministic_post_init(
+            base_oracle_command, oracle_output, oracle_repeat_output
+        )
+        if post.post_return_call.target != RESIDENT_RESUME_TARGET:
+            raise Refusal(
+                f"post-InitHeap oracle reached 0x{post.post_return_call.target:08X}, not the "
+                f"proven resident resume 0x{RESIDENT_RESUME_TARGET:08X}"
+            )
+        print(
+            "ctr04 resident-next-call compare: determinism PASS — two original oracle runs "
+            "produced identical post-InitHeap state"
+        )
+
+        gprs = (0, *(post.post_return_call.registers[name] for name in REGISTER_NAMES[:-2]))
+        stack_pointer = post.post_return_call.registers["sp"]
+        if stack_pointer < 32:
+            raise Refusal("resident stack-store range wraps below address zero")
+        replay_path = scratch.parent / "raw" / "ctr" / "ctr04-resident-replay.exe"
+        try:
+            replay = write_replay(
+                exe,
+                replay_path,
+                resume_target=RESIDENT_RESUME_TARGET,
+                registers=gprs,
+                lo=post.post_return_call.registers["lo"],
+                hi=post.post_return_call.registers["hi"],
+                expected_prefix=RESIDENT_PREFIX,
+                forbidden_ranges=(range(stack_pointer - 32, stack_pointer - 7),),
+            )
+        except ReplayRefusal as error:
+            raise Refusal(f"resident replay construction refused: {error}") from error
+        print(
+            f"ctr04 resident-next-call compare: bounded replay trampoline "
+            f"0x{replay.trampoline:08X} ({replay.size} bytes)"
+        )
+
+        resident_output = scratch / "ctr04-resident-oracle.trace"
+        resident_repeat_output = scratch / "ctr04-resident-oracle-repeat.trace"
+        resident_command = [
+            str(oracle_tool), str(replay_path), "--steps", "256", "--capture-call", "1",
+            "--summary-only",
+        ]
+        run([*resident_command, "--out", str(resident_output)], "resident replay oracle trace A")
+        run(
+            [*resident_command, "--out", str(resident_repeat_output)],
+            "resident replay oracle trace B",
+        )
+        oracle_boundary = parse_boundary(resident_output.read_text(encoding="utf-8"), port=False)
+        oracle_repeat = parse_boundary(
+            resident_repeat_output.read_text(encoding="utf-8"), port=False
+        )
+        if oracle_boundary != oracle_repeat:
+            raise Refusal("two resident replay oracle runs produced different boundary state or steps")
+        print(
+            "ctr04 resident-next-call compare: determinism PASS — two replay oracle runs "
+            "produced identical first-call evidence"
+        )
+
+        port_result = run(
+            [
+                str(port_tool), str(exe), "--resume-target", f"0x{RESIDENT_RESUME_TARGET:08X}",
+                "--capture-target", f"0x{oracle_boundary.target:08X}", "--state",
+                resident_state_arguments(post.post_return_call),
+            ],
+            "generated resident replay trace",
+        )
+        port_boundary = parse_boundary(port_result.stdout, port=True)
+        if arguments.force_port_field:
+            stage, name, value = parse_forced_field(arguments.force_port_field, "resident")
+            if stage != "resident":
+                raise Refusal("first/modeled/post forced fields do not belong to resident replay")
+            port_boundary = dataclasses.replace(
+                port_boundary, registers={**port_boundary.registers, name: value}
+            )
+            print(
+                f"ctr04 resident-next-call compare: TEST-ONLY forced generated "
+                f"resident.{name}=0x{value:08X}"
+            )
+        rows = compare_boundary(oracle_boundary, port_boundary, "resident")
+        comparison_label = "ctr04 resident-next-call compare"
+    elif arguments.post_init_heap:
+        oracle_repeat_output = scratch / "ctr04-oracle-boundary-repeat.trace"
+        oracle = capture_deterministic_post_init(
+            base_oracle_command, oracle_output, oracle_repeat_output
+        )
         print("ctr04 post-InitHeap compare: determinism PASS — two oracle runs produced identical three-boundary evidence")
 
         port_result = run(
@@ -400,6 +577,7 @@ def main() -> int:
             port = force_field(port, stage, name, value)
             print(f"ctr04 post-InitHeap compare: TEST-ONLY forced generated {stage}.{name}=0x{value:08X}")
         rows = compare_post_init_heap(oracle, port)
+        comparison_label = "ctr04 post-InitHeap compare"
     else:
         run([*base_oracle_command, "--out", str(oracle_output)], "oracle trace")
         oracle_boundary = parse_boundary(oracle_output.read_text(encoding="utf-8"), port=False)
@@ -417,12 +595,13 @@ def main() -> int:
             )
             print(f"ctr04 compare: TEST-ONLY forced generated {name}=0x{value:08X}")
         rows = compare(oracle_boundary, port_boundary)
+        comparison_label = "ctr04 compare"
 
-    differences = print_rows(rows, arguments.post_init_heap)
+    differences = print_rows(rows, comparison_label)
     if arguments.expect_difference:
         if differences == 0:
             raise Refusal("--expect-difference was requested but the comparator reported agreement")
-        print("ctr04 compare: PASS — the forced opposite produced a named disagreement")
+        print(f"{comparison_label}: PASS — the forced opposite produced a named disagreement")
         return 0
     return 1 if differences else 0
 

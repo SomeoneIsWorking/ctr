@@ -106,6 +106,30 @@ bool parseAddress(std::string_view text, uint32_t &value) {
   return result.ec == std::errc{} && result.ptr == text.data() + text.size();
 }
 
+bool parseResidentState(std::string_view text, std::array<uint32_t, 33> &state) {
+  for (uint32_t &value : state) {
+    const std::size_t separator = text.find(',');
+    const std::string_view field = text.substr(0, separator);
+    if (field.empty() || !parseAddress(field, value)) {
+      return false;
+    }
+    if (separator == std::string_view::npos) {
+      text = {};
+    } else {
+      text.remove_prefix(separator + 1);
+    }
+  }
+  return text.empty();
+}
+
+void restoreResidentState(Core &core, const std::array<uint32_t, 33> &state, uint32_t resumeTarget) {
+  core.r[0] = 0;
+  std::copy_n(state.begin(), 31, std::begin(core.r) + 1);
+  core.lo = state[31];
+  core.hi = state[32];
+  core.pc = resumeTarget;
+}
+
 void captureCore(Core *core, Boundary &boundary) {
   std::copy(std::begin(core->r), std::end(core->r), boundary.registers.begin());
   boundary.pc = core->pc;
@@ -167,10 +191,14 @@ int main(int argc, char **argv) {
   const bool postInitHeap = argc == 7 && std::string_view(argv[2]) == "--target" &&
                             std::string_view(argv[4]) == "--model-init-heap-return" &&
                             std::string_view(argv[5]) == "--post-target";
-  if (!firstBoundaryOnly && !postInitHeap) {
+  const bool residentReplay = argc == 8 && std::string_view(argv[2]) == "--resume-target" &&
+                              std::string_view(argv[4]) == "--capture-target" && std::string_view(argv[6]) == "--state";
+  if (!firstBoundaryOnly && !postInitHeap && !residentReplay) {
     std::fprintf(stderr,
                  "usage: ctr_crt0_port_trace <PS-X EXE> --target 0xADDR "
-                 "[--model-init-heap-return --post-target 0xADDR]\n");
+                 "[--model-init-heap-return --post-target 0xADDR]\n"
+                 "       ctr_crt0_port_trace <PS-X EXE> --resume-target 0xADDR "
+                 "--capture-target 0xADDR --state AT,...,RA,LO,HI\n");
     return 2;
   }
 
@@ -184,12 +212,20 @@ int main(int argc, char **argv) {
     std::fprintf(stderr, "ctr_crt0_port_trace: REFUSING — invalid nonzero hexadecimal call target.\n");
     return 2;
   }
-  if (postInitHeap && (!parseAddress(argv[6], postTarget) || postTarget == 0 || postTarget == target)) {
+  if ((postInitHeap || residentReplay) &&
+      (!parseAddress(residentReplay ? argv[5] : argv[6], postTarget) || postTarget == 0 || postTarget == target)) {
     std::fprintf(stderr, "ctr_crt0_port_trace: REFUSING — invalid distinct hexadecimal post-return target.\n");
     return 2;
   }
-  if (rec_func_index(layout.entry) < 0 || rec_func_index(target) < 0 ||
-      (postInitHeap && rec_func_index(postTarget) < 0)) {
+  std::array<uint32_t, 33> residentState{};
+  if (residentReplay && !parseResidentState(argv[7], residentState)) {
+    std::fprintf(stderr,
+                 "ctr_crt0_port_trace: REFUSING — --state must contain exactly 33 hexadecimal "
+                 "AT,...,RA,LO,HI values.\n");
+    return 2;
+  }
+  if ((!residentReplay && rec_func_index(layout.entry) < 0) || rec_func_index(target) < 0 ||
+      ((postInitHeap || residentReplay) && rec_func_index(postTarget) < 0)) {
     std::fprintf(stderr,
                  "ctr_crt0_port_trace: REFUSING — entry 0x%08X, observed target 0x%08X, and any post-return "
                  "target 0x%08X must exist in the shipping generated registry.\n",
@@ -205,7 +241,10 @@ int main(int argc, char **argv) {
   Boundary preModel{};
   Boundary modeledReturn{};
   g_boundary = &boundary;
-  if (postInitHeap) {
+  if (residentReplay) {
+    restoreResidentState(*core, residentState, target);
+    shard_set_override(postTarget, captureBoundary);
+  } else if (postInitHeap) {
     g_preModel = &preModel;
     g_modeledReturn = &modeledReturn;
     g_modeledReturnReached = false;
@@ -216,11 +255,11 @@ int main(int argc, char **argv) {
   }
   bool reached = false;
   try {
-    main_dispatch(core.get(), layout.entry);
+    main_dispatch(core.get(), residentReplay ? target : layout.entry);
   } catch (const BoundaryReached &) {
     reached = true;
   }
-  shard_set_override(target, nullptr);
+  shard_set_override(residentReplay ? postTarget : target, nullptr);
   if (postInitHeap) {
     shard_set_override(postTarget, nullptr);
   }
@@ -228,16 +267,17 @@ int main(int argc, char **argv) {
   g_preModel = nullptr;
   g_modeledReturn = nullptr;
 
-  const uint32_t expectedBoundary = postInitHeap ? postTarget : target;
+  const uint32_t expectedBoundary = (postInitHeap || residentReplay) ? postTarget : target;
   if (!reached || boundary.pc != expectedBoundary || (postInitHeap && !g_modeledReturnReached)) {
     std::fprintf(stderr,
                  "ctr_crt0_port_trace: REFUSING — generated execution did not reach the independently observed "
                  "%s boundary.\n",
-                 postInitHeap ? "modeled return and subsequent call" : "first-call");
+                 postInitHeap ? "modeled return and subsequent call"
+                              : (residentReplay ? "resident subsequent call" : "first-call"));
     return 2;
   }
-  if (firstBoundaryOnly) {
-    printBoundary(target, boundary);
+  if (firstBoundaryOnly || residentReplay) {
+    printBoundary(expectedBoundary, boundary);
   } else {
     printBoundary(target, preModel);
     std::printf("# PORT-MODELED-BIOS-RETURN table=A function=0x39 target=0x000000A0 ra=0x%08X "
