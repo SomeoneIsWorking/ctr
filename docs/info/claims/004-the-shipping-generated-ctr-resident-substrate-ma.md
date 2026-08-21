@@ -5,7 +5,7 @@ status: holds
 created: 2026-08-21
 tags: ctr-04,recompiler,differential
 depends: CMakeLists.txt, game/core/crt0_port_trace.cpp, tools/compare_crt0_trace.py, tools/emit_substrate.py
-verified_at: 2026-08-21 13:12:21
+verified_at: 2026-08-21 14:13:10
 reconfirmed: 2026-08-21
 ---
 
@@ -46,3 +46,7 @@ Re-verified after framework deterministic CD pacing landed at exact ce2c83ad: Cl
 ## Re-confirmed 2026-08-21
 
 Post-landing ce2c83ad generated substrate gate retained post-InitHeap 108/108 with forced 107/108 and all registry checks.
+
+## Re-confirmed 2026-08-21
+
+Re-verified against exact psxport 3418a79b624765614f3f198dc1e89632e1e650f0 after the nested shader ownership fix: clean Clang configure/build re-provisioned identity-bound SCUS_944.26 and the true-oracle pre-BIOS gate agreed 34/34; forced generated gp=0 produced exactly one named disagreement at 33/34.

@@ -6,7 +6,7 @@ created: 2026-08-21
 tags:
 depends: game/core/crt0_port_trace.cpp#modelInitHeapReturn, tools/compare_crt0_trace.py#main, CMakeLists.txt
 reconfirmed: 2026-08-21
-verified_at: 2026-08-21 13:12:21
+verified_at: 2026-08-21 14:13:10
 ---
 
 ## Claim
@@ -36,3 +36,7 @@ Re-verified after framework deterministic CD pacing landed at exact ce2c83ad: tw
 ## Re-confirmed 2026-08-21
 
 Post-landing ce2c83ad repeated true-oracle and generated comparison retained 108/108 at the post-InitHeap boundary with the named forced mismatch.
+
+## Re-confirmed 2026-08-21
+
+Re-verified against exact psxport 3418a79b624765614f3f198dc1e89632e1e650f0: two true-oracle post-InitHeap runs produced identical three-boundary evidence, generated execution agreed 108/108 at 0x8003C58C, and forced post.gp=0 produced exactly one named disagreement at 107/108.
