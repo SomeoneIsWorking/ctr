@@ -5,8 +5,9 @@ PC-native PlayStation port of Crash Team Racing, built on
 
 Current status: the USA target executable is measured, its reproducible provisioner is verified on
 real media, and an independent Beetle/Mednafen CPU has executed and cross-checked its crt0. The
-project is still a framework scaffold: no extracted executable is tracked, no game seam or generated
-substrate exists, and no port boot or enhancement is claimed yet.
+shipping recompiler now emits the gitignored resident substrate, and the first port-side comparator
+agrees with the oracle on all 34 call-boundary fields. There is still no game seam or port boot, and
+no hardware-dependent execution or enhancement is claimed.
 
 ## Configure the framework scaffold
 
@@ -27,8 +28,8 @@ framework smoke test:
 CCACHE_DISABLE=1 cmake --build build --target verify
 ```
 
-There is no game translation unit yet, so the shared policy's explicit scaffold mode reports honest
-zero-file format, size, and lint denominators. It begins checking files as game code is added.
+The shared policy format-checks, size-checks, and runs clang-tidy over the port-side trace translation
+unit using the real compile command. Generated and vendored code remain excluded.
 
 ## Provision the USA executable
 
@@ -42,6 +43,31 @@ python3 tools/provision.py /path/to/CTR-USA.chd
 The tool extracts `SYSTEM.CNF` and `SCUS_944.26` transactionally into `scratch/raw/ctr/`, then
 refuses unless the boot target, complete SHA-256, file size, and PS-X EXE header fields match the
 measured USA executable. Copy `.env.example` to the gitignored `.env` for a persistent local path.
+
+## Emit and compare the resident substrate
+
+After provisioning, emit from the identity-checked executable with the shipping psxport recompiler:
+
+```sh
+python3 tools/emit_substrate.py
+```
+
+The tracked seed manifest is deliberately empty: the executable header supplies the measured entry,
+and the shipping emitter discovers direct calls. Reconfigure after the first emit so CMake sees the
+generated source manifest, then build the asset-gated comparator:
+
+```sh
+CCACHE_DISABLE=1 cmake -S . -B build \
+  -DCMAKE_C_COMPILER=/usr/bin/clang \
+  -DCMAKE_CXX_COMPILER=/usr/bin/clang++
+PSXPORT_CTR_DISC=/path/to/CTR-USA.chd \
+  CCACHE_DISABLE=1 cmake --build build --target ctr04_check
+```
+
+`ctr04_check` re-provisions the executable, executes the oracle to its first call, supplies that
+observed target to the generated registry, and compares the PC plus all 31 mutable GPRs and `lo`/`hi`.
+It then forces one captured `gp` value to the opposite answer and requires a named disagreement. The
+generated trace executable also refuses a target absent from the generated registry.
 
 ## Cross-check the first boot window in the independent oracle
 

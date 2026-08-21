@@ -13,3 +13,8 @@ is not the recorded pin. Framework edits happen in the shared clone (`$PSX/psxpo
 All picture work is RE-driven. Widescreen and interpolation require PC-native graphics producers
 reading game state; do not reconstruct pictures from GTE/OT/GP0 output. Establish a faithful,
 measurable base before enhancements.
+
+CTR-04 owns one narrow game module: `game/core/crt0_port_trace.cpp` executes the gitignored shipping
+substrate only to the oracle-observed first-call boundary. `tools/emit_substrate.py` is the
+identity-gated emitter entry point and `tools/compare_crt0_trace.py` owns the cross-process diff.
+Neither is a game loop or permission to guess later addresses.

@@ -22,19 +22,20 @@ names an honest remaining gap; `todo` is not started. No hacks are tracked.
 - notes: Resolution order is CLI > PSXPORT_CTR_DISC > PSXPORT_DISC > .env game/generic key > deterministic sorted root *.chd drop-in. An invalid higher-priority input refuses instead of silently falling through.
 
 ### CTR-03 — Bring up a deterministic psxport/oracle boot harness
-- status: re-partial
+- status: re-verified
 - deps: CTR-02
 - evidence: C003/I003. The asset-gated `oracle_boot_check` re-provisioned the measured executable, ran the independent oracle's 22-check positive/negative/stepping/mirroring fixture, then executed the real CTR crt0 in the vendored Beetle/Mednafen CPU. The execution left mapped text at the InitHeap boundary after 92,378 steps and agreed with the independent symbolic decoder on 7 of 7 comparable fields.
 - where: CMake `oracle_boot_check`; framework `oracle_trace` and `crossvalidate_crt0.py`; gitignored boundary trace
-- gap: Emit the CTR resident substrate from the measured entry and add the port-side trace comparator. The current cross-check compares two independent readings of CTR's real crt0; it does not yet compare a PC port execution because no generated substrate or game seam exists.
+- gap: None for the independent first-call oracle. CTR-04 now owns the generated side; no later BIOS or hardware behavior follows from this step.
 - notes: The asset-gated target is deliberately separate from normal verification. Its oracle fixture demonstrates both a clean executed program and a named hardware-stop answer before the real executable is accepted as evidence.
 
 ### CTR-04 — Recompile through the first real divergence
-- status: todo
+- status: re-partial
 - deps: CTR-03
-- evidence: Not started.
-- where: future `generated/`, `game/recomp_seeds.json`, and divergence logs
-- gap: Recompile from the measured entry and advance only as far as executable evidence supports; never borrow another game's seeds or guess an overlay base.
+- evidence: C004/I004. `tools/emit_substrate.py` re-verified the complete USA executable identity before invoking the shipping emitter. With an empty explicit seed manifest, the executable-header entry plus direct-call discovery emitted 1,236 functions in eight shards (recompiler version 2026-08-12.1). `ctr04_check` then re-provisioned the real disc and compared independent oracle execution with generated execution at the first call: boundary PC plus 31 mutable GPRs and `lo`/`hi` agreed 34/34. A test-only forced `gp=0` produced exactly one named disagreement (33/34), and a non-entry target was refused.
+- where: `game/recomp_seeds.json`, `game/core/crt0_port_trace.cpp`, `tools/emit_substrate.py`, `tools/compare_crt0_trace.py`, CMake `ctr04_check`; gitignored `generated/` and `scratch/logs/ctr04-oracle-boundary.trace`
+- gap: The verified window stops before executing InitHeap/BIOS semantics. The next real boundary is the first call or hardware access after the A(39h) InitHeap thunk returns; extend the independent reference to cross that BIOS boundary before claiming later generated execution. Never borrow another game's seeds or guess an overlay base.
+- notes: The generated tracer takes its interception target from the oracle trace and independently requires both header entry and target to exist in the generated registry. It validates the PS-X EXE shape before using the framework loader; it does not embed CTR addresses or emulate libc. The emitter reported 28 unresolved `lw $ra` bases, so the 1,236 emitted entries are substrate inventory, not a claim that every unexecuted return edge is resolved.
 
 ## Native ownership and enhancements
 

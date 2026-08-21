@@ -28,3 +28,8 @@ Re-verified through the integrated Clang-built CMake target: oracle_spike ran 22
 ## Re-confirmed 2026-08-21
 
 Post-landing recheck retains oracle_spike 22/22 and the real CTR crt0 cross-check at 7 agree, 0 disagree, 0 unseen.
+
+## Re-confirmed 2026-08-21 — CTR-04
+
+The real-disc oracle gate again reported 7/7, and the new independently captured generated boundary
+agreed with the oracle on 34/34 register/PC fields.

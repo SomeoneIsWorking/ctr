@@ -27,13 +27,83 @@ file(WRITE "${CMAKE_BINARY_DIR}/psxport_resolved.txt"
 set(PSXPORT_BUILD_SMOKE ON CACHE BOOL "Build the framework agnosticism smoke" FORCE)
 add_subdirectory("${PSXPORT_DIR}" psxport_build)
 add_custom_target(ctr_scaffold DEPENDS psxport_smoke)
+include(CTest)
+
+add_test(
+  NAME ctr_provision_selftest
+  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/provision.py" --selftest)
+add_test(
+  NAME ctr_crt0_compare_selftest
+  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py" --selftest)
+
+add_custom_target(
+  ctr04_compare_selftest
+  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py" --selftest
+  USES_TERMINAL
+  VERBATIM)
+
+# Compile the harness in an asset-free clone as well. Linking it requires the gitignored generated
+# registry, but format/tidy must retain a real compile command before that substrate exists.
+add_library(ctr_crt0_trace_compile OBJECT game/core/crt0_port_trace.cpp)
+set_target_properties(
+  ctr_crt0_trace_compile
+  PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+target_include_directories(ctr_crt0_trace_compile PRIVATE game/core)
+target_link_libraries(ctr_crt0_trace_compile PRIVATE psxport)
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generated/rec_sources.cmake")
+  include("${CMAKE_CURRENT_SOURCE_DIR}/generated/rec_sources.cmake")
+  list(TRANSFORM GEN_REC_SRCS PREPEND "generated/")
+  set_source_files_properties(
+    ${GEN_REC_SRCS}
+    PROPERTIES
+      LANGUAGE CXX
+      COMPILE_OPTIONS "-O1;-foptimize-sibling-calls;-fno-strict-aliasing;-fwrapv")
+
+  add_executable(ctr_crt0_port_trace $<TARGET_OBJECTS:ctr_crt0_trace_compile> ${GEN_REC_SRCS})
+  set_target_properties(
+    ctr_crt0_port_trace
+    PROPERTIES
+      CXX_STANDARD 20
+      CXX_STANDARD_REQUIRED ON
+      RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/scratch/bin")
+  target_include_directories(ctr_crt0_port_trace PRIVATE game/core)
+  target_link_libraries(ctr_crt0_port_trace PRIVATE psxport)
+
+  add_custom_target(
+    ctr04_check
+    COMMAND
+      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/provision.py"
+      --discdump "$<TARGET_FILE:discdump>"
+    COMMAND
+      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
+      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
+      --oracle-trace "$<TARGET_FILE:oracle_trace>"
+      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
+      --steps 400000
+    COMMAND
+      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
+      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
+      --oracle-trace "$<TARGET_FILE:oracle_trace>"
+      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
+      --steps 400000
+      --force-port-field gp=0
+      --expect-difference
+    DEPENDS ctr_crt0_port_trace discdump oracle_trace
+    USES_TERMINAL
+    VERBATIM)
+else()
+  message(STATUS
+    "CTR-04 generated trace target is unavailable: emit generated/ from the verified USA executable "
+    "with the documented shipping-emitter command, then reconfigure.")
+endif()
 add_custom_target(
   cpp_policy
   COMMAND
     "${Python3_EXECUTABLE}" "${PSXPORT_DIR}/tools/check_cpp_style.py"
     --root "${CMAKE_CURRENT_SOURCE_DIR}"
     --compile-commands "${CMAKE_BINARY_DIR}"
-    --allow-empty-scaffold
+  DEPENDS ctr_crt0_trace_compile
   USES_TERMINAL
   VERBATIM)
 add_custom_target(
@@ -60,6 +130,6 @@ add_custom_target(
   verify
   COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/psxport_sync.py" --check
   COMMAND "$<TARGET_FILE:psxport_smoke>"
-  DEPENDS cpp_policy provision_selftest psxport_smoke
+  DEPENDS cpp_policy provision_selftest ctr04_compare_selftest psxport_smoke
   USES_TERMINAL
   VERBATIM)

@@ -1,0 +1,10 @@
+{
+  // The PS-X EXE entry point is decoded from the executable header by the
+  // shipping emitter. Keep this manifest empty until a newly measured
+  // indirect target or overlay requires an explicit seed.
+  "main": [],
+  "main_reentry": [],
+  "overlay_bases": {},
+  "overlay_base_patterns": [],
+  "overlay_seeds": {}
+}

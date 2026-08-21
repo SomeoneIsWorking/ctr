@@ -22,7 +22,9 @@ size `0x007588FC`, and libc initialiser `0x80080620`. These values are evidence 
 seam; none is wired into shipping game code yet. The independent Beetle/Mednafen CPU subsequently
 executed the real crt0 to its InitHeap boundary and agreed with the symbolic decoder on all seven
 comparable fields: GP, libc target, BIOS function, InitHeap `a0`, planned SP, planned `a0`, and planned
-`a1` heap size.
+`a1` heap size. The shipping generated substrate subsequently executed the header entry to that same
+first-call boundary and agreed with the oracle on the boundary PC, all 31 mutable GPRs, and `lo`/`hi`
+(34/34 fields). This remains a pre-BIOS boundary result, not a port boot.
 
 ## Reproduce the measurement
 
