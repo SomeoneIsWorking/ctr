@@ -142,6 +142,32 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generated/rec_sources.cmake")
     DEPENDS ctr04_post_init_heap_check ctr_crt0_port_trace oracle_trace
     USES_TERMINAL
     VERBATIM)
+
+  # Execute the first resident call as well as its caller prefix. Ghidra established that the
+  # runtime initializer reads only two unchanged initialized-data words, has a zero constructor
+  # count, and returns to a second exact prefix before the next call. The comparator byte-checks all
+  # three non-contiguous code ranges and excludes every stack byte written by both frames.
+  add_custom_target(
+    ctr04_runtime_init_next_call_check
+    COMMAND
+      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
+      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
+      --oracle-trace "$<TARGET_FILE:oracle_trace>"
+      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
+      --steps 400000
+      --runtime-init-next-call
+    COMMAND
+      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
+      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
+      --oracle-trace "$<TARGET_FILE:oracle_trace>"
+      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
+      --steps 400000
+      --runtime-init-next-call
+      --force-port-field resident:gp=0
+      --expect-difference
+    DEPENDS ctr04_resident_next_call_check ctr_crt0_port_trace oracle_trace
+    USES_TERMINAL
+    VERBATIM)
 else()
   message(STATUS
     "CTR-04 generated trace target is unavailable: emit generated/ from the verified USA executable "

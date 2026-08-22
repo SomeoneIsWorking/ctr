@@ -30,6 +30,9 @@ modeled-return, and post-return states agree with generated execution on 108/108
 bounded crt0 continuation, not a port boot. Independent disassembly then proved the exact first
 resident prefix has no RAM reads before its call. The canonical oracle and generated execution agree
 there on 34/34 fields at `0x800779E4` (`ra=0x8003C5B0`), with a 33/34 forced-opposite control.
+Ghidra then proved that runtime initializer's complete path and the caller continuation through the
+next call. A byte- and input-checked replay executes both and agrees 34/34 at `0x80032DC0`
+(`ra=0x8003C5D8`), again detecting a forced `gp` disagreement as 33/34.
 
 ## Reproduce the measurement
 

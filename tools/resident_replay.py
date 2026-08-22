@@ -82,13 +82,16 @@ def build_replay(
     lo: int,
     hi: int,
     expected_prefix: bytes,
+    expected_ranges: tuple[tuple[int, bytes], ...] = (),
+    expected_words: tuple[tuple[int, int], ...] = (),
     forbidden_ranges: tuple[range, ...] = (),
 ) -> ReplayImage:
     """Return a replay EXE, refusing unless the bounded original prefix is exact.
 
     ``registers`` is the complete 32-GPR state, including the immutable zero register.
-    The replay is only sound through ``expected_prefix``; callers must independently prove
-    that prefix has no memory reads before the boundary they capture.
+    The replay is only sound through the checked code ranges and initialized-data words;
+    callers must independently prove that they cover every instruction and memory read before
+    the boundary they capture.
     """
 
     load, text_size = _validate_exe(source)
@@ -106,6 +109,22 @@ def build_replay(
     observed_prefix = payload[resume_offset:resume_offset + len(expected_prefix)]
     if observed_prefix != expected_prefix:
         raise ReplayRefusal("resident prefix bytes changed; the store-only replay proof is stale")
+    for address, expected in expected_ranges:
+        offset = address - load
+        if offset < 0 or offset + len(expected) > text_size:
+            raise ReplayRefusal("an expected continuation range lies outside executable text")
+        if payload[offset:offset + len(expected)] != expected:
+            raise ReplayRefusal(
+                f"continuation bytes at 0x{address:08X} changed; the replay proof is stale"
+            )
+    for address, expected in expected_words:
+        offset = address - load
+        if offset < 0 or offset + 4 > text_size:
+            raise ReplayRefusal("an expected initialized-data word lies outside executable text")
+        if _read_u32(payload, offset) != expected:
+            raise ReplayRefusal(
+                f"initialized-data word at 0x{address:08X} changed; the replay proof is stale"
+            )
 
     scratch = next((index for index in (26, 27, 25) if registers[index] == 0), None)
     if scratch is None:

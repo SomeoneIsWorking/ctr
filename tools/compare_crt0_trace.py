@@ -27,6 +27,29 @@ RESIDENT_PREFIX_WORDS = (
 )
 RESIDENT_PREFIX = struct.pack(f"<{len(RESIDENT_PREFIX_WORDS)}I", *RESIDENT_PREFIX_WORDS)
 
+RUNTIME_INIT_TARGET = 0x800779E4
+RUNTIME_INIT_WORDS = (
+    0x3C088009, 0x8D08C050, 0x27BDFFF0, 0xAFB00004, 0xAFB10008,
+    0xAFBF000C, 0x1500000F, 0x34080001, 0x3C018009, 0xAC28C050,
+    0x3C108009, 0x2610D668, 0x3C110000, 0x26310000, 0x12200007,
+    0x00000000, 0x8E080000, 0x26100004, 0x0100F809, 0x2631FFFF,
+    0x1620FFFB, 0x00000000, 0x8FBF000C, 0x8FB10008, 0x8FB00004,
+    0x27BD0010, 0x03E00008, 0x00000000,
+)
+RUNTIME_INIT_CODE = struct.pack(f"<{len(RUNTIME_INIT_WORDS)}I", *RUNTIME_INIT_WORDS)
+POST_RUNTIME_INIT_TARGET = 0x8003C5B0
+POST_RUNTIME_INIT_WORDS = (
+    0x8F830188, 0x24020005, 0x10620264, 0x241300D8, 0x24140001,
+    0x2412FFFF, 0x24110001, 0x2415FFFA, 0x0C00CB70, 0x00000000,
+)
+POST_RUNTIME_INIT_CODE = struct.pack(
+    f"<{len(POST_RUNTIME_INIT_WORDS)}I", *POST_RUNTIME_INIT_WORDS
+)
+RUNTIME_INIT_NEXT_CALL = 0x80032DC0
+RUNTIME_INIT_FLAG = 0x8008C050
+INITIAL_MODE_WORD = 0x8008D0F4
+BSS_START = 0x8008D668
+
 
 class Refusal(RuntimeError):
     """The evidence was incomplete, so no agreement can be claimed."""
@@ -306,16 +329,26 @@ def selftest() -> int:
     struct.pack_into("<I", synthetic, 0x1C, 0x800)
     prefix_offset = 0x300
     synthetic[0x800 + prefix_offset:0x800 + prefix_offset + len(RESIDENT_PREFIX)] = RESIDENT_PREFIX
+    continuation_address = 0x80010500
+    continuation = bytes.fromhex("11223344")
+    synthetic[0x800 + 0x500:0x800 + 0x500 + len(continuation)] = continuation
+    initialized_word_address = 0x80010600
+    initialized_word = 0x78563412
+    struct.pack_into("<I", synthetic, 0x800 + 0x600, initialized_word)
     replay_registers = tuple([0, *range(1, 26), 0, 0, 28, 29, 30, 31])
     replay_a = build_replay(
         bytes(synthetic), resume_target=0x80010000 + prefix_offset,
         registers=replay_registers, lo=0x12345678, hi=0x9ABCDEF0,
         expected_prefix=RESIDENT_PREFIX,
+        expected_ranges=((continuation_address, continuation),),
+        expected_words=((initialized_word_address, initialized_word),),
     )
     replay_b = build_replay(
         bytes(synthetic), resume_target=0x80010000 + prefix_offset,
         registers=replay_registers, lo=0x12345678, hi=0x9ABCDEF0,
         expected_prefix=RESIDENT_PREFIX,
+        expected_ranges=((continuation_address, continuation),),
+        expected_words=((initialized_word_address, initialized_word),),
     )
     checks.append(
         (
@@ -343,6 +376,30 @@ def selftest() -> int:
         checks.append(("changed resident prefix refuses", True))
     else:
         checks.append(("changed resident prefix refuses", False))
+    changed_continuation = bytearray(synthetic)
+    changed_continuation[0x800 + 0x500] ^= 1
+    try:
+        build_replay(
+            bytes(changed_continuation), resume_target=0x80010000 + prefix_offset,
+            registers=replay_registers, lo=0, hi=0, expected_prefix=RESIDENT_PREFIX,
+            expected_ranges=((continuation_address, continuation),),
+        )
+    except ReplayRefusal:
+        checks.append(("changed non-contiguous continuation refuses", True))
+    else:
+        checks.append(("changed non-contiguous continuation refuses", False))
+    changed_data = bytearray(synthetic)
+    changed_data[0x800 + 0x600] ^= 1
+    try:
+        build_replay(
+            bytes(changed_data), resume_target=0x80010000 + prefix_offset,
+            registers=replay_registers, lo=0, hi=0, expected_prefix=RESIDENT_PREFIX,
+            expected_words=((initialized_word_address, initialized_word),),
+        )
+    except ReplayRefusal:
+        checks.append(("changed initialized-data input refuses", True))
+    else:
+        checks.append(("changed initialized-data input refuses", False))
     no_zero_run = bytearray(synthetic)
     no_zero_run[0x800:] = bytes([0xA5]) * 0x800
     no_zero_run[0x800 + prefix_offset:0x800 + prefix_offset + len(RESIDENT_PREFIX)] = RESIDENT_PREFIX
@@ -365,6 +422,19 @@ def selftest() -> int:
         checks.append(("missing exact scratch register refuses", True))
     else:
         checks.append(("missing exact scratch register refuses", False))
+    stack_ranges = replay_stack_writes(0x1000, runtime_init=True)
+    checks.append(
+        (
+            "all outer and runtime-init stack-store bytes are excluded",
+            stack_ranges == (range(0xFE0, 0xFFC), range(0xFB4, 0xFC0)),
+        )
+    )
+    checks.append(
+        (
+            "runtime-init inputs remain initialized data before BSS",
+            RUNTIME_INIT_FLAG < BSS_START and INITIAL_MODE_WORD < BSS_START,
+        )
+    )
     for label, passed in checks:
         print(f"  {'PASS' if passed else 'FAIL'} {label}")
     failed = sum(not passed for _, passed in checks)
@@ -436,6 +506,16 @@ def resident_state_arguments(boundary: Boundary) -> str:
     return ",".join(f"0x{value:08X}" for value in values)
 
 
+def replay_stack_writes(stack_pointer: int, runtime_init: bool) -> tuple[range, ...]:
+    required = 76 if runtime_init else 32
+    if stack_pointer < required:
+        raise Refusal("resident stack-store range wraps below address zero")
+    ranges = (range(stack_pointer - 32, stack_pointer - 4),)
+    if runtime_init:
+        ranges += (range(stack_pointer - 76, stack_pointer - 64),)
+    return ranges
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("exe", nargs="?")
@@ -444,6 +524,7 @@ def main() -> int:
     parser.add_argument("--steps", type=int, default=400000)
     parser.add_argument("--post-init-heap", action="store_true")
     parser.add_argument("--resident-next-call", action="store_true")
+    parser.add_argument("--runtime-init-next-call", action="store_true")
     parser.add_argument("--force-port-field", help="test-only post-capture mutation, [STAGE:]NAME=VALUE")
     parser.add_argument("--expect-difference", action="store_true")
     parser.add_argument("--selftest", action="store_true")
@@ -457,8 +538,13 @@ def main() -> int:
         raise Refusal("an executable, --oracle-trace, and --port-trace are all required")
     if arguments.steps <= 0:
         raise Refusal("--steps must be positive; an empty run is not agreement")
-    if arguments.post_init_heap and arguments.resident_next_call:
-        raise Refusal("--post-init-heap and --resident-next-call are distinct evidence windows")
+    selected_windows = sum(
+        (arguments.post_init_heap, arguments.resident_next_call, arguments.runtime_init_next_call)
+    )
+    if selected_windows > 1:
+        raise Refusal(
+            "--post-init-heap, --resident-next-call, and --runtime-init-next-call are distinct evidence windows"
+        )
 
     exe = pathlib.Path(arguments.exe)
     oracle_tool = pathlib.Path(arguments.oracle_trace)
@@ -475,7 +561,9 @@ def main() -> int:
         "--summary-only",
     ]
 
-    if arguments.resident_next_call:
+    if arguments.resident_next_call or arguments.runtime_init_next_call:
+        runtime_init_window = arguments.runtime_init_next_call
+        label = "ctr04 runtime-init-next-call compare" if runtime_init_window else "ctr04 resident-next-call compare"
         oracle_repeat_output = scratch / "ctr04-oracle-boundary-repeat.trace"
         post = capture_deterministic_post_init(
             base_oracle_command, oracle_output, oracle_repeat_output
@@ -486,15 +574,22 @@ def main() -> int:
                 f"proven resident resume 0x{RESIDENT_RESUME_TARGET:08X}"
             )
         print(
-            "ctr04 resident-next-call compare: determinism PASS — two original oracle runs "
+            f"{label}: determinism PASS — two original oracle runs "
             "produced identical post-InitHeap state"
         )
 
         gprs = (0, *(post.post_return_call.registers[name] for name in REGISTER_NAMES[:-2]))
         stack_pointer = post.post_return_call.registers["sp"]
-        if stack_pointer < 32:
-            raise Refusal("resident stack-store range wraps below address zero")
         replay_path = scratch.parent / "raw" / "ctr" / "ctr04-resident-replay.exe"
+        expected_ranges = ()
+        expected_words = ()
+        forbidden_ranges = replay_stack_writes(stack_pointer, runtime_init_window)
+        if runtime_init_window:
+            expected_ranges = (
+                (RUNTIME_INIT_TARGET, RUNTIME_INIT_CODE),
+                (POST_RUNTIME_INIT_TARGET, POST_RUNTIME_INIT_CODE),
+            )
+            expected_words = ((RUNTIME_INIT_FLAG, 0), (INITIAL_MODE_WORD, 0))
         try:
             replay = write_replay(
                 exe,
@@ -504,19 +599,22 @@ def main() -> int:
                 lo=post.post_return_call.registers["lo"],
                 hi=post.post_return_call.registers["hi"],
                 expected_prefix=RESIDENT_PREFIX,
-                forbidden_ranges=(range(stack_pointer - 32, stack_pointer - 7),),
+                expected_ranges=expected_ranges,
+                expected_words=expected_words,
+                forbidden_ranges=forbidden_ranges,
             )
         except ReplayRefusal as error:
             raise Refusal(f"resident replay construction refused: {error}") from error
         print(
-            f"ctr04 resident-next-call compare: bounded replay trampoline "
+            f"{label}: bounded replay trampoline "
             f"0x{replay.trampoline:08X} ({replay.size} bytes)"
         )
 
         resident_output = scratch / "ctr04-resident-oracle.trace"
         resident_repeat_output = scratch / "ctr04-resident-oracle-repeat.trace"
+        call_ordinal = 2 if runtime_init_window else 1
         resident_command = [
-            str(oracle_tool), str(replay_path), "--steps", "256", "--capture-call", "1",
+            str(oracle_tool), str(replay_path), "--steps", "256", "--capture-call", str(call_ordinal),
             "--summary-only",
         ]
         run([*resident_command, "--out", str(resident_output)], "resident replay oracle trace A")
@@ -530,9 +628,14 @@ def main() -> int:
         )
         if oracle_boundary != oracle_repeat:
             raise Refusal("two resident replay oracle runs produced different boundary state or steps")
+        if runtime_init_window and oracle_boundary.target != RUNTIME_INIT_NEXT_CALL:
+            raise Refusal(
+                f"runtime initializer replay reached 0x{oracle_boundary.target:08X}, not the "
+                f"Ghidra-proven next call 0x{RUNTIME_INIT_NEXT_CALL:08X}"
+            )
         print(
-            "ctr04 resident-next-call compare: determinism PASS — two replay oracle runs "
-            "produced identical first-call evidence"
+            f"{label}: determinism PASS — two replay oracle runs "
+            "produced identical call-boundary evidence"
         )
 
         port_result = run(
@@ -552,11 +655,11 @@ def main() -> int:
                 port_boundary, registers={**port_boundary.registers, name: value}
             )
             print(
-                f"ctr04 resident-next-call compare: TEST-ONLY forced generated "
+                f"{label}: TEST-ONLY forced generated "
                 f"resident.{name}=0x{value:08X}"
             )
         rows = compare_boundary(oracle_boundary, port_boundary, "resident")
-        comparison_label = "ctr04 resident-next-call compare"
+        comparison_label = label
     elif arguments.post_init_heap:
         oracle_repeat_output = scratch / "ctr04-oracle-boundary-repeat.trace"
         oracle = capture_deterministic_post_init(
