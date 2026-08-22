@@ -32,7 +32,9 @@ resident prefix has no RAM reads before its call. The canonical oracle and gener
 there on 34/34 fields at `0x800779E4` (`ra=0x8003C5B0`), with a 33/34 forced-opposite control.
 Ghidra then proved that runtime initializer's complete path and the caller continuation through the
 next call. A byte- and input-checked replay executes both and agrees 34/34 at `0x80032DC0`
-(`ra=0x8003C5D8`), again detecting a forced `gp` disagreement as 33/34.
+(`ra=0x8003C5D8`), again detecting a forced `gp` disagreement as 33/34. The next decompile proves
+that service's startup idle path from four exact executable-backed values and reaches `0x8001D06C`
+(`ra=0x8003C5E0`) with deterministic 34/34 agreement; its forced control is 33/34.
 
 ## Reproduce the measurement
 

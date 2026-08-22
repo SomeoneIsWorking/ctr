@@ -16,8 +16,8 @@ measurable base before enhancements.
 
 CTR-04 owns one narrow game module: `game/core/crt0_port_trace.cpp` executes the gitignored shipping
 substrate through the oracle-observed first call, an explicit consumer-owned A(39h) InitHeap return,
-the first subsequent call, and the exact checked replay through runtime initializer `0x800779E4` to
-resident call `0x80032DC0`.
+the first subsequent call, and the exact checked replay through runtime initializer `0x800779E4`,
+startup service `0x80032DC0`, and its next resident call `0x8001D06C`.
 `tools/emit_substrate.py` is the identity-gated emitter entry point; `tools/compare_crt0_trace.py` owns
 the repeat-oracle cross-process diff; `tools/resident_replay.py` owns the bounded exact-state replay.
 None is a game loop or permission to guess later addresses or RAM; the modeled external leaf is

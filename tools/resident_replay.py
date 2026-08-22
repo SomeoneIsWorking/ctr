@@ -89,9 +89,11 @@ def build_replay(
     """Return a replay EXE, refusing unless the bounded original prefix is exact.
 
     ``registers`` is the complete 32-GPR state, including the immutable zero register.
-    The replay is only sound through the checked code ranges and initialized-data words;
+    The replay is only sound through the checked code ranges and executable-backed words;
     callers must independently prove that they cover every instruction and memory read before
-    the boundary they capture.
+    the boundary they capture. ``expected_words`` covers executable-backed memory inputs,
+    including zero image bytes that the real crt0 preserves as BSS state; it is not permission
+    to assume arbitrary replay RAM equals post-crt0 RAM.
     """
 
     load, text_size = _validate_exe(source)
@@ -120,10 +122,10 @@ def build_replay(
     for address, expected in expected_words:
         offset = address - load
         if offset < 0 or offset + 4 > text_size:
-            raise ReplayRefusal("an expected initialized-data word lies outside executable text")
+            raise ReplayRefusal("an expected executable-backed word lies outside executable text")
         if _read_u32(payload, offset) != expected:
             raise ReplayRefusal(
-                f"initialized-data word at 0x{address:08X} changed; the replay proof is stale"
+                f"executable-backed word at 0x{address:08X} changed; the replay proof is stale"
             )
 
     scratch = next((index for index in (26, 27, 25) if registers[index] == 0), None)
@@ -142,9 +144,20 @@ def build_replay(
     words.append(scratch << 11 | 0x21)  # addu scratch,zero,zero (jump delay slot)
     trampoline_size = 4 * len(words)
 
+    # The trampoline is part of the replay mechanism, not game state. It must never occupy any
+    # byte later cited as an input to the proof. A service-state word at 0x8008D708 exposed this:
+    # the former planner found a convenient BSS zero run at 0x8008D6F0, then its own `lui` word
+    # became the value the replayed game loaded. Reserving only the resume prefix and stack spans
+    # allowed the instrument to manufacture the divergence it reported.
+    evidence_ranges = tuple(
+        range(address, address + len(expected)) for address, expected in expected_ranges
+    ) + tuple(range(address, address + 4) for address, _ in expected_words)
     prefix_range = range(resume_target, resume_target + len(expected_prefix))
     trampoline_offset = _find_zero_run(
-        payload, trampoline_size, load, (prefix_range, *forbidden_ranges)
+        payload,
+        trampoline_size,
+        load,
+        (prefix_range, *evidence_ranges, *forbidden_ranges),
     )
     trampoline = load + trampoline_offset
     jump_pc = trampoline + (len(words) - 2) * 4

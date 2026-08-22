@@ -180,6 +180,31 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generated/rec_sources.cmake")
     DEPENDS ctr04_resident_next_call_check ctr_crt0_port_trace oracle_trace
     USES_TERMINAL
     VERBATIM)
+
+  # Continue through the first startup service call on its measured idle path. The consumer checks
+  # every executed code island and all four memory inputs (packed into three exact source words)
+  # before the independent oracle and generated substrate may agree at the next call.
+  add_custom_target(
+    ctr04_startup_service_next_call_check
+    COMMAND
+      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
+      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
+      --oracle-trace "$<TARGET_FILE:oracle_trace>"
+      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
+      --steps 400000
+      --startup-service-next-call
+    COMMAND
+      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
+      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
+      --oracle-trace "$<TARGET_FILE:oracle_trace>"
+      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
+      --steps 400000
+      --startup-service-next-call
+      --force-port-field resident:gp=0
+      --expect-difference
+    DEPENDS ctr04_runtime_init_next_call_check ctr_crt0_port_trace oracle_trace
+    USES_TERMINAL
+    VERBATIM)
 else()
   message(STATUS
     "CTR-04 generated trace target is unavailable: emit generated/ from the verified USA executable "

@@ -20,12 +20,17 @@ REGISTER_NAMES = (
     "k1", "gp", "sp", "fp", "ra", "lo", "hi",
 )
 
+
+def pack_words(words: tuple[int, ...]) -> bytes:
+    return struct.pack(f"<{len(words)}I", *words)
+
+
 RESIDENT_RESUME_TARGET = 0x8003C58C
 RESIDENT_PREFIX_WORDS = (
     0x27BDFFC0, 0xAFBF0038, 0xAFB50034, 0xAFB40030, 0xAFB3002C,
     0xAFB20028, 0xAFB10024, 0x0C01DE79, 0xAFB00020,
 )
-RESIDENT_PREFIX = struct.pack(f"<{len(RESIDENT_PREFIX_WORDS)}I", *RESIDENT_PREFIX_WORDS)
+RESIDENT_PREFIX = pack_words(RESIDENT_PREFIX_WORDS)
 
 RUNTIME_INIT_TARGET = 0x800779E4
 RUNTIME_INIT_WORDS = (
@@ -36,19 +41,42 @@ RUNTIME_INIT_WORDS = (
     0x1620FFFB, 0x00000000, 0x8FBF000C, 0x8FB10008, 0x8FB00004,
     0x27BD0010, 0x03E00008, 0x00000000,
 )
-RUNTIME_INIT_CODE = struct.pack(f"<{len(RUNTIME_INIT_WORDS)}I", *RUNTIME_INIT_WORDS)
+RUNTIME_INIT_CODE = pack_words(RUNTIME_INIT_WORDS)
 POST_RUNTIME_INIT_TARGET = 0x8003C5B0
 POST_RUNTIME_INIT_WORDS = (
     0x8F830188, 0x24020005, 0x10620264, 0x241300D8, 0x24140001,
     0x2412FFFF, 0x24110001, 0x2415FFFA, 0x0C00CB70, 0x00000000,
 )
-POST_RUNTIME_INIT_CODE = struct.pack(
-    f"<{len(POST_RUNTIME_INIT_WORDS)}I", *POST_RUNTIME_INIT_WORDS
-)
+POST_RUNTIME_INIT_CODE = pack_words(POST_RUNTIME_INIT_WORDS)
 RUNTIME_INIT_NEXT_CALL = 0x80032DC0
 RUNTIME_INIT_FLAG = 0x8008C050
 INITIAL_MODE_WORD = 0x8008D0F4
 BSS_START = 0x8008D668
+
+# The startup service takes this exact idle path for the original post-crt0 state. Ghidra's
+# decompile establishes the four reads and the control flow; the bounded replay checks both the
+# executed instruction islands and their source-image inputs before treating the next call as
+# evidence. Keeping the islands separate avoids claiming unexecuted branches in the same function.
+STARTUP_SERVICE_ENTRY_WORDS = (
+    0x93820134, 0x27BDFFE0, 0xAFBF001C, 0x1040006A, 0xAFB00018,
+    0x3C028009, 0x8C42D708, 0x00000000, 0x14400065, 0x00000000,
+    0x87820136, 0x00000000, 0x10400061, 0x00000000,
+)
+STARTUP_SERVICE_IDLE_WORDS = (0x8F83013C, 0x00000000, 0x1060001A, 0x00000000)
+STARTUP_SERVICE_RETURN_WORDS = (0x8FBF001C, 0x8FB00018, 0x03E00008, 0x27BD0020)
+POST_STARTUP_SERVICE_WORDS = (0x0C00741B, 0x00000000)
+STARTUP_SERVICE_ENTRY = 0x80032DC0
+STARTUP_SERVICE_IDLE = 0x80032F78
+STARTUP_SERVICE_RETURN = 0x80032FEC
+POST_STARTUP_SERVICE = 0x8003C5D8
+STARTUP_SERVICE_NEXT_CALL = 0x8001D06C
+STARTUP_SERVICE_REQUEST_WORD = 0x8008D0A0
+STARTUP_SERVICE_LOADING_FLAG = 0x8008D708
+STARTUP_SERVICE_TIMESTAMP = 0x8008D0A8
+STARTUP_SERVICE_ENTRY_CODE = pack_words(STARTUP_SERVICE_ENTRY_WORDS)
+STARTUP_SERVICE_IDLE_CODE = pack_words(STARTUP_SERVICE_IDLE_WORDS)
+STARTUP_SERVICE_RETURN_CODE = pack_words(STARTUP_SERVICE_RETURN_WORDS)
+POST_STARTUP_SERVICE_CODE = pack_words(POST_STARTUP_SERVICE_WORDS)
 
 
 class Refusal(RuntimeError):
@@ -365,6 +393,21 @@ def selftest() -> int:
         ),
     )
     checks.append(("main-RAM alias exclusion moves the trampoline", aliased.trampoline != replay_a.trampoline))
+    evidence_protected = build_replay(
+        bytes(synthetic),
+        resume_target=0x80010000 + prefix_offset,
+        registers=replay_registers,
+        lo=0,
+        hi=0,
+        expected_prefix=RESIDENT_PREFIX,
+        expected_words=((replay_a.trampoline, 0),),
+    )
+    checks.append(
+        (
+            "checked memory inputs cannot be occupied by the replay trampoline",
+            evidence_protected.trampoline != replay_a.trampoline,
+        )
+    )
     changed = bytearray(synthetic)
     changed[0x800 + prefix_offset] ^= 1
     try:
@@ -433,6 +476,14 @@ def selftest() -> int:
         (
             "runtime-init inputs remain initialized data before BSS",
             RUNTIME_INIT_FLAG < BSS_START and INITIAL_MODE_WORD < BSS_START,
+        )
+    )
+    checks.append(
+        (
+            "startup-service replay distinguishes initialized state from BSS zero",
+            STARTUP_SERVICE_REQUEST_WORD < BSS_START
+            and STARTUP_SERVICE_TIMESTAMP < BSS_START
+            and STARTUP_SERVICE_LOADING_FLAG >= BSS_START,
         )
     )
     for label, passed in checks:
@@ -525,6 +576,7 @@ def main() -> int:
     parser.add_argument("--post-init-heap", action="store_true")
     parser.add_argument("--resident-next-call", action="store_true")
     parser.add_argument("--runtime-init-next-call", action="store_true")
+    parser.add_argument("--startup-service-next-call", action="store_true")
     parser.add_argument("--force-port-field", help="test-only post-capture mutation, [STAGE:]NAME=VALUE")
     parser.add_argument("--expect-difference", action="store_true")
     parser.add_argument("--selftest", action="store_true")
@@ -539,11 +591,16 @@ def main() -> int:
     if arguments.steps <= 0:
         raise Refusal("--steps must be positive; an empty run is not agreement")
     selected_windows = sum(
-        (arguments.post_init_heap, arguments.resident_next_call, arguments.runtime_init_next_call)
+        (
+            arguments.post_init_heap,
+            arguments.resident_next_call,
+            arguments.runtime_init_next_call,
+            arguments.startup_service_next_call,
+        )
     )
     if selected_windows > 1:
         raise Refusal(
-            "--post-init-heap, --resident-next-call, and --runtime-init-next-call are distinct evidence windows"
+            "post-InitHeap and each resident next-call option are distinct evidence windows"
         )
 
     exe = pathlib.Path(arguments.exe)
@@ -561,9 +618,19 @@ def main() -> int:
         "--summary-only",
     ]
 
-    if arguments.resident_next_call or arguments.runtime_init_next_call:
-        runtime_init_window = arguments.runtime_init_next_call
-        label = "ctr04 runtime-init-next-call compare" if runtime_init_window else "ctr04 resident-next-call compare"
+    if (
+        arguments.resident_next_call
+        or arguments.runtime_init_next_call
+        or arguments.startup_service_next_call
+    ):
+        include_startup_service = arguments.startup_service_next_call
+        include_runtime_init = arguments.runtime_init_next_call or include_startup_service
+        if include_startup_service:
+            label = "ctr04 startup-service-next-call compare"
+        elif include_runtime_init:
+            label = "ctr04 runtime-init-next-call compare"
+        else:
+            label = "ctr04 resident-next-call compare"
         oracle_repeat_output = scratch / "ctr04-oracle-boundary-repeat.trace"
         post = capture_deterministic_post_init(
             base_oracle_command, oracle_output, oracle_repeat_output
@@ -583,13 +650,25 @@ def main() -> int:
         replay_path = scratch.parent / "raw" / "ctr" / "ctr04-resident-replay.exe"
         expected_ranges = ()
         expected_words = ()
-        forbidden_ranges = replay_stack_writes(stack_pointer, runtime_init_window)
-        if runtime_init_window:
+        forbidden_ranges = replay_stack_writes(stack_pointer, include_runtime_init)
+        if include_runtime_init:
             expected_ranges = (
                 (RUNTIME_INIT_TARGET, RUNTIME_INIT_CODE),
                 (POST_RUNTIME_INIT_TARGET, POST_RUNTIME_INIT_CODE),
             )
             expected_words = ((RUNTIME_INIT_FLAG, 0), (INITIAL_MODE_WORD, 0))
+        if include_startup_service:
+            expected_ranges += (
+                (STARTUP_SERVICE_ENTRY, STARTUP_SERVICE_ENTRY_CODE),
+                (STARTUP_SERVICE_IDLE, STARTUP_SERVICE_IDLE_CODE),
+                (STARTUP_SERVICE_RETURN, STARTUP_SERVICE_RETURN_CODE),
+                (POST_STARTUP_SERVICE, POST_STARTUP_SERVICE_CODE),
+            )
+            expected_words += (
+                (STARTUP_SERVICE_REQUEST_WORD, 1),
+                (STARTUP_SERVICE_LOADING_FLAG, 0),
+                (STARTUP_SERVICE_TIMESTAMP, 0),
+            )
         try:
             replay = write_replay(
                 exe,
@@ -612,7 +691,7 @@ def main() -> int:
 
         resident_output = scratch / "ctr04-resident-oracle.trace"
         resident_repeat_output = scratch / "ctr04-resident-oracle-repeat.trace"
-        call_ordinal = 2 if runtime_init_window else 1
+        call_ordinal = 3 if include_startup_service else (2 if include_runtime_init else 1)
         resident_command = [
             str(oracle_tool), str(replay_path), "--steps", "256", "--capture-call", str(call_ordinal),
             "--summary-only",
@@ -628,10 +707,13 @@ def main() -> int:
         )
         if oracle_boundary != oracle_repeat:
             raise Refusal("two resident replay oracle runs produced different boundary state or steps")
-        if runtime_init_window and oracle_boundary.target != RUNTIME_INIT_NEXT_CALL:
+        expected_target = (
+            STARTUP_SERVICE_NEXT_CALL if include_startup_service else RUNTIME_INIT_NEXT_CALL
+        )
+        if include_runtime_init and oracle_boundary.target != expected_target:
             raise Refusal(
-                f"runtime initializer replay reached 0x{oracle_boundary.target:08X}, not the "
-                f"Ghidra-proven next call 0x{RUNTIME_INIT_NEXT_CALL:08X}"
+                f"resident replay reached 0x{oracle_boundary.target:08X}, not the "
+                f"Ghidra-proven next call 0x{expected_target:08X}"
             )
         print(
             f"{label}: determinism PASS — two replay oracle runs "

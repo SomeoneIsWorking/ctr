@@ -5,7 +5,7 @@ status: holds
 created: 2026-08-21
 tags: ctr-04,recompiler,differential
 depends: CMakeLists.txt, game/core/crt0_port_trace.cpp, tools/compare_crt0_trace.py, tools/emit_substrate.py
-verified_at: 2026-08-22 14:18:17
+verified_at: 2026-08-22 18:12:28
 reconfirmed: 2026-08-22
 ---
 
@@ -54,3 +54,7 @@ Re-verified against exact psxport 3418a79b624765614f3f198dc1e89632e1e650f0 after
 ## Re-confirmed 2026-08-22
 
 Fresh real-disc ctr04_check through CtrRuntime on psxport 7f5d3f13 agreed on 34/34 pre-BIOS fields; forced gp=0 produced the named 33/34 opposite.
+
+## Re-confirmed 2026-08-22
+
+Against exact landed and recorded psxport ad5cf802, the real-executable pre-BIOS comparator agreed 34/34 at 0x80080620 and forced generated gp=0 produced the named 33/34 opposite.

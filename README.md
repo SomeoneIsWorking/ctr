@@ -7,9 +7,9 @@ Current status: the USA target executable is measured, its reproducible provisio
 real media, and an independent Beetle/Mednafen CPU has executed and cross-checked its crt0. The
 shipping recompiler emits the gitignored resident substrate; the pre-BIOS boundary agrees on 34/34
 fields, an explicit A(39h) return continuation agrees through the next call on 108/108 fields, and
-bounded resident execution agrees at both `0x800779E4` and the post-initializer call `0x80032DC0` on
-34/34 fields. There is still no game seam or port boot, and no broader hardware-dependent execution
-is claimed.
+bounded resident execution agrees at `0x800779E4`, `0x80032DC0`, and the startup service's next call
+`0x8001D06C` on 34/34 fields. There is still no shipping game loop, and no broader
+hardware-dependent execution is claimed.
 
 ## Configure the framework scaffold
 
@@ -70,6 +70,8 @@ PSXPORT_CTR_DISC=/path/to/CTR-USA.chd \
   CCACHE_DISABLE=1 cmake --build build --target ctr04_resident_next_call_check
 PSXPORT_CTR_DISC=/path/to/CTR-USA.chd \
   CCACHE_DISABLE=1 cmake --build build --target ctr04_runtime_init_next_call_check
+PSXPORT_CTR_DISC=/path/to/CTR-USA.chd \
+  CCACHE_DISABLE=1 cmake --build build --target ctr04_startup_service_next_call_check
 ```
 
 `ctr04_check` re-provisions the executable, executes the oracle to its first call, supplies that
@@ -99,7 +101,11 @@ mode word `0x8008D0F4` before calling `0x80032DC0`. Both inputs precede the BSS 
 zero in the identity-checked executable. The replay validates all three non-contiguous code ranges,
 both initialized-data words, and every byte written by the two stack frames. Two oracle replays are
 identical and generated execution agrees on all 34 boundary fields; forced `resident.gp=0` is detected
-as 33/34. The proof ends at `0x80032DC0`, not at a frame loop.
+as 33/34. Ghidra then established `0x80032DC0`'s startup idle path: request word `0x8008D0A0` is 1,
+loading flag `0x8008D708` and timestamp `0x8008D0A8` are zero, and the packed request count is zero.
+The replay checks those values plus every executed instruction island, then agrees 34/34 at the next
+call `0x8001D06C`; its forced `gp=0` control reports 33/34. The proof ends at that call, not at a
+frame loop.
 
 ## Cross-check the first boot window in the independent oracle
 
@@ -121,4 +127,4 @@ launch Crash Team Racing. See `titles/ctr/README.md` for the measured target and
 `docs/re-frontier.md` for the ordered work required before a boot claim is possible.
 
 Disc images and extracted executables are never committed. The remaining boot frontier begins in
-callee `0x80032DC0`; this bounded continuation does not claim that the PC port boots.
+callee `0x8001D06C`; this bounded continuation does not claim that the PC port boots.
