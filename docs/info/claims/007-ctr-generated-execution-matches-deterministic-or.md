@@ -6,7 +6,7 @@ created: 2026-08-22
 tags:
 depends: tools/compare_crt0_trace.py#main, tools/resident_replay.py#build_replay, game/core/crt0_port_trace.cpp#restoreResidentState, CMakeLists.txt
 reconfirmed: 2026-08-22
-verified_at: 2026-08-22 18:32:09
+verified_at: 2026-08-22 18:35:49
 ---
 
 ## Claim
@@ -36,3 +36,7 @@ Against exact landed and recorded psxport ad5cf802, repeated original and call-o
 ## Re-confirmed 2026-08-22
 
 Current repeated original and call-ordinal-2 replay captures were deterministic, generated execution agreed 34/34 at 0x80032DC0, and forced resident.gp=0 produced 33/34.
+
+## Re-confirmed 2026-08-22
+
+Post-commit Clang verification passed 87/87 CTest with exact ad5cf802 pin; real SCUS_944.26 oracle/generated windows remained deterministic, comparator controls passed 18/18, the new 0x800718BC boundary agreed 34/34, and forced resident.gp produced the named 33/34 difference.

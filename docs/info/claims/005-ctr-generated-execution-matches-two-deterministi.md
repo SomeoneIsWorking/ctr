@@ -6,7 +6,7 @@ created: 2026-08-21
 tags:
 depends: game/core/crt0_port_trace.cpp#modelInitHeapReturn, tools/compare_crt0_trace.py#main, CMakeLists.txt
 reconfirmed: 2026-08-22
-verified_at: 2026-08-22 18:32:09
+verified_at: 2026-08-22 18:35:48
 ---
 
 ## Claim
@@ -52,3 +52,7 @@ Against exact landed and recorded psxport ad5cf802, two original oracle post-Ini
 ## Re-confirmed 2026-08-22
 
 Current comparator produced deterministic repeated oracle evidence and generated 108/108 agreement at post-InitHeap call 0x8003C58C; forced post.gp=0 produced 107/108.
+
+## Re-confirmed 2026-08-22
+
+Post-commit Clang verification passed 87/87 CTest with exact ad5cf802 pin; real SCUS_944.26 oracle/generated windows remained deterministic, comparator controls passed 18/18, the new 0x800718BC boundary agreed 34/34, and forced resident.gp produced the named 33/34 difference.

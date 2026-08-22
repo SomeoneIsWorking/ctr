@@ -6,7 +6,7 @@ created: 2026-08-21
 tags: ctr-03,oracle,boot
 depends: CMakeLists.txt, tools/provision.py
 reconfirmed: 2026-08-22
-verified_at: 2026-08-22 18:32:08
+verified_at: 2026-08-22 18:35:48
 ---
 
 ## Claim
@@ -57,3 +57,7 @@ Against exact landed and recorded psxport ad5cf802, oracle_spike passed 39/39 an
 ## Re-confirmed 2026-08-22
 
 Current Clang oracle fixture passed 39/39 and crossvalidate_crt0 on exact SCUS_944.26 reproduced symbolic-versus-executed 7/7 at the first crt0 call against recorded psxport ad5cf802.
+
+## Re-confirmed 2026-08-22
+
+Post-commit Clang verification passed 87/87 CTest with exact ad5cf802 pin; real SCUS_944.26 oracle/generated windows remained deterministic, comparator controls passed 18/18, the new 0x800718BC boundary agreed 34/34, and forced resident.gp produced the named 33/34 difference.

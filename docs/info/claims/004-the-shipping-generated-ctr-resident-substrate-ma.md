@@ -5,7 +5,7 @@ status: holds
 created: 2026-08-21
 tags: ctr-04,recompiler,differential
 depends: CMakeLists.txt, game/core/crt0_port_trace.cpp, tools/compare_crt0_trace.py, tools/emit_substrate.py
-verified_at: 2026-08-22 18:32:09
+verified_at: 2026-08-22 18:35:48
 reconfirmed: 2026-08-22
 ---
 
@@ -62,3 +62,7 @@ Against exact landed and recorded psxport ad5cf802, the real-executable pre-BIOS
 ## Re-confirmed 2026-08-22
 
 Current real-executable pre-BIOS comparator agreed 34/34 at 0x80080620 and forced generated gp=0 produced 33/34 against recorded psxport ad5cf802.
+
+## Re-confirmed 2026-08-22
+
+Post-commit Clang verification passed 87/87 CTest with exact ad5cf802 pin; real SCUS_944.26 oracle/generated windows remained deterministic, comparator controls passed 18/18, the new 0x800718BC boundary agreed 34/34, and forced resident.gp produced the named 33/34 difference.
