@@ -6,7 +6,7 @@ created: 2026-08-20
 tags: target,executable,ctr-01
 depends: titles/ctr/README.md
 reconfirmed: 2026-08-22
-verified_at: 2026-08-22 14:18:15
+verified_at: 2026-08-22 18:32:08
 ---
 
 ## Claim
@@ -36,3 +36,7 @@ Post-landing ce2c83ad asset gate reprovisioned the real USA executable and reval
 ## Re-confirmed 2026-08-22
 
 Fresh real-disc provisioning during the 7f5d3f13 runtime migration selected SCUS_944.26 and reproduced the recorded SHA-256 and executable identity.
+
+## Re-confirmed 2026-08-22
+
+Current identity gate accepted exact 516096-byte SCUS_944.26 with SHA-256 7b4aac0bf2f6310984e599295df17b457da5a23b270c20200cefef6079efb838; the title documentation change only advances the verified execution frontier.

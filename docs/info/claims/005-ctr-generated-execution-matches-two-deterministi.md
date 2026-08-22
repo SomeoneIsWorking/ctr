@@ -6,7 +6,7 @@ created: 2026-08-21
 tags:
 depends: game/core/crt0_port_trace.cpp#modelInitHeapReturn, tools/compare_crt0_trace.py#main, CMakeLists.txt
 reconfirmed: 2026-08-22
-verified_at: 2026-08-22 18:12:28
+verified_at: 2026-08-22 18:32:09
 ---
 
 ## Claim
@@ -48,3 +48,7 @@ Fresh real-disc post-InitHeap chain through CtrRuntime produced two deterministi
 ## Re-confirmed 2026-08-22
 
 Against exact landed and recorded psxport ad5cf802, two original oracle post-InitHeap captures were deterministic, generated execution agreed 108/108 at 0x8003C58C, and forced post.gp=0 produced 107/108.
+
+## Re-confirmed 2026-08-22
+
+Current comparator produced deterministic repeated oracle evidence and generated 108/108 agreement at post-InitHeap call 0x8003C58C; forced post.gp=0 produced 107/108.

@@ -78,6 +78,42 @@ STARTUP_SERVICE_IDLE_CODE = pack_words(STARTUP_SERVICE_IDLE_WORDS)
 STARTUP_SERVICE_RETURN_CODE = pack_words(STARTUP_SERVICE_RETURN_WORDS)
 POST_STARTUP_SERVICE_CODE = pack_words(POST_STARTUP_SERVICE_WORDS)
 
+# Startup state zero makes the next polling service return without calling its optional worker.
+# The caller then dispatches through the first executable-backed jump-table entry and calls the
+# A(2Bh) memset thunk. The proof stops at that thunk: its jump to 0xA0 is an external BIOS leaf with
+# a RAM side effect, not executable code that this bounded replay may silently step through.
+BACKGROUND_SERVICE_ENTRY_WORDS = (0x8F82074C, 0x27BDFFE8, 0x10400003, 0xAFBF0010)
+BACKGROUND_SERVICE_RETURN_WORDS = (0x8FBF0010, 0x00000000, 0x03E00008, 0x27BD0018)
+STATE_DISPATCH_WORDS = (
+    0x8F830188,
+    0x00000000,
+    0x2C620005,
+    0x10400255,
+    0x24020005,
+    0x3C028001,
+    0x24421594,
+    0x00031880,
+    0x00621821,
+    0x8C620000,
+    0x00000000,
+    0x00400008,
+    0x00000000,
+)
+STATE_ZERO_CASE_WORDS = (0x00002821, 0x8F840340, 0x0C01C62F, 0x24062584)
+BACKGROUND_SERVICE = 0x8001D06C
+BACKGROUND_SERVICE_RETURN = 0x8001D084
+POST_BACKGROUND_SERVICE = 0x8003C5E0
+STATE_ZERO_CASE = 0x8003C614
+STARTUP_MEMSET_THUNK = 0x800718BC
+BACKGROUND_SERVICE_PENDING = 0x8008D6B8
+STATE_JUMP_TABLE_ZERO = 0x80011594
+GLOBAL_STATE_POINTER = 0x8008D2AC
+GLOBAL_STATE_BASE = 0x80096B20
+BACKGROUND_SERVICE_ENTRY_CODE = pack_words(BACKGROUND_SERVICE_ENTRY_WORDS)
+BACKGROUND_SERVICE_RETURN_CODE = pack_words(BACKGROUND_SERVICE_RETURN_WORDS)
+STATE_DISPATCH_CODE = pack_words(STATE_DISPATCH_WORDS)
+STATE_ZERO_CASE_CODE = pack_words(STATE_ZERO_CASE_WORDS)
+
 
 class Refusal(RuntimeError):
     """The evidence was incomplete, so no agreement can be claimed."""
@@ -486,6 +522,14 @@ def selftest() -> int:
             and STARTUP_SERVICE_LOADING_FLAG >= BSS_START,
         )
     )
+    checks.append(
+        (
+            "state-zero service inputs retain their executable/BSS classification",
+            STATE_JUMP_TABLE_ZERO < BSS_START
+            and GLOBAL_STATE_POINTER < BSS_START
+            and BACKGROUND_SERVICE_PENDING >= BSS_START,
+        )
+    )
     for label, passed in checks:
         print(f"  {'PASS' if passed else 'FAIL'} {label}")
     failed = sum(not passed for _, passed in checks)
@@ -577,6 +621,7 @@ def main() -> int:
     parser.add_argument("--resident-next-call", action="store_true")
     parser.add_argument("--runtime-init-next-call", action="store_true")
     parser.add_argument("--startup-service-next-call", action="store_true")
+    parser.add_argument("--startup-memset-thunk", action="store_true")
     parser.add_argument("--force-port-field", help="test-only post-capture mutation, [STAGE:]NAME=VALUE")
     parser.add_argument("--expect-difference", action="store_true")
     parser.add_argument("--selftest", action="store_true")
@@ -596,6 +641,7 @@ def main() -> int:
             arguments.resident_next_call,
             arguments.runtime_init_next_call,
             arguments.startup_service_next_call,
+            arguments.startup_memset_thunk,
         )
     )
     if selected_windows > 1:
@@ -622,10 +668,14 @@ def main() -> int:
         arguments.resident_next_call
         or arguments.runtime_init_next_call
         or arguments.startup_service_next_call
+        or arguments.startup_memset_thunk
     ):
-        include_startup_service = arguments.startup_service_next_call
+        include_memset_thunk = arguments.startup_memset_thunk
+        include_startup_service = arguments.startup_service_next_call or include_memset_thunk
         include_runtime_init = arguments.runtime_init_next_call or include_startup_service
-        if include_startup_service:
+        if include_memset_thunk:
+            label = "ctr04 startup-memset-thunk compare"
+        elif include_startup_service:
             label = "ctr04 startup-service-next-call compare"
         elif include_runtime_init:
             label = "ctr04 runtime-init-next-call compare"
@@ -669,6 +719,18 @@ def main() -> int:
                 (STARTUP_SERVICE_LOADING_FLAG, 0),
                 (STARTUP_SERVICE_TIMESTAMP, 0),
             )
+        if include_memset_thunk:
+            expected_ranges += (
+                (BACKGROUND_SERVICE, BACKGROUND_SERVICE_ENTRY_CODE),
+                (BACKGROUND_SERVICE_RETURN, BACKGROUND_SERVICE_RETURN_CODE),
+                (POST_BACKGROUND_SERVICE, STATE_DISPATCH_CODE),
+                (STATE_ZERO_CASE, STATE_ZERO_CASE_CODE),
+            )
+            expected_words += (
+                (BACKGROUND_SERVICE_PENDING, 0),
+                (STATE_JUMP_TABLE_ZERO, STATE_ZERO_CASE),
+                (GLOBAL_STATE_POINTER, GLOBAL_STATE_BASE),
+            )
         try:
             replay = write_replay(
                 exe,
@@ -691,7 +753,11 @@ def main() -> int:
 
         resident_output = scratch / "ctr04-resident-oracle.trace"
         resident_repeat_output = scratch / "ctr04-resident-oracle-repeat.trace"
-        call_ordinal = 3 if include_startup_service else (2 if include_runtime_init else 1)
+        call_ordinal = (
+            4
+            if include_memset_thunk
+            else (3 if include_startup_service else (2 if include_runtime_init else 1))
+        )
         resident_command = [
             str(oracle_tool), str(replay_path), "--steps", "256", "--capture-call", str(call_ordinal),
             "--summary-only",
@@ -708,7 +774,9 @@ def main() -> int:
         if oracle_boundary != oracle_repeat:
             raise Refusal("two resident replay oracle runs produced different boundary state or steps")
         expected_target = (
-            STARTUP_SERVICE_NEXT_CALL if include_startup_service else RUNTIME_INIT_NEXT_CALL
+            STARTUP_MEMSET_THUNK
+            if include_memset_thunk
+            else (STARTUP_SERVICE_NEXT_CALL if include_startup_service else RUNTIME_INIT_NEXT_CALL)
         )
         if include_runtime_init and oracle_boundary.target != expected_target:
             raise Refusal(

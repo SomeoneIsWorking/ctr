@@ -6,7 +6,7 @@ created: 2026-08-22
 tags:
 depends: tools/compare_crt0_trace.py#main, tools/resident_replay.py#build_replay, CMakeLists.txt
 reconfirmed: 2026-08-22
-verified_at: 2026-08-22 18:10:48
+verified_at: 2026-08-22 18:32:09
 ---
 
 ## Claim
@@ -28,3 +28,7 @@ Fresh Clang consumer rebuild against the quiescent shared framework; exact 7b4aa
 ## Re-confirmed 2026-08-22
 
 Verified against exact landed and recorded psxport ad5cf802: normal verify passed its provenance guard and all asset-free contracts, Clang policy passed, embedded CTest passed 87/87, exact 7b4aac0b... executable produced deterministic 34/34 agreement at 0x8001D06C, and forced resident.gp=0 produced 33/34.
+
+## Re-confirmed 2026-08-22
+
+Current repeated original and call-ordinal-3 replay captures were deterministic, generated execution agreed 34/34 at 0x8001D06C, and forced resident.gp=0 produced 33/34.

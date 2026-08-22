@@ -34,7 +34,10 @@ Ghidra then proved that runtime initializer's complete path and the caller conti
 next call. A byte- and input-checked replay executes both and agrees 34/34 at `0x80032DC0`
 (`ra=0x8003C5D8`), again detecting a forced `gp` disagreement as 33/34. The next decompile proves
 that service's startup idle path from four exact executable-backed values and reaches `0x8001D06C`
-(`ra=0x8003C5E0`) with deterministic 34/34 agreement; its forced control is 33/34.
+(`ra=0x8003C5E0`) with deterministic 34/34 agreement; its forced control is 33/34. The next service
+returns on its BSS-zero pending word, state zero selects exact jump-table entry `0x8003C614`, and the
+generated/oracle boundary agrees 34/34 at executable A(2Bh) thunk `0x800718BC`
+(`ra=0x8003C624`), again with a 33/34 forced control. The external memset side effect is not modeled.
 
 ## Reproduce the measurement
 

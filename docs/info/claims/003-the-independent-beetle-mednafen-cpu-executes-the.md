@@ -6,7 +6,7 @@ created: 2026-08-21
 tags: ctr-03,oracle,boot
 depends: CMakeLists.txt, tools/provision.py
 reconfirmed: 2026-08-22
-verified_at: 2026-08-22 18:12:28
+verified_at: 2026-08-22 18:32:08
 ---
 
 ## Claim
@@ -53,3 +53,7 @@ Fresh oracle_boot_check on Clang 22.1.8 and psxport 7f5d3f13 ran the 39/39 both-
 ## Re-confirmed 2026-08-22
 
 Against exact landed and recorded psxport ad5cf802, oracle_spike passed 39/39 and crossvalidate_crt0 on exact 7b4aac0b... SCUS_944.26 reproduced symbolic-versus-executed 7/7 at the InitHeap boundary.
+
+## Re-confirmed 2026-08-22
+
+Current Clang oracle fixture passed 39/39 and crossvalidate_crt0 on exact SCUS_944.26 reproduced symbolic-versus-executed 7/7 at the first crt0 call against recorded psxport ad5cf802.

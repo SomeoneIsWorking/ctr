@@ -6,7 +6,7 @@ created: 2026-08-21
 tags:
 depends: tools/resident_replay.py#build_replay, tools/compare_crt0_trace.py#main, game/core/crt0_port_trace.cpp#restoreResidentState, CMakeLists.txt
 reconfirmed: 2026-08-22
-verified_at: 2026-08-22 18:12:28
+verified_at: 2026-08-22 18:32:09
 ---
 
 ## Claim
@@ -48,3 +48,7 @@ Fresh real-disc bounded replay through CtrRuntime produced deterministic oracle 
 ## Re-confirmed 2026-08-22
 
 Against exact landed and recorded psxport ad5cf802, repeated original and call-ordinal-1 replay captures were deterministic, generated execution agreed 34/34 at 0x800779E4, and forced resident.gp=0 produced 33/34.
+
+## Re-confirmed 2026-08-22
+
+Current repeated original and call-ordinal-1 replay captures were deterministic, generated execution agreed 34/34 at 0x800779E4, and forced resident.gp=0 produced 33/34.

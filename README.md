@@ -8,7 +8,8 @@ real media, and an independent Beetle/Mednafen CPU has executed and cross-checke
 shipping recompiler emits the gitignored resident substrate; the pre-BIOS boundary agrees on 34/34
 fields, an explicit A(39h) return continuation agrees through the next call on 108/108 fields, and
 bounded resident execution agrees at `0x800779E4`, `0x80032DC0`, and the startup service's next call
-`0x8001D06C` on 34/34 fields. There is still no shipping game loop, and no broader
+`0x8001D06C` on 34/34 fields. The state-zero path then agrees 34/34 at executable initialization
+thunk `0x800718BC`. There is still no shipping game loop, and no broader
 hardware-dependent execution is claimed.
 
 ## Configure the framework scaffold
@@ -72,6 +73,8 @@ PSXPORT_CTR_DISC=/path/to/CTR-USA.chd \
   CCACHE_DISABLE=1 cmake --build build --target ctr04_runtime_init_next_call_check
 PSXPORT_CTR_DISC=/path/to/CTR-USA.chd \
   CCACHE_DISABLE=1 cmake --build build --target ctr04_startup_service_next_call_check
+PSXPORT_CTR_DISC=/path/to/CTR-USA.chd \
+  CCACHE_DISABLE=1 cmake --build build --target ctr04_startup_memset_thunk_check
 ```
 
 `ctr04_check` re-provisions the executable, executes the oracle to its first call, supplies that
@@ -104,8 +107,13 @@ identical and generated execution agrees on all 34 boundary fields; forced `resi
 as 33/34. Ghidra then established `0x80032DC0`'s startup idle path: request word `0x8008D0A0` is 1,
 loading flag `0x8008D708` and timestamp `0x8008D0A8` are zero, and the packed request count is zero.
 The replay checks those values plus every executed instruction island, then agrees 34/34 at the next
-call `0x8001D06C`; its forced `gp=0` control reports 33/34. The proof ends at that call, not at a
-frame loop.
+call `0x8001D06C`; its forced `gp=0` control reports 33/34. That callee's pending-work word
+`0x8008D6B8` is BSS zero, so it returns without calling its optional worker. Mode word zero selects
+jump-table word `0x80011594`, which points to `0x8003C614`; initialized pointer word `0x8008D2AC`
+supplies destination `0x80096B20`. The next gate checks both executed islands, the complete state
+dispatch, the case-zero callsite, and those exact inputs, then agrees 34/34 at `0x800718BC` with a
+forced 33/34 opposite. That thunk jumps to external BIOS A(2Bh) `memset`; the proof stops before it
+because later execution requires its RAM side effect, not a guessed return.
 
 ## Cross-check the first boot window in the independent oracle
 
@@ -126,5 +134,6 @@ media.
 launch Crash Team Racing. See `titles/ctr/README.md` for the measured target and
 `docs/re-frontier.md` for the ordered work required before a boot claim is possible.
 
-Disc images and extracted executables are never committed. The remaining boot frontier begins in
-callee `0x8001D06C`; this bounded continuation does not claim that the PC port boots.
+Disc images and extracted executables are never committed. The remaining boot frontier is the
+external A(2Bh) RAM mutation reached through thunk `0x800718BC`; this bounded continuation does not
+claim that the PC port boots.
