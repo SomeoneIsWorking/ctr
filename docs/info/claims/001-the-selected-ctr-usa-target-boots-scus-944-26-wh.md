@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-20
 tags: target,executable,ctr-01
 depends: titles/ctr/README.md
-reconfirmed: 2026-08-21
-verified_at: 2026-08-21 13:12:20
+reconfirmed: 2026-08-22
+verified_at: 2026-08-22 14:18:15
 ---
 
 ## Claim
@@ -32,3 +32,7 @@ Post-landing verify reprovisioned the selected USA executable and passed the com
 ## Re-confirmed 2026-08-21
 
 Post-landing ce2c83ad asset gate reprovisioned the real USA executable and revalidated the complete identity contract.
+
+## Re-confirmed 2026-08-22
+
+Fresh real-disc provisioning during the 7f5d3f13 runtime migration selected SCUS_944.26 and reproduced the recorded SHA-256 and executable identity.

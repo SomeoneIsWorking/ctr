@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-21
 tags: ctr-03,oracle,boot
 depends: CMakeLists.txt, tools/provision.py
-reconfirmed: 2026-08-21
-verified_at: 2026-08-21 13:12:21
+reconfirmed: 2026-08-22
+verified_at: 2026-08-22 14:18:16
 ---
 
 ## Claim
@@ -45,3 +45,7 @@ Post-landing oracle boot gate preserved the deterministic pre-BIOS 34/34 boundar
 ## Re-confirmed 2026-08-21
 
 Post-landing ce2c83ad oracle gate retained pre-BIOS 34/34, forced 33/34, and deterministic repeated execution.
+
+## Re-confirmed 2026-08-22
+
+Fresh oracle_boot_check on Clang 22.1.8 and psxport 7f5d3f13 ran the 39/39 both-answer oracle fixture and reproduced the real CTR symbolic-versus-executed 7/7 boundary agreement.

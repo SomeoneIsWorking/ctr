@@ -1,4 +1,5 @@
 #include "core.h"
+#include "ctr_runtime.h"
 
 #include <algorithm>
 #include <array>
@@ -235,6 +236,8 @@ int main(int argc, char **argv) {
     return 2;
   }
 
+  ctr::CtrRuntime runtime(main_dispatch, residentReplay ? target : layout.entry);
+  psxport_install_game(runtime);
   auto core = std::make_unique<Core>();
   load_exe(argv[1], core.get());
   Boundary boundary{};
@@ -255,7 +258,7 @@ int main(int argc, char **argv) {
   }
   bool reached = false;
   try {
-    main_dispatch(core.get(), residentReplay ? target : layout.entry);
+    runtime.bootInit(*core);
   } catch (const BoundaryReached &) {
     reached = true;
   }

@@ -42,6 +42,18 @@ add_custom_target(
   USES_TERMINAL
   VERBATIM)
 
+# CTR's process-lifetime derived runtime is asset-free and exposes no legacy GameConfig/GameHooks
+# view. The harness gives it the already-validated trace target before constructing Core.
+add_library(ctr_runtime STATIC game/core/ctr_runtime.cpp)
+set_target_properties(ctr_runtime PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+target_include_directories(ctr_runtime PUBLIC game/core)
+target_link_libraries(ctr_runtime PUBLIC psxport)
+
+add_executable(ctr_runtime_test tests/test_ctr_runtime.cpp)
+set_target_properties(ctr_runtime_test PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+target_link_libraries(ctr_runtime_test PRIVATE ctr_runtime)
+add_test(NAME ctr_runtime_inheritance COMMAND ctr_runtime_test)
+
 # Compile the harness in an asset-free clone as well. Linking it requires the gitignored generated
 # registry, but format/tidy must retain a real compile command before that substrate exists.
 add_library(ctr_crt0_trace_compile OBJECT game/core/crt0_port_trace.cpp)
@@ -49,7 +61,7 @@ set_target_properties(
   ctr_crt0_trace_compile
   PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 target_include_directories(ctr_crt0_trace_compile PRIVATE game/core)
-target_link_libraries(ctr_crt0_trace_compile PRIVATE psxport)
+target_link_libraries(ctr_crt0_trace_compile PRIVATE ctr_runtime)
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generated/rec_sources.cmake")
   include("${CMAKE_CURRENT_SOURCE_DIR}/generated/rec_sources.cmake")
@@ -68,7 +80,7 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generated/rec_sources.cmake")
       CXX_STANDARD_REQUIRED ON
       RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/scratch/bin")
   target_include_directories(ctr_crt0_port_trace PRIVATE game/core)
-  target_link_libraries(ctr_crt0_port_trace PRIVATE psxport)
+  target_link_libraries(ctr_crt0_port_trace PRIVATE ctr_runtime)
 
   add_custom_target(
     ctr04_check
@@ -206,6 +218,7 @@ add_custom_target(
   verify
   COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/psxport_sync.py" --check
   COMMAND "$<TARGET_FILE:psxport_smoke>"
-  DEPENDS cpp_policy provision_selftest ctr04_compare_selftest psxport_smoke
+  COMMAND "$<TARGET_FILE:ctr_runtime_test>"
+  DEPENDS cpp_policy provision_selftest ctr04_compare_selftest psxport_smoke ctr_runtime_test
   USES_TERMINAL
   VERBATIM)

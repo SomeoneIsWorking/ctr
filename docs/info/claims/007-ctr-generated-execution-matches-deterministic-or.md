@@ -6,7 +6,7 @@ created: 2026-08-22
 tags:
 depends: tools/compare_crt0_trace.py#main, tools/resident_replay.py#build_replay, game/core/crt0_port_trace.cpp#restoreResidentState, CMakeLists.txt
 reconfirmed: 2026-08-22
-verified_at: 2026-08-22 12:34:54
+verified_at: 2026-08-22 14:18:17
 ---
 
 ## Claim
@@ -24,3 +24,7 @@ The claim is falsified if the executable identity, any checked code/data input, 
 ## Re-confirmed 2026-08-22
 
 Reconfirmed with Clang 22.1.8 against CTR's exact recorded psxport 3418a79b: normal verify passed, two original oracle captures and two call-ordinal-2 bounded replays were deterministic, generated execution agreed 34/34 at 0x80032DC0, and forced resident.gp=0 produced 33/34.
+
+## Re-confirmed 2026-08-22
+
+Fresh real-disc runtime-initializer replay through CtrRuntime produced deterministic oracle captures and 34/34 generated agreement at 0x80032DC0; forced resident.gp=0 produced 33/34.

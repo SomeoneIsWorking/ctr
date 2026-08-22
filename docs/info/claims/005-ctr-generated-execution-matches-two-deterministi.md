@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-21
 tags:
 depends: game/core/crt0_port_trace.cpp#modelInitHeapReturn, tools/compare_crt0_trace.py#main, CMakeLists.txt
-reconfirmed: 2026-08-21
-verified_at: 2026-08-21 14:13:10
+reconfirmed: 2026-08-22
+verified_at: 2026-08-22 14:18:17
 ---
 
 ## Claim
@@ -40,3 +40,7 @@ Post-landing ce2c83ad repeated true-oracle and generated comparison retained 108
 ## Re-confirmed 2026-08-21
 
 Re-verified against exact psxport 3418a79b624765614f3f198dc1e89632e1e650f0: two true-oracle post-InitHeap runs produced identical three-boundary evidence, generated execution agreed 108/108 at 0x8003C58C, and forced post.gp=0 produced exactly one named disagreement at 107/108.
+
+## Re-confirmed 2026-08-22
+
+Fresh real-disc post-InitHeap chain through CtrRuntime produced two deterministic oracle captures, 108/108 generated agreement, and forced post.gp=0 produced 107/108.
