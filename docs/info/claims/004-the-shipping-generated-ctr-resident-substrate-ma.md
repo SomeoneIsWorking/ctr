@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-21
 tags: ctr-04,recompiler,differential
 depends: CMakeLists.txt, game/core/crt0_port_trace.cpp, tools/compare_crt0_trace.py, tools/emit_substrate.py
-verified_at: 2026-08-22 18:35:48
-reconfirmed: 2026-08-22
+verified_at: 2026-08-24 20:09:43
+reconfirmed: 2026-08-24
 ---
 
 ## Claim
@@ -66,3 +66,7 @@ Current real-executable pre-BIOS comparator agreed 34/34 at 0x80080620 and force
 ## Re-confirmed 2026-08-22
 
 Post-commit Clang verification passed 87/87 CTest with exact ad5cf802 pin; real SCUS_944.26 oracle/generated windows remained deterministic, comparator controls passed 18/18, the new 0x800718BC boundary agreed 34/34, and forced resident.gp produced the named 33/34 difference.
+
+## Re-confirmed 2026-08-24
+
+Post-landing isolated real-data chain and generated tracer reconfirmed 34/34 at the resident boundaries; comparator selftest 23/23 and normal verify passed

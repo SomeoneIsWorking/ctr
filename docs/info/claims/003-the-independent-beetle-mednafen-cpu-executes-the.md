@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-21
 tags: ctr-03,oracle,boot
 depends: CMakeLists.txt, tools/provision.py
-reconfirmed: 2026-08-22
-verified_at: 2026-08-22 18:35:48
+reconfirmed: 2026-08-24
+verified_at: 2026-08-24 20:09:43
 ---
 
 ## Claim
@@ -61,3 +61,7 @@ Current Clang oracle fixture passed 39/39 and crossvalidate_crt0 on exact SCUS_9
 ## Re-confirmed 2026-08-22
 
 Post-commit Clang verification passed 87/87 CTest with exact ad5cf802 pin; real SCUS_944.26 oracle/generated windows remained deterministic, comparator controls passed 18/18, the new 0x800718BC boundary agreed 34/34, and forced resident.gp produced the named 33/34 difference.
+
+## Re-confirmed 2026-08-24
+
+Post-landing canonical Clang/CTest 87/87 and isolated serialized real-data gate chain on SCUS_944.26 reconfirmed the independent pre-BIOS boundary

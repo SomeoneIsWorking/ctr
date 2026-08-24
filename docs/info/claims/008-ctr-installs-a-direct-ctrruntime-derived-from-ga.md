@@ -6,7 +6,7 @@ created: 2026-08-22
 tags: runtime,inheritance
 depends: game/core/ctr_runtime.cpp#CtrRuntime, game/core/crt0_port_trace.cpp#main, tests/test_ctr_runtime.cpp
 reconfirmed: 2026-08-24
-verified_at: 2026-08-24 20:05:45
+verified_at: 2026-08-24 20:09:44
 ---
 
 ## Claim
@@ -24,3 +24,7 @@ The runtime ceases to derive GameRuntime, a legacy compatibility view becomes no
 ## Re-confirmed 2026-08-24
 
 Clang 22.1.8 canonical verify passed against recorded psxport bc8c8897; ctr_runtime_inheritance proved direct derived install, null legacy views, and explicit false guest-VRAM picture policy without a rendered-frame claim.
+
+## Re-confirmed 2026-08-24
+
+Post-landing verify passed direct CtrRuntime install/null legacy views and production guest-VRAM picture query false on pinned bc8c8897

@@ -6,7 +6,7 @@ created: 2026-08-24
 tags:
 depends: tools/compare_crt0_trace.py#main, tools/resident_replay.py#build_replay, docs/re-frontier.md#ctr-04
 reconfirmed: 2026-08-24
-verified_at: 2026-08-24 20:05:45
+verified_at: 2026-08-24 20:09:44
 ---
 
 ## Claim
@@ -28,3 +28,7 @@ Full corrected-model chained gate on real SCUS_944.26 and recorded psxport d2266
 ## Re-confirmed 2026-08-24
 
 Isolated serialized real SCUS_944.26 gate process 468226 on psxport bc8c8897 reproduced SHA-256 7b4aac0b..., deterministic ordinal-6 oracle/replay at 0x800771C4, 34/34 generated agreement, and named 33/34 forced-gp disagreement. An earlier overlapped run is excluded from acceptance evidence.
+
+## Re-confirmed 2026-08-24
+
+Post-landing isolated PID 468226 reconfirmed init-swap dispatcher 0x800771C4 at 34/34 and forced gp 33/34; overlapped prior run was discarded

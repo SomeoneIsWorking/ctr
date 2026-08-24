@@ -6,7 +6,7 @@ created: 2026-08-24
 tags:
 depends: tools/compare_crt0_trace.py#main, tools/resident_replay.py#build_replay, game/core/crt0_port_trace.cpp#modelMemsetReturn, CMakeLists.txt
 reconfirmed: 2026-08-24
-verified_at: 2026-08-24 20:05:45
+verified_at: 2026-08-24 20:09:44
 ---
 
 ## Claim
@@ -28,3 +28,7 @@ Corrected no-stack-residue A(2Bh) model re-ran through the real SCUS_944.26 asse
 ## Re-confirmed 2026-08-24
 
 Isolated serialized real SCUS_944.26 gate process 468226 on psxport bc8c8897 reproduced SHA-256 7b4aac0b..., deterministic oracle/replay, 34/34 at 0x80077CD8 after corrected no-stack-residue memset, and named 33/34 forced-gp disagreement. An earlier overlapped run is excluded from acceptance evidence.
+
+## Re-confirmed 2026-08-24
+
+Post-landing isolated PID 468226 reconfirmed post-memset 0x80077CD8 at 34/34 and forced gp 33/34; stack-residue negative is in the 23/23 comparator selftest

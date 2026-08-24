@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-21
 tags:
 depends: tools/resident_replay.py#build_replay, tools/compare_crt0_trace.py#main, game/core/crt0_port_trace.cpp#restoreResidentState, CMakeLists.txt
-reconfirmed: 2026-08-22
-verified_at: 2026-08-22 18:35:49
+reconfirmed: 2026-08-24
+verified_at: 2026-08-24 20:09:43
 ---
 
 ## Claim
@@ -56,3 +56,7 @@ Current repeated original and call-ordinal-1 replay captures were deterministic,
 ## Re-confirmed 2026-08-22
 
 Post-commit Clang verification passed 87/87 CTest with exact ad5cf802 pin; real SCUS_944.26 oracle/generated windows remained deterministic, comparator controls passed 18/18, the new 0x800718BC boundary agreed 34/34, and forced resident.gp produced the named 33/34 difference.
+
+## Re-confirmed 2026-08-24
+
+Post-landing isolated real-data chain reconfirmed the first resident call boundary at 34/34 and forced gp at 33/34
