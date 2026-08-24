@@ -22,9 +22,11 @@ public:
   void destroyContext(void *context) override;
   void registerOverrides(Game &game) override;
   void bootInit(Core &core) override;
+  const GuestProgramImage *guestProgramImage() const override;
   bool guestVramIsPicture(const Game &game) const override;
 
 private:
+  static const GuestProgramImage programImage_;
   Dispatch dispatch_;
   const uint32_t bootTarget_;
 };

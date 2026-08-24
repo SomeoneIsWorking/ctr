@@ -72,15 +72,36 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generated/rec_sources.cmake")
       LANGUAGE CXX
       COMPILE_OPTIONS "-O1;-foptimize-sibling-calls;-fno-strict-aliasing;-fwrapv")
 
-  add_executable(ctr_crt0_port_trace $<TARGET_OBJECTS:ctr_crt0_trace_compile> ${GEN_REC_SRCS})
+  add_executable(
+    ctr_crt0_port_trace
+    $<TARGET_OBJECTS:ctr_crt0_trace_compile>
+    game/core/recomp_register.cpp
+    ${GEN_REC_SRCS})
   set_target_properties(
     ctr_crt0_port_trace
     PROPERTIES
       CXX_STANDARD 20
       CXX_STANDARD_REQUIRED ON
       RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/scratch/bin")
-  target_include_directories(ctr_crt0_port_trace PRIVATE game/core)
+  target_include_directories(ctr_crt0_port_trace PRIVATE game/core generated)
   target_link_libraries(ctr_crt0_port_trace PRIVATE ctr_runtime)
+
+  add_executable(
+    ctr_port
+    game/app/main.cpp
+    game/core/bootstrap_frontier.cpp
+    game/core/recomp_register.cpp
+    ${GEN_REC_SRCS})
+  set_target_properties(
+    ctr_port
+    PROPERTIES
+      CXX_STANDARD 20
+      CXX_STANDARD_REQUIRED ON
+      ENABLE_EXPORTS ON
+      RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/scratch/bin")
+  target_include_directories(ctr_port PRIVATE game/core generated)
+  target_link_libraries(ctr_port PRIVATE ctr_runtime)
+  add_dependencies(ctr_port gen_gpu_shaders)
 
   add_custom_target(
     ctr04_check
@@ -259,8 +280,8 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generated/rec_sources.cmake")
 
   # Past the modeled A(2Bh) leaf, the state-zero case stores zero through executable swap
   # 0x80077CD8 (delay-slot store into initialized word 0x8008C0B4, previous value returned) before
-  # calling 0x800771C4. This gate stops at 0x800771C4's entry: its jalr is indirect and is the next,
-  # still-blocked window (see docs/re-frontier.md).
+  # calling 0x800771C4. This gate stops at 0x800771C4's entry; the next gate validates its indirect
+  # jalr separately.
   add_custom_target(
     ctr04_startup_init_swap_next_call_check
     COMMAND
@@ -280,6 +301,58 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generated/rec_sources.cmake")
       --force-port-field resident:gp=0
       --expect-difference
     DEPENDS ctr04_startup_post_memset_next_call_check ctr_crt0_port_trace oracle_trace
+    USES_TERMINAL
+    VERBATIM)
+
+  # The executable dispatcher reads its table pointer and slot from identity-checked initialized
+  # data, then reaches 0x800772E0 through jalr. The independent oracle captures that exact
+  # pre-instruction PC; generated execution reaches it through the shipping rec_dispatch router and
+  # CtrRuntime's measured GuestProgramImage.
+  add_custom_target(
+    ctr04_startup_init_dispatch_next_call_check
+    COMMAND
+      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
+      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
+      --oracle-trace "$<TARGET_FILE:oracle_trace>"
+      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
+      --steps 400000
+      --startup-init-dispatch-next-call
+    COMMAND
+      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
+      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
+      --oracle-trace "$<TARGET_FILE:oracle_trace>"
+      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
+      --steps 400000
+      --startup-init-dispatch-next-call
+      --force-port-field resident:gp=0
+      --expect-difference
+    DEPENDS ctr04_startup_init_swap_next_call_check ctr_crt0_port_trace oracle_trace
+    USES_TERMINAL
+    VERBATIM)
+
+  # Execute the one-time initializer only through its measured IRQ/DPCR prefix. The independent
+  # oracle requires actual I_MASK/I_STAT/DPCR writes and emits a separate fixed-schema snapshot at
+  # 0x800777E8 before its first instruction; generated execution reads the shipping Core devices at
+  # the same pre-entry boundary. A forced DPCR opposite must disagree while all CPU fields stay equal.
+  add_custom_target(
+    ctr04_startup_init_device_next_call_check
+    COMMAND
+      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
+      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
+      --oracle-trace "$<TARGET_FILE:oracle_trace>"
+      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
+      --steps 400000
+      --startup-init-device-next-call
+    COMMAND
+      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
+      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
+      --oracle-trace "$<TARGET_FILE:oracle_trace>"
+      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
+      --steps 400000
+      --startup-init-device-next-call
+      --force-port-field device:DPCR=0x33333332
+      --expect-difference
+    DEPENDS ctr04_startup_init_dispatch_next_call_check ctr_crt0_port_trace oracle_trace
     USES_TERMINAL
     VERBATIM)
 else()

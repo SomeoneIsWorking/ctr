@@ -1,0 +1,120 @@
+#!/usr/bin/env python3
+"""Hermetic contract tests for the CTR product launcher."""
+
+from __future__ import annotations
+
+import subprocess
+import unittest
+from pathlib import Path
+
+from tools import run
+
+
+class FakeHost:
+    def __init__(self, *, system: str = "Linux", distribution: str = "fedora") -> None:
+        self._system = system
+        self._distribution = distribution
+        self.missing: set[str] = set()
+        self.failed_modules: set[str] = set()
+        self.commands: list[list[str]] = []
+
+    def which(self, name: str) -> str | None:
+        return None if name in self.missing else f"/mock/{name}"
+
+    def run(self, args, **_kwargs) -> subprocess.CompletedProcess[str]:
+        command = [str(value) for value in args]
+        self.commands.append(command)
+        failed = (
+            command[:2] == ["pkg-config", "--exists"]
+            and command[2] in self.failed_modules
+        )
+        return subprocess.CompletedProcess(command, 1 if failed else 0, "", "")
+
+    def system(self) -> str:
+        return self._system
+
+    def linux_distribution(self) -> str:
+        return self._distribution
+
+
+class LauncherContractTest(unittest.TestCase):
+    def test_zero_arguments_select_shipping_product(self) -> None:
+        arguments = run.parse_args([])
+        self.assertIsNone(arguments.disc)
+        self.assertFalse(arguments.prepare_only)
+        self.assertFalse(arguments.headless)
+
+    def test_explicit_compiler_names_are_capability_probed_not_identity_filtered(
+        self,
+    ) -> None:
+        host = FakeHost()
+        cc, cxx = run.preflight(host, {"CC": "vendor-c", "CXX": "vendor-cxx"})
+        self.assertEqual(cc, "/mock/vendor-c")
+        self.assertEqual(cxx, "/mock/vendor-cxx")
+        self.assertIn(
+            ["/mock/vendor-c", "-std=c11", "-x", "c", "-fsyntax-only", "-"],
+            host.commands,
+        )
+        self.assertIn(
+            ["/mock/vendor-cxx", "-std=c++20", "-x", "c++", "-fsyntax-only", "-"],
+            host.commands,
+        )
+
+    def test_missing_fedora_dependency_names_exact_user_command(self) -> None:
+        host = FakeHost()
+        host.failed_modules.add("sdl3-image")
+        with self.assertRaisesRegex(run.Refusal, r"sudo dnf install SDL3_image-devel"):
+            run.preflight(host, {})
+
+    def test_missing_debian_tool_names_exact_user_command(self) -> None:
+        host = FakeHost(distribution="ubuntu debian")
+        host.missing.add("glslc")
+        with self.assertRaisesRegex(run.Refusal, r"sudo apt install glslc"):
+            run.preflight(host, {})
+
+    def test_prepare_only_does_not_launch(self) -> None:
+        calls: list[object] = []
+        framework = Path("/mock/psxport")
+
+        def fail_launch(*_args, **_kwargs) -> None:
+            self.fail("prepare-only must not launch ctr_port")
+
+        run.execute(
+            None,
+            prepare_only=True,
+            preflight_step=lambda: ("/mock/cc", "/mock/cxx"),
+            sync_step=lambda: framework,
+            prepare_step=lambda *args: calls.append(args),
+            launch_step=fail_launch,
+        )
+        self.assertEqual(calls, [(None, framework, "/mock/cc", "/mock/cxx")])
+
+    def test_default_path_prepares_then_launches_product(self) -> None:
+        calls: list[object] = []
+        framework = Path("/mock/psxport")
+        run.execute(
+            "disc.chd",
+            preflight_step=lambda: ("/mock/cc", "/mock/cxx"),
+            sync_step=lambda: framework,
+            prepare_step=lambda *args: calls.append(("prepare", args)),
+            launch_step=lambda *args, **kwargs: calls.append(("launch", args, kwargs)),
+        )
+        self.assertEqual(
+            calls,
+            [
+                ("prepare", ("disc.chd", framework, "/mock/cc", "/mock/cxx")),
+                ("launch", (framework,), {"headless": False}),
+            ],
+        )
+
+    def test_shell_shim_enters_only_frozen_uv_bootstrap(self) -> None:
+        shim = (run.ROOT / "run.sh").read_text(encoding="utf-8")
+        self.assertEqual(
+            shim,
+            '#!/bin/sh\ncd "$(dirname "$0")" || exit 1\n'
+            'exec uv run --frozen python bootstrap.py "$@"\n',
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

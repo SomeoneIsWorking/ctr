@@ -1,5 +1,7 @@
 #include "core.h"
 #include "ctr_runtime.h"
+#include "game.h"
+#include "recomp_register.h"
 
 #include <algorithm>
 #include <array>
@@ -15,9 +17,7 @@
 #include <system_error>
 
 void load_exe(const char *path, Core *core);
-void main_dispatch(Core *core, uint32_t address);
-int rec_func_index(uint32_t address);
-void shard_set_override(uint32_t address, void (*overrideFunction)(Core *));
+void rec_dispatch(Core *core, uint32_t address);
 
 namespace {
 
@@ -45,6 +45,12 @@ struct Boundary {
   uint32_t hi = 0;
 };
 
+struct DeviceBoundary {
+  uint32_t iStat = 0;
+  uint32_t iMask = 0;
+  uint32_t dpcr = 0;
+};
+
 struct BoundaryReached final {};
 
 struct ModeledMemset {
@@ -57,6 +63,7 @@ struct ModeledMemset {
 };
 
 Boundary *g_boundary = nullptr;
+DeviceBoundary *g_deviceBoundary = nullptr;
 Boundary *g_preModel = nullptr;
 Boundary *g_modeledReturn = nullptr;
 bool g_modeledReturnReached = false;
@@ -179,6 +186,11 @@ void captureBoundary(Core *core) {
     std::abort();
   }
   captureCore(core, *g_boundary);
+  if (g_deviceBoundary != nullptr) {
+    g_deviceBoundary->iStat = core->mem_r16(0x1F801070u) & 0x7FFu;
+    g_deviceBoundary->iMask = core->mem_r16(0x1F801074u) & 0x7FFu;
+    g_deviceBoundary->dpcr = core->mem_r32(0x1F8010F0u);
+  }
   throw BoundaryReached{};
 }
 
@@ -260,6 +272,13 @@ void printBoundary(uint32_t target, const Boundary &boundary) {
   printTaggedBoundary("PORT-CAPTURED-CALL", "PORT-CALL-BOUNDARY", target, boundary);
 }
 
+void printDeviceBoundary(uint32_t target, const DeviceBoundary &devices) {
+  std::printf("# PORT-DEVICE-BOUNDARY schema=1 pc=0x%08X\n", target);
+  std::printf("# PORT-DEVICE-REG I_STAT value=0x%08X mask=0x000007FF\n", devices.iStat);
+  std::printf("# PORT-DEVICE-REG I_MASK value=0x%08X mask=0x000007FF\n", devices.iMask);
+  std::printf("# PORT-DEVICE-REG DPCR value=0x%08X mask=0xFFFFFFFF\n", devices.dpcr);
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
@@ -269,17 +288,26 @@ int main(int argc, char **argv) {
                             std::string_view(argv[5]) == "--post-target";
   const bool residentReplay = argc == 8 && std::string_view(argv[2]) == "--resume-target" &&
                               std::string_view(argv[4]) == "--capture-target" && std::string_view(argv[6]) == "--state";
+  const bool residentReplayWithDevices =
+      argc == 9 && std::string_view(argv[2]) == "--resume-target" && std::string_view(argv[4]) == "--capture-target" &&
+      std::string_view(argv[6]) == "--state" && std::string_view(argv[8]) == "--capture-devices";
   const bool residentReplayWithMemset =
       argc == 10 && std::string_view(argv[2]) == "--resume-target" && std::string_view(argv[4]) == "--capture-target" &&
       std::string_view(argv[6]) == "--state" && std::string_view(argv[8]) == "--model-memset";
-  const bool anyResidentReplay = residentReplay || residentReplayWithMemset;
-  if (!firstBoundaryOnly && !postInitHeap && !residentReplay && !residentReplayWithMemset) {
+  const bool residentReplayWithMemsetAndDevices =
+      argc == 11 && std::string_view(argv[2]) == "--resume-target" && std::string_view(argv[4]) == "--capture-target" &&
+      std::string_view(argv[6]) == "--state" && std::string_view(argv[8]) == "--model-memset" &&
+      std::string_view(argv[10]) == "--capture-devices";
+  const bool anyMemsetReplay = residentReplayWithMemset || residentReplayWithMemsetAndDevices;
+  const bool captureDevices = residentReplayWithDevices || residentReplayWithMemsetAndDevices;
+  const bool anyResidentReplay = residentReplay || residentReplayWithDevices || anyMemsetReplay;
+  if (!firstBoundaryOnly && !postInitHeap && !residentReplay && !residentReplayWithDevices && !anyMemsetReplay) {
     std::fprintf(stderr,
                  "usage: ctr_crt0_port_trace <PS-X EXE> --target 0xADDR "
                  "[--model-init-heap-return --post-target 0xADDR]\n"
                  "       ctr_crt0_port_trace <PS-X EXE> --resume-target 0xADDR "
                  "--capture-target 0xADDR --state AT,...,RA,LO,HI "
-                 "[--model-memset TARGET,DST,VALUE,SIZE,POISON]\n");
+                 "[--model-memset TARGET,DST,VALUE,SIZE,POISON] [--capture-devices]\n");
     return 2;
   }
 
@@ -306,7 +334,7 @@ int main(int argc, char **argv) {
     return 2;
   }
   ModeledMemset modeledMemset{};
-  if (residentReplayWithMemset && !parseModeledMemset(argv[9], modeledMemset)) {
+  if (anyMemsetReplay && !parseModeledMemset(argv[9], modeledMemset)) {
     std::fprintf(stderr,
                  "ctr_crt0_port_trace: REFUSING — --model-memset must be "
                  "TARGET,DST,BYTE,NONZERO_SIZE,DISTINCT_POISON.\n");
@@ -314,7 +342,7 @@ int main(int argc, char **argv) {
   }
   if ((!anyResidentReplay && rec_func_index(layout.entry) < 0) || rec_func_index(target) < 0 ||
       ((postInitHeap || anyResidentReplay) && rec_func_index(postTarget) < 0) ||
-      (residentReplayWithMemset && rec_func_index(modeledMemset.target) < 0)) {
+      (anyMemsetReplay && rec_func_index(modeledMemset.target) < 0)) {
     std::fprintf(stderr,
                  "ctr_crt0_port_trace: REFUSING — entry 0x%08X, observed target 0x%08X, and any post-return "
                  "target 0x%08X must exist in the shipping generated registry.\n",
@@ -324,29 +352,33 @@ int main(int argc, char **argv) {
     return 2;
   }
 
-  ctr::CtrRuntime runtime(main_dispatch, anyResidentReplay ? target : layout.entry);
+  ctr::installRecompiledProgram();
+  ctr::CtrRuntime runtime(rec_dispatch, anyResidentReplay ? target : layout.entry);
   psxport_install_game(runtime);
-  auto core = std::make_unique<Core>();
-  load_exe(argv[1], core.get());
+  auto game = std::make_unique<Game>();
+  Core *core = &game->core;
+  load_exe(argv[1], core);
   Boundary boundary{};
   Boundary preModel{};
   Boundary modeledReturn{};
+  DeviceBoundary deviceBoundary{};
   g_boundary = &boundary;
+  g_deviceBoundary = captureDevices ? &deviceBoundary : nullptr;
   if (anyResidentReplay) {
     restoreResidentState(*core, residentState, target);
-    shard_set_override(postTarget, captureBoundary);
-    if (residentReplayWithMemset) {
+    ctr::setRecompiledOverride(postTarget, captureBoundary);
+    if (anyMemsetReplay) {
       g_modeledMemset = &modeledMemset;
-      shard_set_override(modeledMemset.target, modelMemsetReturn);
+      ctr::setRecompiledOverride(modeledMemset.target, modelMemsetReturn);
     }
   } else if (postInitHeap) {
     g_preModel = &preModel;
     g_modeledReturn = &modeledReturn;
     g_modeledReturnReached = false;
-    shard_set_override(target, modelInitHeapReturn);
-    shard_set_override(postTarget, captureBoundary);
+    ctr::setRecompiledOverride(target, modelInitHeapReturn);
+    ctr::setRecompiledOverride(postTarget, captureBoundary);
   } else {
-    shard_set_override(target, captureBoundary);
+    ctr::setRecompiledOverride(target, captureBoundary);
   }
   bool reached = false;
   try {
@@ -354,21 +386,22 @@ int main(int argc, char **argv) {
   } catch (const BoundaryReached &) {
     reached = true;
   }
-  shard_set_override(anyResidentReplay ? postTarget : target, nullptr);
-  if (residentReplayWithMemset) {
-    shard_set_override(modeledMemset.target, nullptr);
+  ctr::setRecompiledOverride(anyResidentReplay ? postTarget : target, nullptr);
+  if (anyMemsetReplay) {
+    ctr::setRecompiledOverride(modeledMemset.target, nullptr);
   }
   if (postInitHeap) {
-    shard_set_override(postTarget, nullptr);
+    ctr::setRecompiledOverride(postTarget, nullptr);
   }
   g_boundary = nullptr;
+  g_deviceBoundary = nullptr;
   g_preModel = nullptr;
   g_modeledReturn = nullptr;
   g_modeledMemset = nullptr;
 
   const uint32_t expectedBoundary = (postInitHeap || anyResidentReplay) ? postTarget : target;
   if (!reached || boundary.pc != expectedBoundary || (postInitHeap && !g_modeledReturnReached) ||
-      (residentReplayWithMemset && !modeledMemset.reached)) {
+      (anyMemsetReplay && !modeledMemset.reached)) {
     std::fprintf(stderr,
                  "ctr_crt0_port_trace: REFUSING — generated execution did not reach the independently observed "
                  "%s boundary.\n",
@@ -378,6 +411,9 @@ int main(int argc, char **argv) {
   }
   if (firstBoundaryOnly || anyResidentReplay) {
     printBoundary(expectedBoundary, boundary);
+    if (captureDevices) {
+      printDeviceBoundary(expectedBoundary, deviceBoundary);
+    }
   } else {
     printBoundary(target, preModel);
     std::printf("# PORT-MODELED-BIOS-RETURN table=A function=0x39 target=0x000000A0 ra=0x%08X "

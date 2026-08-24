@@ -9,8 +9,26 @@ shipping recompiler emits the gitignored resident substrate; the pre-BIOS bounda
 fields, an explicit A(39h) return continuation agrees through the next call on 108/108 fields, and
 bounded resident execution agrees at `0x800779E4`, `0x80032DC0`, and the startup service's next call
 `0x8001D06C` on 34/34 fields. The state-zero path then agrees 34/34 at executable initialization
-thunk `0x800718BC`. There is still no shipping game loop, and no broader
-hardware-dependent execution is claimed.
+thunk `0x800718BC`, explicitly models its A(2Bh) memset, and crosses the first indirect dispatcher
+with 37/37 CPU/device agreement after the initializer's IRQ/DPCR prefix at `0x800777E8`. The shipping
+`ctr_port` product boots the verified executable to that bounded frontier. Gameplay and broader
+hardware-dependent execution are not implemented yet.
+
+## Run the current product
+
+Install `uv` plus the native C/C++ dependencies, then provide the CTR USA CHD through
+`PSXPORT_CTR_DISC`, `PSXPORT_DISC`, `.env`, or a root `*.chd` drop-in and run:
+
+```sh
+./run.sh
+```
+
+Zero arguments provision and verify the executable, emit the resident substrate, build only the
+shipping `ctr_port` target, and launch it. `run.sh` is a slim `uv run --frozen` shim; all setup uses
+the same locked interpreter. The launcher accepts any selected C/C++ compiler that passes its C11
+and C++20 capability probes; it has no compiler identity whitelist or blacklist. Use
+`./run.sh --prepare-only` for a non-launching cold-path check or `./run.sh --headless` for the bounded
+no-window product path.
 
 ## Configure the framework scaffold
 
@@ -134,6 +152,6 @@ media.
 launch Crash Team Racing. See `titles/ctr/README.md` for the measured target and
 `docs/re-frontier.md` for the ordered work required before a boot claim is possible.
 
-Disc images and extracted executables are never committed. The remaining boot frontier is the
-external A(2Bh) RAM mutation reached through thunk `0x800718BC`; this bounded continuation does not
-claim that the PC port boots.
+Disc images and extracted executables are never committed. The verified initializer prefix writes
+I_MASK/I_STAT and DPCR before calling zero-fill function `0x800777E8`; that callee is the current
+pre-instruction frontier. The bounded product boot does not claim the zero-fill body or gameplay.

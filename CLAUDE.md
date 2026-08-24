@@ -14,7 +14,7 @@ All picture work is RE-driven. Widescreen and interpolation require PC-native gr
 reading game state; do not reconstruct pictures from GTE/OT/GP0 output. Establish a faithful,
 measurable base before enhancements.
 
-CTR-04 owns one narrow game module: `game/core/crt0_port_trace.cpp` executes the gitignored shipping
+CTR-04 owns one narrow diagnostic module: `game/core/crt0_port_trace.cpp` executes the gitignored shipping
 substrate through the oracle-observed first call, an explicit consumer-owned A(39h) InitHeap return,
 the first subsequent call, and the exact checked replay through runtime initializer `0x800779E4`,
 startup service `0x80032DC0`, background service `0x8001D06C`, and the state-zero initialization
@@ -29,3 +29,11 @@ psxport's `GameRuntime`: one process-lifetime `CtrRuntime` owns the validated ge
 while the trace harness owns only command parsing, capture state, and invocation-scoped boundary
 overrides. CTR has no legacy `GameConfig` or `GameHooks`; do not introduce the compatibility adapter
 unless a future measured framework fact genuinely requires it.
+
+The shipping path is `run.sh` -> locked `bootstrap.py`/`tools/run.py` -> CMake `ctr_port`.
+`game/app/main.cpp` composes the runtime and psxport machine owners;
+`game/core/recomp_register.cpp` owns generated registry installation; and
+`game/core/bootstrap_frontier.cpp` owns the one-shot stop before `0x800777E8`. The player executable
+takes no asset override and must only consume the executable verified by `tools/provision.py`.
+The launcher capability-probes the selected C and C++ compilers; never add a compiler identity
+whitelist or blacklist. Do not turn the bounded product stop into a trace dump or diagnostic default.

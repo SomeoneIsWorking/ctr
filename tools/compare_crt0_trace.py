@@ -128,6 +128,16 @@ STARTUP_INIT_SWAP = 0x80077CD8
 POST_INIT_SWAP = 0x8003C62C
 INIT_DISPATCHER = 0x800771C4
 INIT_NEXT_CALL = 0x800772E0
+INITIALIZER_DEVICE_NEXT_CALL = 0x800777E8
+INITIALIZER_DEVICE_PREFIX_WORDS = (
+    0x27BDFFE8, 0xAFB00010, 0x3C108009, 0x2610AF98,
+    0xAFBF0014, 0x96020000, 0x00000000, 0x1440002A,
+    0x00001021, 0x3C038009, 0x8C63C024, 0x3C028009,
+    0x8C42C028, 0x3C053333, 0xA4400000, 0x94420000,
+    0x34A53333, 0xA4620000, 0x3C028009, 0x8C42C02C,
+    0x02002021, 0xAC450000, 0x0C01DDFA, 0x2405041A,
+)
+INITIALIZER_DEVICE_PREFIX = pack_words(INITIALIZER_DEVICE_PREFIX_WORDS)
 INIT_SWAP_DATA_WORD = 0x8008C0B4
 INIT_DISPATCH_TABLE = 0x8008C020
 INIT_DISPATCH_SLOT = INIT_DISPATCH_TABLE_BASE + 0xC
@@ -156,6 +166,12 @@ class Boundary:
     pc: int
     registers: dict[str, int]
     step: int | None = None
+
+
+@dataclasses.dataclass(frozen=True)
+class DeviceBoundary:
+    pc: int
+    values: dict[str, int]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -242,6 +258,84 @@ def parse_boundary(text: str, port: bool) -> Boundary:
     )
 
 
+def parse_pc_boundary(text: str, label: str) -> Boundary:
+    capture = re.search(
+        r"^# CAPTURED-PC target=0x([0-9A-Fa-f]+) executed=(\d+)\s*$",
+        text,
+        re.MULTILINE,
+    )
+    header = re.search(
+        r"^# PC-BOUNDARY-REGS executed=(\d+) pc=0x([0-9A-Fa-f]+)\s*$",
+        text,
+        re.MULTILINE,
+    )
+    registers = {
+        name: int(value, 16)
+        for name, value in re.findall(
+            r"^# PC-BOUNDARY-REG (\w+)=0x([0-9A-Fa-f]+)\s*$",
+            text,
+            re.MULTILINE,
+        )
+    }
+    if capture is None or header is None:
+        raise Refusal(f"{label} has no complete PC boundary")
+    missing = sorted(set(REGISTER_NAMES) - registers.keys())
+    extra = sorted(registers.keys() - set(REGISTER_NAMES))
+    if missing or extra:
+        raise Refusal(
+            f"{label} register coverage changed (missing={missing or 'none'}, extra={extra or 'none'})"
+        )
+    captured_target = int(capture.group(1), 16)
+    captured_executed = int(capture.group(2))
+    block_executed = int(header.group(1))
+    block_pc = int(header.group(2), 16)
+    if captured_target != block_pc or captured_executed != block_executed:
+        raise Refusal(f"{label} PC metadata and register block disagree")
+    return Boundary(captured_target, block_pc, registers, captured_executed)
+
+
+def parse_device_boundary(text: str, port: bool, expected_pc: int) -> DeviceBoundary:
+    prefix = "PORT-" if port else ""
+    label = "port" if port else "oracle"
+    headers = re.findall(
+        rf"^# {prefix}DEVICE-BOUNDARY schema=(\d+) pc=0x([0-9A-Fa-f]+)\s*$",
+        text,
+        re.MULTILINE,
+    )
+    rows = re.findall(
+        rf"^# {prefix}DEVICE-REG (\w+) value=0x([0-9A-Fa-f]+) "
+        rf"mask=0x([0-9A-Fa-f]+)\s*$",
+        text,
+        re.MULTILINE,
+    )
+    if len(headers) != 1 or headers[0][0] != "1":
+        raise Refusal(f"{label} has no unique device schema 1 boundary")
+    pc = int(headers[0][1], 16)
+    if pc != expected_pc:
+        raise Refusal(
+            f"{label} device PC 0x{pc:08X} disagrees with CPU boundary 0x{expected_pc:08X}"
+        )
+    expected_masks = {"I_STAT": 0x7FF, "I_MASK": 0x7FF, "DPCR": 0xFFFFFFFF}
+    values: dict[str, int] = {}
+    for name, raw_value, raw_mask in rows:
+        if name not in expected_masks or name in values:
+            raise Refusal(f"{label} device register coverage is duplicated or unknown: {name}")
+        mask = int(raw_mask, 16)
+        if mask != expected_masks[name]:
+            raise Refusal(
+                f"{label} {name} mask is 0x{mask:08X}, expected 0x{expected_masks[name]:08X}"
+            )
+        value = int(raw_value, 16)
+        if value & ~mask:
+            raise Refusal(f"{label} {name} value 0x{value:08X} exceeds its declared mask")
+        values[name] = value
+    if set(values) != set(expected_masks):
+        raise Refusal(
+            f"{label} device coverage changed: got {sorted(values)}, expected {sorted(expected_masks)}"
+        )
+    return DeviceBoundary(pc, values)
+
+
 def parse_modeled_return(text: str, port: bool) -> ModeledReturn:
     prefix = "PORT-" if port else ""
     match = re.search(
@@ -301,6 +395,17 @@ def compare_boundary(oracle: Boundary, port: Boundary, stage: str) -> list[tuple
     return rows
 
 
+def compare_devices(oracle: DeviceBoundary, port: DeviceBoundary) -> list[tuple[str, int, int]]:
+    if port.pc != oracle.pc:
+        raise Refusal(
+            f"port device PC 0x{port.pc:08X} does not match oracle device PC 0x{oracle.pc:08X}"
+        )
+    return [
+        (f"device.{name}", oracle.values[name], port.values[name])
+        for name in ("I_STAT", "I_MASK", "DPCR")
+    ]
+
+
 def compare(oracle: Boundary, port: Boundary) -> list[tuple[str, int, int]]:
     return [(name.removeprefix("first."), left, right) for name, left, right in compare_boundary(oracle, port, "first")]
 
@@ -348,6 +453,30 @@ def format_boundary(boundary: Boundary, capture_tag: str, register_tag: str) -> 
     return "\n".join(lines)
 
 
+def format_pc_boundary(boundary: Boundary) -> str:
+    if boundary.step is None:
+        raise ValueError("PC-boundary fixtures require an executed-instruction denominator")
+    lines = [
+        f"# CAPTURED-PC target=0x{boundary.target:08X} executed={boundary.step}",
+        f"# PC-BOUNDARY-REGS executed={boundary.step} pc=0x{boundary.pc:08X}",
+    ]
+    lines.extend(
+        f"# PC-BOUNDARY-REG {name}=0x{boundary.registers[name]:08X}"
+        for name in REGISTER_NAMES
+    )
+    return "\n".join(lines)
+
+
+def format_device_boundary(boundary: DeviceBoundary, port: bool) -> str:
+    prefix = "PORT-" if port else ""
+    lines = [f"# {prefix}DEVICE-BOUNDARY schema=1 pc=0x{boundary.pc:08X}"]
+    for name, mask in (("I_STAT", 0x7FF), ("I_MASK", 0x7FF), ("DPCR", 0xFFFFFFFF)):
+        lines.append(
+            f"# {prefix}DEVICE-REG {name} value=0x{boundary.values[name]:08X} mask=0x{mask:08X}"
+        )
+    return "\n".join(lines)
+
+
 def format_evidence(evidence: PostInitHeapEvidence, port: bool) -> str:
     prefix = "PORT-" if port else ""
     model = evidence.modeled_return
@@ -385,6 +514,15 @@ def selftest() -> int:
     oracle = parse_post_init_heap(format_evidence(expected, port=False), port=False)
     port = parse_post_init_heap(format_evidence(dataclasses.replace(expected, first_call=dataclasses.replace(first, step=None), modeled_return=dataclasses.replace(model, boundary=dataclasses.replace(modeled_boundary, step=None), step=None), post_return_call=dataclasses.replace(post, step=None)), port=True), port=True)
     rows = compare_post_init_heap(oracle, port)
+    expected_devices = DeviceBoundary(
+        post.pc, {"I_STAT": 0, "I_MASK": 0, "DPCR": 0x33333333}
+    )
+    oracle_devices = parse_device_boundary(
+        format_device_boundary(expected_devices, port=False), port=False, expected_pc=post.pc
+    )
+    port_devices = parse_device_boundary(
+        format_device_boundary(expected_devices, port=True), port=True, expected_pc=post.pc
+    )
     forced = dataclasses.replace(
         port,
         post_return_call=dataclasses.replace(
@@ -394,12 +532,35 @@ def selftest() -> int:
     )
     checks = [
         ("complete three-boundary evidence parses", oracle == expected),
+        (
+            "pre-instruction PC boundary parses with its executed denominator",
+            parse_pc_boundary(format_pc_boundary(post), "fixture") == post,
+        ),
         ("equal oracle and generated evidence", not any(left != right for _, left, right in rows)),
         (
             "forced opposite is visible",
             sum(left != right for _, left, right in compare_post_init_heap(oracle, forced)) == 1,
         ),
         ("repeat-run nondeterminism is visible", oracle != dataclasses.replace(oracle, post_return_call=dataclasses.replace(post, step=109))),
+        (
+            "complete fixed-schema device evidence parses",
+            oracle_devices == expected_devices and port_devices == expected_devices,
+        ),
+        (
+            "forced DPCR opposite is visible without changing CPU evidence",
+            sum(
+                left != right
+                for _, left, right in compare_devices(
+                    oracle_devices,
+                    dataclasses.replace(
+                        port_devices,
+                        values={**port_devices.values, "DPCR": 0x33333332},
+                    ),
+                )
+            )
+            == 1
+            and not any(left != right for _, left, right in compare_boundary(post, post, "resident")),
+        ),
     ]
     try:
         parse_post_init_heap(format_boundary(first, "CAPTURED-CALL", "CALL-BOUNDARY"), port=False)
@@ -416,6 +577,26 @@ def selftest() -> int:
         checks.append(("capture metadata/register disagreement refuses", True))
     else:
         checks.append(("capture metadata/register disagreement refuses", False))
+    malformed_devices = format_device_boundary(expected_devices, port=False).replace(
+        "mask=0x000007FF", "mask=0xFFFFFFFF", 1
+    )
+    try:
+        parse_device_boundary(malformed_devices, port=False, expected_pc=post.pc)
+    except Refusal:
+        checks.append(("malformed device mask refuses", True))
+    else:
+        checks.append(("malformed device mask refuses", False))
+    missing_device = "\n".join(
+        line
+        for line in format_device_boundary(expected_devices, port=False).splitlines()
+        if " I_MASK " not in line
+    )
+    try:
+        parse_device_boundary(missing_device, port=False, expected_pc=post.pc)
+    except Refusal:
+        checks.append(("missing device register refuses", True))
+    else:
+        checks.append(("missing device register refuses", False))
 
     synthetic = bytearray(0x800 + 0x800)
     synthetic[:8] = b"PS-X EXE"
@@ -726,6 +907,7 @@ def main() -> int:
     parser.add_argument("--startup-post-memset-next-call", action="store_true")
     parser.add_argument("--startup-init-swap-next-call", action="store_true")
     parser.add_argument("--startup-init-dispatch-next-call", action="store_true")
+    parser.add_argument("--startup-init-device-next-call", action="store_true")
     parser.add_argument("--force-port-field", help="test-only post-capture mutation, [STAGE:]NAME=VALUE")
     parser.add_argument("--expect-difference", action="store_true")
     parser.add_argument("--selftest", action="store_true")
@@ -749,6 +931,7 @@ def main() -> int:
             arguments.startup_post_memset_next_call,
             arguments.startup_init_swap_next_call,
             arguments.startup_init_dispatch_next_call,
+            arguments.startup_init_device_next_call,
         )
     )
     if selected_windows > 1:
@@ -779,14 +962,18 @@ def main() -> int:
         or arguments.startup_post_memset_next_call
         or arguments.startup_init_swap_next_call
         or arguments.startup_init_dispatch_next_call
+        or arguments.startup_init_device_next_call
     ):
-        include_init_dispatch = arguments.startup_init_dispatch_next_call
+        include_init_device = arguments.startup_init_device_next_call
+        include_init_dispatch = arguments.startup_init_dispatch_next_call or include_init_device
         include_init_swap = arguments.startup_init_swap_next_call or include_init_dispatch
         include_post_memset = arguments.startup_post_memset_next_call or include_init_swap
         include_memset_thunk = arguments.startup_memset_thunk or include_post_memset
         include_startup_service = arguments.startup_service_next_call or include_memset_thunk
         include_runtime_init = arguments.runtime_init_next_call or include_startup_service
-        if include_init_dispatch:
+        if include_init_device:
+            label = "ctr04 startup-init-device-next-call compare"
+        elif include_init_dispatch:
             label = "ctr04 startup-init-dispatch-next-call compare"
         elif include_init_swap:
             label = "ctr04 startup-init-swap-next-call compare"
@@ -867,6 +1054,8 @@ def main() -> int:
                 (INIT_DISPATCH_TABLE, INIT_DISPATCH_TABLE_BASE),
                 (INIT_DISPATCH_SLOT, INIT_NEXT_CALL),
             )
+        if include_init_device:
+            expected_ranges += ((INIT_NEXT_CALL, INITIALIZER_DEVICE_PREFIX),)
         try:
             replay = write_replay(
                 exe,
@@ -901,9 +1090,7 @@ def main() -> int:
         resident_output = scratch / "ctr04-resident-oracle.trace"
         resident_repeat_output = scratch / "ctr04-resident-oracle-repeat.trace"
         call_ordinal = (
-            7
-            if include_init_dispatch
-            else 6
+            6
             if include_init_swap
             else 5
             if include_post_memset
@@ -913,7 +1100,15 @@ def main() -> int:
         )
         resident_command = [
             str(oracle_tool), str(replay_path), "--steps", "60000" if include_post_memset else "256",
-            "--capture-call", str(call_ordinal),
+            *(
+                [
+                    "--capture-at",
+                    f"0x{INITIALIZER_DEVICE_NEXT_CALL if include_init_device else INIT_NEXT_CALL:08X}",
+                    *(["--capture-devices"] if include_init_device else []),
+                ]
+                if include_init_dispatch
+                else ["--capture-call", str(call_ordinal)]
+            ),
             "--summary-only",
         ]
         run([*resident_command, "--out", str(resident_output)], "resident replay oracle trace A")
@@ -921,14 +1116,31 @@ def main() -> int:
             [*resident_command, "--out", str(resident_repeat_output)],
             "resident replay oracle trace B",
         )
-        oracle_boundary = parse_boundary(resident_output.read_text(encoding="utf-8"), port=False)
-        oracle_repeat = parse_boundary(
-            resident_repeat_output.read_text(encoding="utf-8"), port=False
+        boundary_parser = (
+            (lambda text: parse_pc_boundary(text, "oracle"))
+            if include_init_dispatch
+            else (lambda text: parse_boundary(text, port=False))
         )
-        if oracle_boundary != oracle_repeat:
+        resident_text = resident_output.read_text(encoding="utf-8")
+        repeat_text = resident_repeat_output.read_text(encoding="utf-8")
+        oracle_boundary = boundary_parser(resident_text)
+        oracle_repeat = boundary_parser(repeat_text)
+        oracle_devices = (
+            parse_device_boundary(resident_text, port=False, expected_pc=oracle_boundary.pc)
+            if include_init_device
+            else None
+        )
+        oracle_repeat_devices = (
+            parse_device_boundary(repeat_text, port=False, expected_pc=oracle_repeat.pc)
+            if include_init_device
+            else None
+        )
+        if oracle_boundary != oracle_repeat or oracle_devices != oracle_repeat_devices:
             raise Refusal("two resident replay oracle runs produced different boundary state or steps")
         expected_target = (
-            INIT_NEXT_CALL
+            INITIALIZER_DEVICE_NEXT_CALL
+            if include_init_device
+            else INIT_NEXT_CALL
             if include_init_dispatch
             else INIT_DISPATCHER
             if include_init_swap
@@ -962,22 +1174,46 @@ def main() -> int:
                     if include_post_memset
                     else []
                 ),
+                *(["--capture-devices"] if include_init_device else []),
             ],
             "generated resident replay trace",
         )
         port_boundary = parse_boundary(port_result.stdout, port=True)
+        port_devices = (
+            parse_device_boundary(port_result.stdout, port=True, expected_pc=port_boundary.pc)
+            if include_init_device
+            else None
+        )
         if arguments.force_port_field:
-            stage, name, value = parse_forced_field(arguments.force_port_field, "resident")
-            if stage != "resident":
-                raise Refusal("first/modeled/post forced fields do not belong to resident replay")
-            port_boundary = dataclasses.replace(
-                port_boundary, registers={**port_boundary.registers, name: value}
-            )
+            field, separator, raw_value = arguments.force_port_field.partition("=")
+            if include_init_device and separator and field.startswith("device:"):
+                assert port_devices is not None
+                name = field.removeprefix("device:")
+                if name not in port_devices.values:
+                    raise Refusal("device forced field must name I_STAT, I_MASK, or DPCR")
+                try:
+                    value = int(raw_value, 0)
+                except ValueError as error:
+                    raise Refusal(f"invalid forced value {raw_value!r}") from error
+                port_devices = dataclasses.replace(
+                    port_devices, values={**port_devices.values, name: value}
+                )
+                stage = "device"
+            else:
+                stage, name, value = parse_forced_field(arguments.force_port_field, "resident")
+                if stage != "resident":
+                    raise Refusal("first/modeled/post forced fields do not belong to resident replay")
+                port_boundary = dataclasses.replace(
+                    port_boundary, registers={**port_boundary.registers, name: value}
+                )
             print(
                 f"{label}: TEST-ONLY forced generated "
-                f"resident.{name}=0x{value:08X}"
+                f"{stage}.{name}=0x{value:08X}"
             )
         rows = compare_boundary(oracle_boundary, port_boundary, "resident")
+        if include_init_device:
+            assert oracle_devices is not None and port_devices is not None
+            rows.extend(compare_devices(oracle_devices, port_devices))
         comparison_label = label
     elif arguments.post_init_heap:
         oracle_repeat_output = scratch / "ctr04-oracle-boundary-repeat.trace"

@@ -8,6 +8,12 @@
 
 namespace ctr {
 
+const GuestProgramImage CtrRuntime::programImage_{
+    // GuestProgramImage stores physical addresses; CTR-01 measured the corresponding KSEG0
+    // executable extent as [0x80010000,0x8008D800).
+    .residentText = {0x00010000u, 0x0008D800u},
+};
+
 CtrRuntime::CtrRuntime(Dispatch dispatch, uint32_t bootTarget) : dispatch_(dispatch), bootTarget_(bootTarget) {
   if (!dispatch_ || bootTarget_ == 0) {
     lucent::error("ctr-runtime",
@@ -35,9 +41,13 @@ void CtrRuntime::bootInit(Core &core) {
   dispatch_(&core, bootTarget_);
 }
 
+const GuestProgramImage *CtrRuntime::guestProgramImage() const {
+  return &programImage_;
+}
+
 bool CtrRuntime::guestVramIsPicture(const Game &) const {
-  // CTR currently owns only a CPU-boundary trace harness. It neither builds nor presents a guest
-  // frame, so claiming guest VRAM as picture content here would invent rendered-frame ownership.
+  // CTR's bounded product boot neither builds nor presents a guest frame, so claiming guest VRAM as
+  // picture content here would invent rendered-frame ownership.
   return false;
 }
 

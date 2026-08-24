@@ -1,7 +1,7 @@
 ---
 id: 8
 title: CTR replay cannot cross the first indirect dispatch (jalr) at 0x800771C4
-status: open
+status: resolved
 symptom: The startup-init-dispatch window refuses — oracle counts only direct jal boundaries and generated execution refuses guest-code routing without a GuestProgramImage.
 tags: ctr,oracle,replay,bus,recomp,indirect-call
 created: 2026-08-24
@@ -56,3 +56,6 @@ Unblock order, both measured 2026-08-24:
 
 Until then `--startup-init-dispatch-next-call` stays in the tree as an honestly-refusing instrument;
 no CMake target wires it into gates.
+
+### Resolution (2026-08-24)
+Root cause fixed on both CPUs: CtrRuntime now supplies measured residentText [0x00010000,0x0008D800), the trace installs the shipping RecompRegistry and routes jalr through rec_dispatch, and psxport oracle_trace --capture-at captures a strict pre-instruction PC boundary. On verified SCUS_944.26, repeated oracle/replay captures agreed 34/34 with generated state at 0x800772E0; forced gp=0 produced 33/34. The next honest boundary is the initializer's DPCR write at 0x80077334, not the old indirect-dispatch blockage.

@@ -38,6 +38,15 @@ int main() {
     std::fprintf(stderr, "CtrRuntime exposed a legacy GameConfig/GameHooks view\n");
     return 1;
   }
+  const GuestProgramImage *programImage = runtime.guestProgramImage();
+  if (programImage == nullptr || core->guestProgramImage != programImage ||
+      programImage->residentText.begin != 0x00010000u || programImage->residentText.end != 0x0008D800u ||
+      !programImage->residentText.containsPhysical(0x80010000u) ||
+      !programImage->residentText.containsPhysical(0x8008D7FFu) ||
+      programImage->residentText.containsPhysical(0x8008D800u)) {
+    std::fprintf(stderr, "CtrRuntime did not install the measured half-open resident program range\n");
+    return 1;
+  }
   if (core->gameCtx != nullptr || runtime.bootTarget() != kValidatedEntry) {
     std::fprintf(stderr, "CtrRuntime invented context state or lost its validated target\n");
     return 1;
@@ -54,6 +63,7 @@ int main() {
     return 1;
   }
 
-  std::puts("CtrRuntime: direct derived install, no legacy views/picture claim, configured trace dispatch");
+  std::puts("CtrRuntime: direct derived install, measured resident image, no legacy views/picture claim, "
+            "configured trace dispatch");
   return 0;
 }
