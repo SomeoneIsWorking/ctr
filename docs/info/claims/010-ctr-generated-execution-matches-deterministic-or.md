@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-22
 tags:
 depends: tools/compare_crt0_trace.py#main, tools/resident_replay.py#build_replay, CMakeLists.txt
-reconfirmed: 2026-08-22
-verified_at: 2026-08-22 18:35:49
+reconfirmed: 2026-08-24
+verified_at: 2026-08-24 20:05:45
 ---
 
 ## Claim
@@ -28,3 +28,11 @@ Fresh Clang rebuild against recorded psxport ad5cf802; normal verify passed, emb
 ## Re-confirmed 2026-08-22
 
 Post-commit Clang verification passed 87/87 CTest with exact ad5cf802 pin; real SCUS_944.26 oracle/generated windows remained deterministic, comparator controls passed 18/18, the new 0x800718BC boundary agreed 34/34, and forced resident.gp produced the named 33/34 difference.
+
+## Re-confirmed 2026-08-24
+
+Full corrected-model chained asset gate re-ran the pre-memset boundary green on real SCUS_944.26: deterministic oracle/replay, 34/34 at 0x800718BC, and forced resident.gp 33/34; comparator selftest 23/23.
+
+## Re-confirmed 2026-08-24
+
+Isolated serialized real SCUS_944.26 gate process 468226 on psxport bc8c8897 reproduced SHA-256 7b4aac0b..., deterministic oracle/replay, 34/34 at 0x800718BC, and a named 33/34 forced-gp disagreement. An earlier overlapped run is excluded from acceptance evidence.

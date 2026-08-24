@@ -22,6 +22,7 @@ public:
   void destroyContext(void *context) override;
   void registerOverrides(Game &game) override;
   void bootInit(Core &core) override;
+  bool guestVramIsPicture(const Game &game) const override;
 
 private:
   Dispatch dispatch_;

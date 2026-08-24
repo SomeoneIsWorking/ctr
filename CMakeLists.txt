@@ -230,6 +230,58 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generated/rec_sources.cmake")
     DEPENDS ctr04_startup_service_next_call_check ctr_crt0_port_trace oracle_trace
     USES_TERMINAL
     VERBATIM)
+
+  # The A(2Bh) leaf is modeled explicitly on both CPUs, not skipped: the replay poisons the complete
+  # BSS destination, byte-checks the thunk before redirecting it to a register-preserving byte loop,
+  # and the generated tracer requires the poison before applying the same leaf contract. Continue
+  # only to the immediately following call, whose callsite bytes are also checked.
+  add_custom_target(
+    ctr04_startup_post_memset_next_call_check
+    COMMAND
+      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
+      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
+      --oracle-trace "$<TARGET_FILE:oracle_trace>"
+      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
+      --steps 400000
+      --startup-post-memset-next-call
+    COMMAND
+      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
+      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
+      --oracle-trace "$<TARGET_FILE:oracle_trace>"
+      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
+      --steps 400000
+      --startup-post-memset-next-call
+      --force-port-field resident:gp=0
+      --expect-difference
+    DEPENDS ctr04_startup_memset_thunk_check ctr_crt0_port_trace oracle_trace
+    USES_TERMINAL
+    VERBATIM)
+
+  # Past the modeled A(2Bh) leaf, the state-zero case stores zero through executable swap
+  # 0x80077CD8 (delay-slot store into initialized word 0x8008C0B4, previous value returned) before
+  # calling 0x800771C4. This gate stops at 0x800771C4's entry: its jalr is indirect and is the next,
+  # still-blocked window (see docs/re-frontier.md).
+  add_custom_target(
+    ctr04_startup_init_swap_next_call_check
+    COMMAND
+      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
+      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
+      --oracle-trace "$<TARGET_FILE:oracle_trace>"
+      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
+      --steps 400000
+      --startup-init-swap-next-call
+    COMMAND
+      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
+      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
+      --oracle-trace "$<TARGET_FILE:oracle_trace>"
+      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
+      --steps 400000
+      --startup-init-swap-next-call
+      --force-port-field resident:gp=0
+      --expect-difference
+    DEPENDS ctr04_startup_post_memset_next_call_check ctr_crt0_port_trace oracle_trace
+    USES_TERMINAL
+    VERBATIM)
 else()
   message(STATUS
     "CTR-04 generated trace target is unavailable: emit generated/ from the verified USA executable "

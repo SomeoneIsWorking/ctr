@@ -23,6 +23,25 @@ class ReplayImage:
     data: bytes
     trampoline: int
     size: int
+    leaf_model: int | None = None
+    leaf_model_size: int = 0
+
+
+@dataclasses.dataclass(frozen=True)
+class ModeledMemset:
+    """Explicit executable model for an external A(2Bh) memset leaf.
+
+    The replay poisons the destination before entry, replaces the checked executable thunk with a
+    jump to a register-preserving byte loop, and therefore cannot accidentally pass because fresh
+    oracle RAM already happened to contain the requested fill byte.
+    """
+
+    thunk: int
+    expected_thunk: bytes
+    destination: int
+    value: int
+    size: int
+    poison: int = 0xA5
 
 
 def _read_u32(data: bytes, offset: int) -> int:
@@ -74,6 +93,41 @@ def _find_zero_run(payload: bytes, size: int, load: int, forbidden: tuple[range,
     raise ReplayRefusal(f"executable has no aligned {size}-byte zero run for the replay trampoline")
 
 
+def _modeled_memset_words(size: int) -> tuple[int, ...]:
+    # Preserve every guest register except v0, which the BIOS leaf returns as the original a0.
+    # Saving temporaries below guest sp would leave a RAM side effect that the generated-side leaf
+    # model does not have. Instead, use the first twelve destination bytes as temporary storage,
+    # fill the tail, restore v1/t0/t1, and finally overwrite the temporary bytes with a1.
+    if size < 12:
+        return (
+            *(0xA0850000 | offset for offset in range(size)),  # sb a1,offset(a0)
+            0x00801021,  # addu  v0,a0,zero
+            0x03E00008,  # jr    ra
+            0x00000000,  # nop
+        )
+    return (
+        0xAC830000,  # sw    v1,0(a0)
+        0xAC880004,  # sw    t0,4(a0)
+        0xAC890008,  # sw    t1,8(a0)
+        0x2488000C,  # addiu t0,a0,12
+        0x24C9FFF4,  # addiu t1,a2,-12
+        0x11200006,  # beq   t1,zero,restore
+        0x00000000,  # nop
+        0xA1050000,  # loop: sb a1,0(t0)
+        0x25080001,  # addiu t0,t0,1
+        0x2529FFFF,  # addiu t1,t1,-1
+        0x1520FFFC,  # bne   t1,zero,loop
+        0x00000000,  # nop
+        0x8C890008,  # restore: lw t1,8(a0)
+        0x8C880004,  # lw    t0,4(a0)
+        0x8C830000,  # lw    v1,0(a0)
+        *(0xA0850000 | offset for offset in range(12)),  # sb a1,offset(a0)
+        0x00801021,  # addu  v0,a0,zero
+        0x03E00008,  # jr    ra
+        0x00000000,  # nop
+    )
+
+
 def build_replay(
     source: bytes,
     *,
@@ -85,6 +139,7 @@ def build_replay(
     expected_ranges: tuple[tuple[int, bytes], ...] = (),
     expected_words: tuple[tuple[int, int], ...] = (),
     forbidden_ranges: tuple[range, ...] = (),
+    modeled_memset: ModeledMemset | None = None,
 ) -> ReplayImage:
     """Return a replay EXE, refusing unless the bounded original prefix is exact.
 
@@ -153,11 +208,51 @@ def build_replay(
         range(address, address + len(expected)) for address, expected in expected_ranges
     ) + tuple(range(address, address + 4) for address, _ in expected_words)
     prefix_range = range(resume_target, resume_target + len(expected_prefix))
+    model_words: tuple[int, ...] = ()
+    model_size = 0
+    model_offset: int | None = None
+    model_address: int | None = None
+    model_ranges: tuple[range, ...] = ()
+    if modeled_memset is not None:
+        model = modeled_memset
+        if not model.expected_thunk or len(model.expected_thunk) != 12:
+            raise ReplayRefusal("modeled memset requires the complete 12-byte executable thunk")
+        if model.thunk & 3 or model.destination & 3:
+            raise ReplayRefusal("modeled memset thunk and destination must be four-byte aligned")
+        if not 0 <= model.value <= 0xFF or not 0 <= model.poison <= 0xFF:
+            raise ReplayRefusal("modeled memset value and poison must be bytes")
+        if model.value == model.poison:
+            raise ReplayRefusal("modeled memset poison must differ from the requested fill byte")
+        if model.size <= 0:
+            raise ReplayRefusal("modeled memset requires a nonempty destination")
+        thunk_offset = model.thunk - load
+        if thunk_offset < 0 or thunk_offset + len(model.expected_thunk) > text_size:
+            raise ReplayRefusal("modeled memset thunk lies outside original executable text")
+        if payload[thunk_offset:thunk_offset + len(model.expected_thunk)] != model.expected_thunk:
+            raise ReplayRefusal("modeled memset thunk bytes changed; the external-leaf proof is stale")
+        destination_end = model.destination + model.size
+        if destination_end > 0x1_0000_0000 or model.destination < load + text_size:
+            raise ReplayRefusal("modeled memset poison must occupy BSS beyond original executable text")
+        if (model.destination & (RAM_SIZE - 1)) + model.size > RAM_SIZE:
+            raise ReplayRefusal("modeled memset destination wraps PSX main RAM")
+        model_words = _modeled_memset_words(model.size)
+        model_size = 4 * len(model_words)
+        model_offset = _find_zero_run(
+            payload,
+            model_size,
+            load,
+            (range(model.thunk, model.thunk + len(model.expected_thunk)),
+             range(model.destination, destination_end),
+             prefix_range, *evidence_ranges, *forbidden_ranges),
+        )
+        model_address = load + model_offset
+        model_ranges = (range(model_address, model_address + model_size),)
+
     trampoline_offset = _find_zero_run(
         payload,
         trampoline_size,
         load,
-        (prefix_range, *evidence_ranges, *forbidden_ranges),
+        (prefix_range, *evidence_ranges, *model_ranges, *forbidden_ranges),
     )
     trampoline = load + trampoline_offset
     jump_pc = trampoline + (len(words) - 2) * 4
@@ -166,9 +261,27 @@ def build_replay(
     words[-2] = 0x08000000 | ((resume_target >> 2) & 0x03FFFFFF)
 
     result = bytearray(source)
+    if modeled_memset is not None:
+        assert model_offset is not None and model_address is not None
+        destination_end = modeled_memset.destination + modeled_memset.size
+        extended_text_size = (destination_end - load + 0x7FF) & ~0x7FF
+        required_file_size = HEADER_SIZE + extended_text_size
+        if len(result) < required_file_size:
+            result.extend(bytes(required_file_size - len(result)))
+        struct.pack_into("<I", result, TEXT_SIZE_OFFSET, extended_text_size)
+        destination_offset = HEADER_SIZE + modeled_memset.destination - load
+        result[destination_offset:destination_offset + modeled_memset.size] = bytes(
+            [modeled_memset.poison]
+        ) * modeled_memset.size
+        struct.pack_into(
+            f"<{len(model_words)}I", result, HEADER_SIZE + model_offset, *model_words
+        )
+        thunk_offset = HEADER_SIZE + modeled_memset.thunk - load
+        jump = 0x08000000 | ((model_address >> 2) & 0x03FFFFFF)
+        struct.pack_into("<III", result, thunk_offset, jump, 0, 0)
     struct.pack_into("<I", result, ENTRY_OFFSET, trampoline)
     struct.pack_into(f"<{len(words)}I", result, HEADER_SIZE + trampoline_offset, *words)
-    return ReplayImage(bytes(result), trampoline, trampoline_size)
+    return ReplayImage(bytes(result), trampoline, trampoline_size, model_address, model_size)
 
 
 def write_replay(source: pathlib.Path, output: pathlib.Path, **arguments: object) -> ReplayImage:

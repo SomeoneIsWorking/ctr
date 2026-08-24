@@ -35,4 +35,10 @@ void CtrRuntime::bootInit(Core &core) {
   dispatch_(&core, bootTarget_);
 }
 
+bool CtrRuntime::guestVramIsPicture(const Game &) const {
+  // CTR currently owns only a CPU-boundary trace harness. It neither builds nor presents a guest
+  // frame, so claiming guest VRAM as picture content here would invent rendered-frame ownership.
+  return false;
+}
+
 } // namespace ctr

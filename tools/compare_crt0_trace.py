@@ -11,7 +11,7 @@ import struct
 import subprocess
 import sys
 
-from resident_replay import ReplayRefusal, build_replay, write_replay
+from resident_replay import ModeledMemset, ReplayRefusal, build_replay, write_replay
 
 
 REGISTER_NAMES = (
@@ -105,6 +105,32 @@ BACKGROUND_SERVICE_RETURN = 0x8001D084
 POST_BACKGROUND_SERVICE = 0x8003C5E0
 STATE_ZERO_CASE = 0x8003C614
 STARTUP_MEMSET_THUNK = 0x800718BC
+STARTUP_MEMSET_THUNK_WORDS = (0x240A00A0, 0x01400008, 0x2409002B)
+POST_STARTUP_MEMSET_WORDS = (0x0C01DF36, 0x00002021)
+POST_STARTUP_MEMSET = 0x8003C624
+STARTUP_MEMSET_NEXT_CALL = 0x80077CD8
+
+# After the modeled A(2Bh) leaf returns, the state-zero case calls the executable swap 0x80077CD8:
+# it stores a0 into initialized word 0x8008C0B4 in its delay slot and returns the previous value.
+# The caller then calls 0x800771C4, which loads table pointer 0x8008C000 from initialized word
+# 0x8008C020 and jumps indirectly through slot +0xC to 0x800772E0, the one-time system initializer
+# (Ghidra: FUN_800772e0 guards all of its work on word 0x8008AF98). Two windows cover this: the
+# init-swap window stops at 0x800771C4's entry; the init-dispatch window additionally checks the
+# dispatcher's executed prefix plus both dispatch words and stops at the indirect target's entry.
+INIT_DISPATCH_TABLE_BASE = 0x8008C000
+STARTUP_INIT_SWAP_WORDS = (0x3C028009, 0x8C42C0B4, 0x3C018009, 0x03E00008, 0xAC24C0B4)
+POST_INIT_SWAP_WORDS = (0x0C01DC71, 0x00000000)
+INIT_DISPATCHER_PREFIX_WORDS = (
+    0x3C028009, 0x8C42C020, 0x27BDFFE8, 0xAFBF0010,
+    0x8C42000C, 0x00000000, 0x0040F809, 0x00000000,
+)
+STARTUP_INIT_SWAP = 0x80077CD8
+POST_INIT_SWAP = 0x8003C62C
+INIT_DISPATCHER = 0x800771C4
+INIT_NEXT_CALL = 0x800772E0
+INIT_SWAP_DATA_WORD = 0x8008C0B4
+INIT_DISPATCH_TABLE = 0x8008C020
+INIT_DISPATCH_SLOT = INIT_DISPATCH_TABLE_BASE + 0xC
 BACKGROUND_SERVICE_PENDING = 0x8008D6B8
 STATE_JUMP_TABLE_ZERO = 0x80011594
 GLOBAL_STATE_POINTER = 0x8008D2AC
@@ -113,6 +139,11 @@ BACKGROUND_SERVICE_ENTRY_CODE = pack_words(BACKGROUND_SERVICE_ENTRY_WORDS)
 BACKGROUND_SERVICE_RETURN_CODE = pack_words(BACKGROUND_SERVICE_RETURN_WORDS)
 STATE_DISPATCH_CODE = pack_words(STATE_DISPATCH_WORDS)
 STATE_ZERO_CASE_CODE = pack_words(STATE_ZERO_CASE_WORDS)
+STARTUP_MEMSET_THUNK_CODE = pack_words(STARTUP_MEMSET_THUNK_WORDS)
+POST_STARTUP_MEMSET_CODE = pack_words(POST_STARTUP_MEMSET_WORDS)
+STARTUP_INIT_SWAP_CODE = pack_words(STARTUP_INIT_SWAP_WORDS)
+POST_INIT_SWAP_CODE = pack_words(POST_INIT_SWAP_WORDS)
+INIT_DISPATCHER_CODE = pack_words(INIT_DISPATCHER_PREFIX_WORDS)
 
 
 class Refusal(RuntimeError):
@@ -530,6 +561,76 @@ def selftest() -> int:
             and BACKGROUND_SERVICE_PENDING >= BSS_START,
         )
     )
+    checks.append(
+        (
+            "init-swap dispatch inputs remain initialized data before BSS",
+            INIT_SWAP_DATA_WORD < BSS_START
+            and INIT_DISPATCH_TABLE < BSS_START
+            and INIT_DISPATCH_TABLE_BASE < BSS_START
+            and INIT_DISPATCH_SLOT < BSS_START,
+        )
+    )
+    modeled_memset = ModeledMemset(
+        thunk=0x80010100,
+        expected_thunk=bytes(synthetic[0x900:0x90C]),
+        destination=0x80010800,
+        value=0,
+        size=0x40,
+    )
+    modeled = build_replay(
+        bytes(synthetic),
+        resume_target=0x80010000 + prefix_offset,
+        registers=replay_registers,
+        lo=0,
+        hi=0,
+        expected_prefix=RESIDENT_PREFIX,
+        modeled_memset=modeled_memset,
+    )
+    modeled_payload = modeled.data[0x800:]
+    modeled_destination = modeled_memset.destination - 0x80010000
+    assert modeled.leaf_model is not None
+    modeled_code_offset = modeled.leaf_model - 0x80010000
+    modeled_code = modeled_payload[
+        modeled_code_offset:modeled_code_offset + modeled.leaf_model_size
+    ]
+    checks.extend(
+        (
+            (
+                "modeled memset poisons a BSS destination to make a missing write observable",
+                modeled_payload[
+                    modeled_destination:modeled_destination + modeled_memset.size
+                ] == bytes([modeled_memset.poison]) * modeled_memset.size,
+            ),
+            (
+                "modeled memset redirects the checked thunk to its executable model",
+                modeled_payload[0x100:0x10C] == pack_words(
+                    (0x08000000 | ((modeled.leaf_model >> 2) & 0x03FFFFFF), 0, 0)
+                ),
+            ),
+            (
+                "modeled memset preserves temporaries in its destination, never guest stack",
+                modeled_code.startswith(pack_words((0xAC830000, 0xAC880004, 0xAC890008)))
+                and pack_words((0x27BDFFF0,)) not in modeled_code
+                and pack_words((0xAFA30000,)) not in modeled_code,
+            ),
+        )
+    )
+    changed_thunk = bytearray(synthetic)
+    changed_thunk[0x900] ^= 1
+    try:
+        build_replay(
+            bytes(changed_thunk),
+            resume_target=0x80010000 + prefix_offset,
+            registers=replay_registers,
+            lo=0,
+            hi=0,
+            expected_prefix=RESIDENT_PREFIX,
+            modeled_memset=modeled_memset,
+        )
+    except ReplayRefusal:
+        checks.append(("changed modeled-memset thunk refuses", True))
+    else:
+        checks.append(("changed modeled-memset thunk refuses", False))
     for label, passed in checks:
         print(f"  {'PASS' if passed else 'FAIL'} {label}")
     failed = sum(not passed for _, passed in checks)
@@ -622,6 +723,9 @@ def main() -> int:
     parser.add_argument("--runtime-init-next-call", action="store_true")
     parser.add_argument("--startup-service-next-call", action="store_true")
     parser.add_argument("--startup-memset-thunk", action="store_true")
+    parser.add_argument("--startup-post-memset-next-call", action="store_true")
+    parser.add_argument("--startup-init-swap-next-call", action="store_true")
+    parser.add_argument("--startup-init-dispatch-next-call", action="store_true")
     parser.add_argument("--force-port-field", help="test-only post-capture mutation, [STAGE:]NAME=VALUE")
     parser.add_argument("--expect-difference", action="store_true")
     parser.add_argument("--selftest", action="store_true")
@@ -642,6 +746,9 @@ def main() -> int:
             arguments.runtime_init_next_call,
             arguments.startup_service_next_call,
             arguments.startup_memset_thunk,
+            arguments.startup_post_memset_next_call,
+            arguments.startup_init_swap_next_call,
+            arguments.startup_init_dispatch_next_call,
         )
     )
     if selected_windows > 1:
@@ -669,11 +776,23 @@ def main() -> int:
         or arguments.runtime_init_next_call
         or arguments.startup_service_next_call
         or arguments.startup_memset_thunk
+        or arguments.startup_post_memset_next_call
+        or arguments.startup_init_swap_next_call
+        or arguments.startup_init_dispatch_next_call
     ):
-        include_memset_thunk = arguments.startup_memset_thunk
+        include_init_dispatch = arguments.startup_init_dispatch_next_call
+        include_init_swap = arguments.startup_init_swap_next_call or include_init_dispatch
+        include_post_memset = arguments.startup_post_memset_next_call or include_init_swap
+        include_memset_thunk = arguments.startup_memset_thunk or include_post_memset
         include_startup_service = arguments.startup_service_next_call or include_memset_thunk
         include_runtime_init = arguments.runtime_init_next_call or include_startup_service
-        if include_memset_thunk:
+        if include_init_dispatch:
+            label = "ctr04 startup-init-dispatch-next-call compare"
+        elif include_init_swap:
+            label = "ctr04 startup-init-swap-next-call compare"
+        elif include_post_memset:
+            label = "ctr04 startup-post-memset-next-call compare"
+        elif include_memset_thunk:
             label = "ctr04 startup-memset-thunk compare"
         elif include_startup_service:
             label = "ctr04 startup-service-next-call compare"
@@ -731,6 +850,23 @@ def main() -> int:
                 (STATE_JUMP_TABLE_ZERO, STATE_ZERO_CASE),
                 (GLOBAL_STATE_POINTER, GLOBAL_STATE_BASE),
             )
+        if include_post_memset:
+            expected_ranges += (
+                (STARTUP_MEMSET_THUNK, STARTUP_MEMSET_THUNK_CODE),
+                (POST_STARTUP_MEMSET, POST_STARTUP_MEMSET_CODE),
+            )
+        if include_init_swap:
+            expected_ranges += (
+                (POST_INIT_SWAP, POST_INIT_SWAP_CODE),
+                (STARTUP_INIT_SWAP, STARTUP_INIT_SWAP_CODE),
+            )
+            expected_words += ((INIT_SWAP_DATA_WORD, 0),)
+        if include_init_dispatch:
+            expected_ranges += ((INIT_DISPATCHER, INIT_DISPATCHER_CODE),)
+            expected_words += (
+                (INIT_DISPATCH_TABLE, INIT_DISPATCH_TABLE_BASE),
+                (INIT_DISPATCH_SLOT, INIT_NEXT_CALL),
+            )
         try:
             replay = write_replay(
                 exe,
@@ -743,6 +879,17 @@ def main() -> int:
                 expected_ranges=expected_ranges,
                 expected_words=expected_words,
                 forbidden_ranges=forbidden_ranges,
+                modeled_memset=(
+                    ModeledMemset(
+                        thunk=STARTUP_MEMSET_THUNK,
+                        expected_thunk=STARTUP_MEMSET_THUNK_CODE,
+                        destination=GLOBAL_STATE_BASE,
+                        value=0,
+                        size=0x2584,
+                    )
+                    if include_post_memset
+                    else None
+                ),
             )
         except ReplayRefusal as error:
             raise Refusal(f"resident replay construction refused: {error}") from error
@@ -754,12 +901,19 @@ def main() -> int:
         resident_output = scratch / "ctr04-resident-oracle.trace"
         resident_repeat_output = scratch / "ctr04-resident-oracle-repeat.trace"
         call_ordinal = (
-            4
+            7
+            if include_init_dispatch
+            else 6
+            if include_init_swap
+            else 5
+            if include_post_memset
+            else 4
             if include_memset_thunk
             else (3 if include_startup_service else (2 if include_runtime_init else 1))
         )
         resident_command = [
-            str(oracle_tool), str(replay_path), "--steps", "256", "--capture-call", str(call_ordinal),
+            str(oracle_tool), str(replay_path), "--steps", "60000" if include_post_memset else "256",
+            "--capture-call", str(call_ordinal),
             "--summary-only",
         ]
         run([*resident_command, "--out", str(resident_output)], "resident replay oracle trace A")
@@ -774,7 +928,13 @@ def main() -> int:
         if oracle_boundary != oracle_repeat:
             raise Refusal("two resident replay oracle runs produced different boundary state or steps")
         expected_target = (
-            STARTUP_MEMSET_THUNK
+            INIT_NEXT_CALL
+            if include_init_dispatch
+            else INIT_DISPATCHER
+            if include_init_swap
+            else STARTUP_MEMSET_NEXT_CALL
+            if include_post_memset
+            else STARTUP_MEMSET_THUNK
             if include_memset_thunk
             else (STARTUP_SERVICE_NEXT_CALL if include_startup_service else RUNTIME_INIT_NEXT_CALL)
         )
@@ -790,9 +950,18 @@ def main() -> int:
 
         port_result = run(
             [
-                str(port_tool), str(exe), "--resume-target", f"0x{RESIDENT_RESUME_TARGET:08X}",
+                str(port_tool), str(replay_path if include_post_memset else exe),
+                "--resume-target", f"0x{RESIDENT_RESUME_TARGET:08X}",
                 "--capture-target", f"0x{oracle_boundary.target:08X}", "--state",
                 resident_state_arguments(post.post_return_call),
+                *(
+                    [
+                        "--model-memset",
+                        f"0x{STARTUP_MEMSET_THUNK:08X},0x{GLOBAL_STATE_BASE:08X},0,0x2584,0xA5",
+                    ]
+                    if include_post_memset
+                    else []
+                ),
             ],
             "generated resident replay trace",
         )

@@ -1,6 +1,7 @@
 #include "ctr_runtime.h"
 
 #include "core.h"
+#include "game.h"
 #include "game_runtime.h"
 
 #include <cstdint>
@@ -41,6 +42,11 @@ int main() {
     std::fprintf(stderr, "CtrRuntime invented context state or lost its validated target\n");
     return 1;
   }
+  auto game = std::make_unique<Game>();
+  if (game_guest_vram_is_picture(*game)) {
+    std::fprintf(stderr, "CtrRuntime claimed guest VRAM picture ownership without a rendered frame\n");
+    return 1;
+  }
 
   runtime.bootInit(*core);
   if (g_dispatchedCore != core.get() || g_dispatchedAddress != kValidatedEntry) {
@@ -48,6 +54,6 @@ int main() {
     return 1;
   }
 
-  std::puts("CtrRuntime: direct derived install, no legacy views, configured trace dispatch");
+  std::puts("CtrRuntime: direct derived install, no legacy views/picture claim, configured trace dispatch");
   return 0;
 }

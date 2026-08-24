@@ -47,10 +47,20 @@ struct Boundary {
 
 struct BoundaryReached final {};
 
+struct ModeledMemset {
+  uint32_t target = 0;
+  uint32_t destination = 0;
+  uint32_t value = 0;
+  uint32_t size = 0;
+  uint32_t poison = 0;
+  bool reached = false;
+};
+
 Boundary *g_boundary = nullptr;
 Boundary *g_preModel = nullptr;
 Boundary *g_modeledReturn = nullptr;
 bool g_modeledReturnReached = false;
+ModeledMemset *g_modeledMemset = nullptr;
 
 uint32_t readLe32(const std::array<uint8_t, kExeHeaderSize> &header, std::size_t offset) {
   return static_cast<uint32_t>(header[offset]) | (static_cast<uint32_t>(header[offset + 1]) << 8U) |
@@ -123,6 +133,31 @@ bool parseResidentState(std::string_view text, std::array<uint32_t, 33> &state) 
   return text.empty();
 }
 
+bool parseModeledMemset(std::string_view text, ModeledMemset &model) {
+  std::array<uint32_t, 5> values{};
+  for (uint32_t &value : values) {
+    const std::size_t separator = text.find(',');
+    const std::string_view field = text.substr(0, separator);
+    if (field.empty() || !parseAddress(field, value)) {
+      return false;
+    }
+    if (separator == std::string_view::npos) {
+      text = {};
+    } else {
+      text.remove_prefix(separator + 1);
+    }
+  }
+  const uint64_t virtualEnd = static_cast<uint64_t>(values[1]) + values[3];
+  const uint64_t physicalEnd = static_cast<uint64_t>(values[1] & (static_cast<uint32_t>(kRamSize) - 1U)) + values[3];
+  if (!text.empty() || values[0] == 0 || values[1] == 0 || (values[0] & 3U) != 0 || (values[1] & 3U) != 0 ||
+      values[2] > 0xFF || values[3] == 0 || values[4] > 0xFF || values[2] == values[4] ||
+      virtualEnd > 0x1'0000'0000ULL || physicalEnd > kRamSize) {
+    return false;
+  }
+  model = {values[0], values[1], values[2], values[3], values[4], false};
+  return true;
+}
+
 void restoreResidentState(Core &core, const std::array<uint32_t, 33> &state, uint32_t resumeTarget) {
   core.r[0] = 0;
   std::copy_n(state.begin(), 31, std::begin(core.r) + 1);
@@ -167,6 +202,46 @@ void modelInitHeapReturn(Core *core) {
   g_modeledReturnReached = true;
 }
 
+void modelMemsetReturn(Core *core) {
+  if (g_modeledMemset == nullptr || g_modeledMemset->reached) {
+    std::fprintf(stderr, "ctr_crt0_port_trace: REFUSING — memset model fired outside its one-shot boundary.\n");
+    std::abort();
+  }
+  ModeledMemset &model = *g_modeledMemset;
+  if (core->r[4] != model.destination || core->r[5] != model.value || core->r[6] != model.size) {
+    std::fprintf(stderr,
+                 "ctr_crt0_port_trace: REFUSING — memset args changed: got (0x%08X,0x%08X,0x%08X), "
+                 "expected (0x%08X,0x%08X,0x%08X).\n",
+                 core->r[4],
+                 core->r[5],
+                 core->r[6],
+                 model.destination,
+                 model.value,
+                 model.size);
+    std::abort();
+  }
+  for (uint32_t offset = 0; offset < model.size; ++offset) {
+    if (core->mem_r8(model.destination + offset) != model.poison) {
+      std::fprintf(stderr,
+                   "ctr_crt0_port_trace: REFUSING — modeled memset destination was not fully poisoned "
+                   "before the external leaf.\n");
+      std::abort();
+    }
+  }
+  for (uint32_t offset = 0; offset < model.size; ++offset) {
+    core->mem_w8(model.destination + offset, static_cast<uint8_t>(model.value));
+  }
+  for (uint32_t offset = 0; offset < model.size; ++offset) {
+    if (core->mem_r8(model.destination + offset) != model.value) {
+      std::fprintf(stderr, "ctr_crt0_port_trace: REFUSING — modeled memset postcondition failed.\n");
+      std::abort();
+    }
+  }
+  core->r[2] = core->r[4];
+  core->pc = core->r[31];
+  model.reached = true;
+}
+
 void printRegisterBlock(const char *tag, const Boundary &boundary) {
   std::printf("# %s-REGS pc=0x%08X\n", tag, boundary.pc);
   for (std::size_t index = 1; index < boundary.registers.size(); ++index) {
@@ -194,12 +269,17 @@ int main(int argc, char **argv) {
                             std::string_view(argv[5]) == "--post-target";
   const bool residentReplay = argc == 8 && std::string_view(argv[2]) == "--resume-target" &&
                               std::string_view(argv[4]) == "--capture-target" && std::string_view(argv[6]) == "--state";
-  if (!firstBoundaryOnly && !postInitHeap && !residentReplay) {
+  const bool residentReplayWithMemset =
+      argc == 10 && std::string_view(argv[2]) == "--resume-target" && std::string_view(argv[4]) == "--capture-target" &&
+      std::string_view(argv[6]) == "--state" && std::string_view(argv[8]) == "--model-memset";
+  const bool anyResidentReplay = residentReplay || residentReplayWithMemset;
+  if (!firstBoundaryOnly && !postInitHeap && !residentReplay && !residentReplayWithMemset) {
     std::fprintf(stderr,
                  "usage: ctr_crt0_port_trace <PS-X EXE> --target 0xADDR "
                  "[--model-init-heap-return --post-target 0xADDR]\n"
                  "       ctr_crt0_port_trace <PS-X EXE> --resume-target 0xADDR "
-                 "--capture-target 0xADDR --state AT,...,RA,LO,HI\n");
+                 "--capture-target 0xADDR --state AT,...,RA,LO,HI "
+                 "[--model-memset TARGET,DST,VALUE,SIZE,POISON]\n");
     return 2;
   }
 
@@ -213,20 +293,28 @@ int main(int argc, char **argv) {
     std::fprintf(stderr, "ctr_crt0_port_trace: REFUSING — invalid nonzero hexadecimal call target.\n");
     return 2;
   }
-  if ((postInitHeap || residentReplay) &&
-      (!parseAddress(residentReplay ? argv[5] : argv[6], postTarget) || postTarget == 0 || postTarget == target)) {
+  if ((postInitHeap || anyResidentReplay) &&
+      (!parseAddress(anyResidentReplay ? argv[5] : argv[6], postTarget) || postTarget == 0 || postTarget == target)) {
     std::fprintf(stderr, "ctr_crt0_port_trace: REFUSING — invalid distinct hexadecimal post-return target.\n");
     return 2;
   }
   std::array<uint32_t, 33> residentState{};
-  if (residentReplay && !parseResidentState(argv[7], residentState)) {
+  if (anyResidentReplay && !parseResidentState(argv[7], residentState)) {
     std::fprintf(stderr,
                  "ctr_crt0_port_trace: REFUSING — --state must contain exactly 33 hexadecimal "
                  "AT,...,RA,LO,HI values.\n");
     return 2;
   }
-  if ((!residentReplay && rec_func_index(layout.entry) < 0) || rec_func_index(target) < 0 ||
-      ((postInitHeap || residentReplay) && rec_func_index(postTarget) < 0)) {
+  ModeledMemset modeledMemset{};
+  if (residentReplayWithMemset && !parseModeledMemset(argv[9], modeledMemset)) {
+    std::fprintf(stderr,
+                 "ctr_crt0_port_trace: REFUSING — --model-memset must be "
+                 "TARGET,DST,BYTE,NONZERO_SIZE,DISTINCT_POISON.\n");
+    return 2;
+  }
+  if ((!anyResidentReplay && rec_func_index(layout.entry) < 0) || rec_func_index(target) < 0 ||
+      ((postInitHeap || anyResidentReplay) && rec_func_index(postTarget) < 0) ||
+      (residentReplayWithMemset && rec_func_index(modeledMemset.target) < 0)) {
     std::fprintf(stderr,
                  "ctr_crt0_port_trace: REFUSING — entry 0x%08X, observed target 0x%08X, and any post-return "
                  "target 0x%08X must exist in the shipping generated registry.\n",
@@ -236,7 +324,7 @@ int main(int argc, char **argv) {
     return 2;
   }
 
-  ctr::CtrRuntime runtime(main_dispatch, residentReplay ? target : layout.entry);
+  ctr::CtrRuntime runtime(main_dispatch, anyResidentReplay ? target : layout.entry);
   psxport_install_game(runtime);
   auto core = std::make_unique<Core>();
   load_exe(argv[1], core.get());
@@ -244,9 +332,13 @@ int main(int argc, char **argv) {
   Boundary preModel{};
   Boundary modeledReturn{};
   g_boundary = &boundary;
-  if (residentReplay) {
+  if (anyResidentReplay) {
     restoreResidentState(*core, residentState, target);
     shard_set_override(postTarget, captureBoundary);
+    if (residentReplayWithMemset) {
+      g_modeledMemset = &modeledMemset;
+      shard_set_override(modeledMemset.target, modelMemsetReturn);
+    }
   } else if (postInitHeap) {
     g_preModel = &preModel;
     g_modeledReturn = &modeledReturn;
@@ -262,24 +354,29 @@ int main(int argc, char **argv) {
   } catch (const BoundaryReached &) {
     reached = true;
   }
-  shard_set_override(residentReplay ? postTarget : target, nullptr);
+  shard_set_override(anyResidentReplay ? postTarget : target, nullptr);
+  if (residentReplayWithMemset) {
+    shard_set_override(modeledMemset.target, nullptr);
+  }
   if (postInitHeap) {
     shard_set_override(postTarget, nullptr);
   }
   g_boundary = nullptr;
   g_preModel = nullptr;
   g_modeledReturn = nullptr;
+  g_modeledMemset = nullptr;
 
-  const uint32_t expectedBoundary = (postInitHeap || residentReplay) ? postTarget : target;
-  if (!reached || boundary.pc != expectedBoundary || (postInitHeap && !g_modeledReturnReached)) {
+  const uint32_t expectedBoundary = (postInitHeap || anyResidentReplay) ? postTarget : target;
+  if (!reached || boundary.pc != expectedBoundary || (postInitHeap && !g_modeledReturnReached) ||
+      (residentReplayWithMemset && !modeledMemset.reached)) {
     std::fprintf(stderr,
                  "ctr_crt0_port_trace: REFUSING — generated execution did not reach the independently observed "
                  "%s boundary.\n",
                  postInitHeap ? "modeled return and subsequent call"
-                              : (residentReplay ? "resident subsequent call" : "first-call"));
+                              : (anyResidentReplay ? "resident subsequent call" : "first-call"));
     return 2;
   }
-  if (firstBoundaryOnly || residentReplay) {
+  if (firstBoundaryOnly || anyResidentReplay) {
     printBoundary(expectedBoundary, boundary);
   } else {
     printBoundary(target, preModel);
