@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-22
 tags:
 depends: tools/compare_crt0_trace.py#main, tools/resident_replay.py#build_replay, game/core/crt0_port_trace.cpp#restoreResidentState, CMakeLists.txt
-reconfirmed: 2026-08-24
-verified_at: 2026-08-24 20:09:43
+reconfirmed: 2026-08-26
+verified_at: 2026-08-26 23:28:39
 ---
 
 ## Claim
@@ -44,3 +44,7 @@ Post-commit Clang verification passed 87/87 CTest with exact ad5cf802 pin; real 
 ## Re-confirmed 2026-08-24
 
 Post-landing isolated real-data chain reconfirmed the runtime-initializer continuation at 34/34 and forced gp at 33/34
+
+## Re-confirmed 2026-08-26
+
+Reverified 2026-08-26 on identity-checked SCUS_944.26 with a clean Clang build against exact psxport 51a609267a95ad2f08426df6fe83b57f3bff3c14: the complete chained oracle/generated target through 0x800772E0 passed every named deterministic boundary and its forced-opposite control using freshly emitted recompiler 2026-08-26.14 output.

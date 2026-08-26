@@ -9,7 +9,7 @@
 namespace ctr {
 namespace {
 
-constexpr uint32_t kSupportedFrontier = 0x800777E8u;
+constexpr uint32_t kSupportedFrontier = 0x800772E0u;
 
 struct FrontierReached final {};
 

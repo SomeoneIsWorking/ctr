@@ -1,6 +1,7 @@
 #include "ctr_runtime.h"
 
 #include "core.h"
+#include "projection_hle_plan.h"
 
 #include <lucent/log.h>
 
@@ -26,6 +27,10 @@ uint32_t CtrRuntime::bootTarget() const {
   return bootTarget_;
 }
 
+RenderCapabilities CtrRuntime::renderCapabilities() const {
+  return RenderCapabilities::interpolatedNative();
+}
+
 void *CtrRuntime::createContext(Core &) {
   return nullptr;
 }
@@ -43,6 +48,10 @@ void CtrRuntime::bootInit(Core &core) {
 
 const GuestProgramImage *CtrRuntime::guestProgramImage() const {
   return &programImage_;
+}
+
+const PlatformHlePlan *CtrRuntime::platformHlePlan() const {
+  return &projectionHlePlan();
 }
 
 bool CtrRuntime::guestVramIsPicture(const Game &) const {

@@ -1,10 +1,11 @@
 ---
 id: C014
 kind: claim
-status: holds
+status: falsified
 created: 2026-08-25
 tags: ctr04,device-boundary
 depends: psxport.pin, CMakeLists.txt, tools/compare_crt0_trace.py#main, game/core/crt0_port_trace.cpp#main, game/core/bootstrap_frontier.cpp#runBootstrapToSupportedFrontier
+falsified_on: 2026-08-26
 ---
 
 ## Claim
@@ -18,3 +19,11 @@ Clang build against isolated psxport 9c2e3f1c plus the reviewed generic DPCR/dev
 ## What would falsify it
 
 Executable identity, 24-word initializer prefix, oracle DPCR/device semantics or write provenance, generated Core MMIO behavior, comparator schema, boundary fields, or product frontier changes; repeated captures differ; the forced DPCR opposite is not isolated; or ctr_port fails to build/reach exactly 0x800777E8.
+
+## FALSIFIED 2026-08-26
+
+Exact clean verification through framework `99a42aa3` refused: `oracle_trace` does not implement the
+`--capture-devices` CLI used by this claim; the evidence depended on an unlanded generic framework
+worktree.
+
+> Anything that cited this claim as proof must be re-checked. Grep the repo for it.

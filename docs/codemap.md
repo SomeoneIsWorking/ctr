@@ -1,50 +1,45 @@
 # Codemap
 
-The repository layers a verified USA executable provisioner, a true-oracle crt0 cross-check, and a
-generated-code differential through an explicit A(39h) return over the shared psxport framework. A
-bounded exact-register replay proves the first resident prefix, its one-time runtime initializer,
-the startup services' exact idle/state-zero paths, the explicitly modeled A(2Bh) memset leaf
-(poison-checked on both CPUs), executable swap `0x80077CD8`, and the indirect dispatcher
-`0x800771C4`, then the initializer's complete IRQ/DPCR prefix, stopping before zero-fill callee
-`0x800777E8`. A real `ctr_port` product owns the validated
-generated registry and boots the provisioned executable to that bounded frontier; `run.sh` is its
-zero-argument frozen-uv setup and launch interface.
+CTR follows Dusklight's ownership pattern by responsibility: the app composes process-lifetime
+owners, core modules bridge the verified game/runtime boundary, future simulation owns authoritative
+camera and object transforms, video owns producer commands and rendering, and a separate temporal
+presentation owner decorates previous/current simulation state. Capability coverage belongs in
+`docs/project-state.md`; the ordered evidence chain belongs in `docs/re-frontier.md`.
 
-| Subsystem | Status | Where | Gap / next |
-|---|---|---|---|
-| Player product | 🟡 real bounded boot product | `run.sh`, `bootstrap.py`, `tools/run.py`, `game/app/main.cpp`, `game/core/{recomp_register,bootstrap_frontier}.{h,cpp}`, CMake `ctr_port` | Zero args provision, emit, build, and launch `ctr_port`; product reaches `0x800777E8`, but zero-fill/gameplay/frame ownership is not implemented |
-| Framework consumer | 🟡 derived runtime plus bounded generated trace | `game/core/ctr_runtime.{h,cpp}`, `CMakeLists.txt`, `external/psxport/`, `psxport.pin` | `CtrRuntime : GameRuntime` owns measured resident text and validated dispatch with null legacy views |
-| Target executable | ✅ provisioned, oracle-executed, and port-traced | `tools/provision.py`, `tools/emit_substrate.py`, `titles/ctr/README.md` | Real USA media reproduced `SYSTEM.CNF` and `SCUS_944.26`; generated state agrees 34/34 at indirect target `0x800772E0` and 37/37 after its device prefix at `0x800777E8` |
-| Generated substrate | 🟡 resident discovery output | `generated/` (gitignored), `tools/emit_substrate.py` | 1,236 emitted functions support the bounded trace; inventory is not execution proof and unresolved return edges remain |
-| Project tooling | 🟡 bounded resident differential | `CMakeLists.txt` (`verify`, `oracle_boot_check`, `ctr04_*_check` through `ctr04_startup_init_device_next_call_check`), `tools/{provision,emit_substrate,compare_crt0_trace,resident_replay}.py` | Asset-free verification owns policy/both-answer selftests; exact code/data validation and trampoline exclusions prevent replay beyond or on top of its proof |
-| Runtime seam test | ✅ direct inheritance contract | `tests/test_ctr_runtime.cpp` | Production `CtrRuntime` is installed into `Core`, exposes no legacy views/context, explicitly reports no guest-VRAM picture ownership without a rendered frame, and dispatches only its immutable validated target |
-| Native engine | 🔬 runtime ownership only | `game/core/ctr_runtime.{h,cpp}`; `game/core/crt0_port_trace.cpp` | Process owner is direct inheritance; no game context, frame driver, scheduler, or native engine yet |
-| Native graphics producers | ⬜ missing | — | No producer exists |
-| Widescreen | ⬜ missing | — | Blocked on native camera and producers |
-| Interpolation | ⬜ missing | — | Blocked on PC ownership of transform producers |
-| Differential harness | 🟡 through initializer device prefix | framework `oracle_trace`/`crossvalidate_crt0.py`; CTR `crt0_port_trace.cpp`/`compare_crt0_trace.py`/`resident_replay.py`; CMake `ctr04_startup_init_device_next_call_check` | Repeated oracle evidence agrees on 34 CPU plus 3 device fields at `0x800777E8`; forced DPCR reports the sole 36/37 mismatch; next is zero-fill callee execution |
+| Subsystem | Responsibility | Current / target location | Entry point | Deep doc |
+|---|---|---|---|---|
+| Player composition | Construct the title runtime and framework machine services, load the verified executable, and invoke the bounded product lifecycle | `game/app/main.cpp`, `game/core/bootstrap_frontier.{h,cpp}` | `main`, `ctr::runBootstrapToSupportedFrontier` | `README.md` |
+| Framework-facing runtime | Own CTR's process-lifetime executable facts, generated dispatch entry, platform-HLE fact slice, and guest-picture declaration | `game/core/ctr_runtime.{h,cpp}` | `ctr::CtrRuntime` | `AGENTS.md` |
+| Framework dependency | Provide shared runtime, renderer, oracle, recompiler, and host services at the exact provenance recorded by the title | `external/psxport/` resolved from `psxport.pin` | `tools/psxport_sync.py`, CMake `PSXPORT_DIR` | `AGENTS.md` |
+| Generated-program adapter | Install the generated registry and expose invocation-scoped override wiring without leaking generated shard APIs into app composition | `game/core/recomp_register.{h,cpp}` | `ctr::installRecompiledProgram`, `ctr::setRecompiledOverride` | `docs/re-frontier.md` |
+| Projection HLE facts | Supply the identity-gated retail libgte leaf addresses and admitted executable window; generic handlers remain framework-owned | `game/core/projection_hle_plan.{h,cpp}` | `ctr::projectionHlePlan` | `titles/ctr/README.md` |
+| Bounded trace adapter | Execute generated boundaries and serialize CPU, device, and memory evidence for independent comparison | `game/core/crt0_port_trace.cpp` | `main` | `docs/re-frontier.md` |
+| Input provisioning | Resolve user-supplied disc media, extract transactionally, and enforce complete executable identity | `tools/provision.py`, `tools/emit_substrate.py` | `provision.py`, `emit_substrate.py` | `titles/ctr/README.md` |
+| Boot differential tooling | Construct exact bounded replay images and compare independent oracle state with shipping generated execution | `tools/resident_replay.py`, `tools/compare_crt0_trace.py`, `tools/compare_crt0_trace_selftest.py` | `compare_crt0_trace.py` | `docs/re-frontier.md` |
+| Static render-source measurement | Verify exact projection leaves, producer signatures, callers, and GTE control/command census in the selected executable | `tools/measure_render_frontier.py` | `measure_render_frontier.py` | `docs/issues/0013-ctr-render-artifacts-had-no-binary-grounded-proj.md` |
+| Runtime seam verification | Exercise the production direct-runtime install, executable extent, projection plan, generic handlers, picture declaration, and dispatch contract | `tests/test_ctr_runtime.cpp` | `ctr_runtime_test` | `docs/project-state.md` |
+| Native simulation | Own authoritative simulation ticks plus current camera and object transforms | future simulation module under `game/` | target `Simulation` | `docs/project-goals.md` |
+| Native video producers | Translate pre-GTE game camera/object/material state into typed native primitive commands | future producer modules under `game/` | target producer interfaces | `docs/project-goals.md` |
+| Native render queue and renderer | Own primitive lifetime, ordering/depth, materials, viewport/projection, and final presentation | future video modules under `game/` | target `RenderQueue`, `Renderer` | `docs/project-goals.md` |
+| Temporal presentation | Retain previous/current native transforms and calculate presentation-only interpolation without mutating simulation | future temporal presentation module under `game/` | target temporal decorator | `docs/project-goals.md` |
+| Build and launcher policy | Compose the frozen Python setup, generated inputs, Clang-verifiable CMake targets, and asset-free/asset-gated checks | `run.sh`, `bootstrap.py`, `tools/run.py`, `CMakeLists.txt`, `pyproject.toml`, `uv.lock` | `run.sh`, CMake `verify` | `README.md` |
 
-## Where is X?
+## Where does X go?
 
-- Target identity and load map: `titles/ctr/README.md`
-- Disc resolution, transactional extraction, and identity gate: `tools/provision.py`
-- Identity-gated resident emission: `tools/emit_substrate.py`, `game/recomp_seeds.json`
-- Generated first-call/modeled-return/post-call capture: `game/core/crt0_port_trace.cpp`, `tools/compare_crt0_trace.py`
-- Framework-facing process owner: `game/core/ctr_runtime.{h,cpp}` (`ctr::CtrRuntime`)
-- Runtime inheritance contract: `tests/test_ctr_runtime.cpp`, CTest `ctr_runtime_inheritance`
-- Exact-prefix resident replay: `tools/resident_replay.py`, `CMakeLists.txt` (`ctr04_resident_next_call_check`)
-- Runtime-initializer continuation: `tools/compare_crt0_trace.py`, `CMakeLists.txt` (`ctr04_runtime_init_next_call_check`)
-- Startup-service idle continuation: `tools/compare_crt0_trace.py`, `CMakeLists.txt` (`ctr04_startup_service_next_call_check`)
-- State-zero initialization service: `tools/compare_crt0_trace.py`, `CMakeLists.txt` (`ctr04_startup_memset_thunk_check`)
-- Modeled A(2Bh) memset continuation: `tools/compare_crt0_trace.py`, `CMakeLists.txt` (`ctr04_startup_post_memset_next_call_check`)
-- Init-swap continuation to `0x800771C4`: `tools/compare_crt0_trace.py`, `CMakeLists.txt` (`ctr04_startup_init_swap_next_call_check`)
-- Indirect-dispatch continuation to `0x800772E0`: `tools/compare_crt0_trace.py --startup-init-dispatch-next-call`, CMake `ctr04_startup_init_dispatch_next_call_check`
-- Initializer device-prefix continuation to `0x800777E8`: `tools/compare_crt0_trace.py --startup-init-device-next-call`, CMake `ctr04_startup_init_device_next_call_check`
-- Shipping player composition and bounded lifecycle: `game/app/main.cpp`, `game/core/{recomp_register,bootstrap_frontier}.{h,cpp}`
-- Fresh-clone player launcher: `run.sh`, `bootstrap.py`, `tools/run.py`, `pyproject.toml`, `uv.lock`
-- Independent real-crt0 execution and cross-check: `CMakeLists.txt` (`oracle_boot_check`)
-- Oracle-to-generated boundary gates: `CMakeLists.txt` (`ctr04_check`, `ctr04_post_init_heap_check`, `ctr04_resident_next_call_check`, `ctr04_runtime_init_next_call_check`, `ctr04_startup_service_next_call_check`, `ctr04_startup_memset_thunk_check`)
-- Framework-only build target: `CMakeLists.txt` (`ctr_scaffold`)
-- Normal build/style/lint/smoke gate: `CMakeLists.txt` (`verify`)
-- Ordered RE dependency chain: `docs/re-frontier.md`
-- Symptom/finding history: `docs/issues/`
+- Executable identity and load map: `titles/ctr/README.md`
+- Disc resolution and extraction: `tools/provision.py`
+- Resident generation: `tools/emit_substrate.py`, `game/recomp_seeds.json`
+- Framework-facing process ownership: `game/core/ctr_runtime.{h,cpp}`
+- Product boot boundary: `game/core/bootstrap_frontier.{h,cpp}`
+- Generated registry installation: `game/core/recomp_register.{h,cpp}`
+- Measured projection leaf plan: `game/core/projection_hle_plan.{h,cpp}`
+- Exact CPU/device/memory replay: `tools/resident_replay.py`, `tools/compare_crt0_trace.py`
+- Static projection and primitive-producer census: `tools/measure_render_frontier.py`
+- Native camera and transforms: future simulation module under `game/`
+- Native primitive producers: future producer modules under `game/`
+- Native ordering, depth, widescreen projection, and presentation: future video modules under `game/`
+- Previous/current transform interpolation: future temporal presentation module under `game/`
+- Capability status and current focus: `docs/project-state.md`
+- Epic outcomes and success conditions: `docs/project-goals.md`
+- Atomic investigations and resolved defects: `docs/issues/`
+- Ordered ground-truth dependency chain: `docs/re-frontier.md`

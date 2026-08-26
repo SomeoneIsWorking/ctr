@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-24
 tags: ctr,boot,recomp
 depends: psxport.pin, tools/compare_crt0_trace.py#main, game/core/ctr_runtime.cpp#guestProgramImage, game/core/bootstrap_frontier.cpp#runBootstrapToSupportedFrontier, game/core/recomp_register.cpp#installRecompiledProgram, game/core/crt0_port_trace.cpp#main
-reconfirmed: 2026-08-24 23:03:27
-verified_at: 2026-08-24 23:03:27
+reconfirmed: 2026-08-26
+verified_at: 2026-08-26 23:56:05
 ---
 
 ## Claim
@@ -36,3 +36,7 @@ Final concise comparator diff reconfirmed: current recompiler 2026-08-22.1 subst
 ## Re-confirmed 2026-08-24 23:03:27
 
 Pinned final verification against clean psxport 9c2e3f1c: frozen-uv Clang prepare-only rebuilt ctr_port from recompiler 2026-08-22.1; the complete chained boundary target passed 34/34 at 0x800772E0 and named 33/34 forced opposite; no-window ctr_port reached the same frontier.
+
+## Re-confirmed 2026-08-26
+
+Operator-run exact product observation on 2026-08-26 against pinned psxport 99a42aa396eb810b7872c17bcc4610d21252a61c exited 0 immediately: ctr_port loaded identity-verified scratch/raw/ctr/SCUS_944.26 at entry 0x8007793C with load 0x80010000 and text size 0x7D800, entered the measured executable entry, serviced InitHeap(base=0x8009F700,size=0x7588FC), reached the supported frontier 0x800772E0, and explicitly reported that gameplay is not available yet. The raw operator log is gitignored scratch/logs/ctr-product-99a42aa3.log.

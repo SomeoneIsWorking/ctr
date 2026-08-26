@@ -37,7 +37,21 @@ that service's startup idle path from four exact executable-backed values and re
 (`ra=0x8003C5E0`) with deterministic 34/34 agreement; its forced control is 33/34. The next service
 returns on its BSS-zero pending word, state zero selects exact jump-table entry `0x8003C614`, and the
 generated/oracle boundary agrees 34/34 at executable A(2Bh) thunk `0x800718BC`
-(`ra=0x8003C624`), again with a 33/34 forced control. The external memset side effect is not modeled.
+(`ra=0x8003C624`), again with a 33/34 forced control. The later chain explicitly models that memset,
+crosses executable swap and indirect dispatch, and agrees 34/34 at target `0x800772E0`; its forced
+register mismatch produces the sole 33/34 mismatch. Candidate initializer-device and poisoned
+zero-fill gates remain implemented, but clean framework commit `99a42aa3` lacks their required
+`oracle_trace --capture-devices` interface. They therefore do not currently verify `0x800777E8` or
+`0x80080260`; issue 0014 tracks the shared dependency and required reruns.
+
+The same identity gate now anchors the first render-source investigation. Retail
+`SetGeomScreen [0x8007781C,0x80077828)` and `SetGeomOffset [0x8007782C,0x80077844)` are called by
+boot setup (OFX=256, OFY=120, H=320) and view-derived producer `[0x80042910,0x80042974)`. Ghidra
+decompilation identifies `[0x80024C4C,0x80025138)` as an address-registered `lensflare` callback
+which projects three triangles, writes four GPU packets, and links them into the ordering table.
+The complete text-word census contains 17 CR24 writes, 17 CR25 writes, 16 CR26 writes, 18 RTPS
+commands, and 38 RTPT commands. These are static source boundaries only: no execution order, first
+visible frame, native renderer, widescreen, or interpolation is claimed.
 
 ## Reproduce the measurement
 
@@ -50,6 +64,10 @@ python3 tools/provision.py /path/to/CTR-USA.chd
 Omit the argument to use `PSXPORT_CTR_DISC`, `PSXPORT_DISC`, `.env`, or a root `*.chd` drop-in. The
 provisioner reproduces and verifies every executable field above plus the `SYSTEM.CNF` boot target.
 No disc-derived file belongs in git, and this does not establish that a CTR port boots.
+
+Run `cmake --build build --target ctr05_render_frontier_check` to reproduce the projection/primitive
+measurement without launching the game. The check refuses any executable identity, signature,
+caller, or projection-register census other than the facts above.
 
 To reproduce the independent execution after configuring the Clang build, use the root README's
 `oracle_boot_check` target. It provisions and verifies this exact executable before the oracle runs.

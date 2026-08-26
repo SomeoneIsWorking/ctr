@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-22
 tags: runtime,inheritance
 depends: game/core/ctr_runtime.cpp#CtrRuntime, game/core/crt0_port_trace.cpp#main, tests/test_ctr_runtime.cpp
-reconfirmed: 2026-08-24
-verified_at: 2026-08-24 20:09:44
+reconfirmed: 2026-08-26
+verified_at: 2026-08-26 23:48:29
 ---
 
 ## Claim
@@ -28,3 +28,11 @@ Clang 22.1.8 canonical verify passed against recorded psxport bc8c8897; ctr_runt
 ## Re-confirmed 2026-08-24
 
 Post-landing verify passed direct CtrRuntime install/null legacy views and production guest-VRAM picture query false on pinned bc8c8897
+
+## Re-confirmed 2026-08-26
+
+Reverified 2026-08-26 with the clean Clang build against exact psxport 51a609267a95ad2f08426df6fe83b57f3bff3c14: ctr_runtime_test passed direct runtime installation, null legacy views/context, measured resident extent, typed projection HLE, false guest-VRAM picture ownership, interpolatedNative render capabilities, and configured trace dispatch.
+
+## Re-confirmed 2026-08-26
+
+Reverified 2026-08-26 with a clean isolated Clang build against exact psxport 99a42aa396eb810b7872c17bcc4610d21252a61c: ctr_runtime_test passed direct runtime installation, null legacy views/context, measured resident extent, typed projection HLE, false guest-VRAM picture ownership, interpolatedNative render capabilities, and configured trace dispatch.

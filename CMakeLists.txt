@@ -35,16 +35,32 @@ add_test(
 add_test(
   NAME ctr_crt0_compare_selftest
   COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py" --selftest)
+add_test(
+  NAME ctr_render_frontier_selftest
+  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/measure_render_frontier.py" --selftest)
 
 add_custom_target(
   ctr04_compare_selftest
   COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py" --selftest
   USES_TERMINAL
   VERBATIM)
+add_custom_target(
+  ctr05_render_frontier_selftest
+  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/measure_render_frontier.py" --selftest
+  USES_TERMINAL
+  VERBATIM)
+add_custom_target(
+  ctr05_render_frontier_check
+  COMMAND
+    "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/measure_render_frontier.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
+  DEPENDS ctr05_render_frontier_selftest
+  USES_TERMINAL
+  VERBATIM)
 
 # CTR's process-lifetime derived runtime is asset-free and exposes no legacy GameConfig/GameHooks
 # view. The harness gives it the already-validated trace target before constructing Core.
-add_library(ctr_runtime STATIC game/core/ctr_runtime.cpp)
+add_library(ctr_runtime STATIC game/core/ctr_runtime.cpp game/core/projection_hle_plan.cpp)
 set_target_properties(ctr_runtime PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 target_include_directories(ctr_runtime PUBLIC game/core)
 target_link_libraries(ctr_runtime PUBLIC psxport)
@@ -355,6 +371,32 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generated/rec_sources.cmake")
     DEPENDS ctr04_startup_init_dispatch_next_call_check ctr_crt0_port_trace oracle_trace
     USES_TERMINAL
     VERBATIM)
+
+  # Execute the retail 1,050-word zero-fill body and prove its RAM side effect rather than relying
+  # on the executable's already-zero bytes. The oracle replay poisons the exact destination at the
+  # checked callsite and counts residual non-zero words before reproducing the next call; generated
+  # execution independently poisons, executes the shipping body, and scans the same range.
+  add_custom_target(
+    ctr04_startup_zero_fill_next_call_check
+    COMMAND
+      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
+      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
+      --oracle-trace "$<TARGET_FILE:oracle_trace>"
+      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
+      --steps 400000
+      --startup-zero-fill-next-call
+    COMMAND
+      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
+      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
+      --oracle-trace "$<TARGET_FILE:oracle_trace>"
+      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
+      --steps 400000
+      --startup-zero-fill-next-call
+      --force-port-field memory:nonzero_words=1
+      --expect-difference
+    DEPENDS ctr04_startup_init_device_next_call_check ctr_crt0_port_trace oracle_trace
+    USES_TERMINAL
+    VERBATIM)
 else()
   message(STATUS
     "CTR-04 generated trace target is unavailable: emit generated/ from the verified USA executable "
@@ -394,6 +436,12 @@ add_custom_target(
   COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/psxport_sync.py" --check
   COMMAND "$<TARGET_FILE:psxport_smoke>"
   COMMAND "$<TARGET_FILE:ctr_runtime_test>"
-  DEPENDS cpp_policy provision_selftest ctr04_compare_selftest psxport_smoke ctr_runtime_test
+  DEPENDS
+    cpp_policy
+    provision_selftest
+    ctr04_compare_selftest
+    ctr05_render_frontier_selftest
+    psxport_smoke
+    ctr_runtime_test
   USES_TERMINAL
   VERBATIM)

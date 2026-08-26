@@ -51,6 +51,13 @@ struct DeviceBoundary {
   uint32_t dpcr = 0;
 };
 
+struct MemoryBoundary {
+  uint32_t destination = 0;
+  uint32_t size = 0;
+  uint32_t poison = 0;
+  uint32_t nonzeroWords = 0;
+};
+
 struct BoundaryReached final {};
 
 struct ModeledMemset {
@@ -62,12 +69,22 @@ struct ModeledMemset {
   bool reached = false;
 };
 
+struct ObservedZeroFill {
+  uint32_t target = 0;
+  uint32_t destination = 0;
+  uint32_t words = 0;
+  uint32_t poison = 0;
+  bool reached = false;
+};
+
 Boundary *g_boundary = nullptr;
 DeviceBoundary *g_deviceBoundary = nullptr;
+MemoryBoundary *g_memoryBoundary = nullptr;
 Boundary *g_preModel = nullptr;
 Boundary *g_modeledReturn = nullptr;
 bool g_modeledReturnReached = false;
 ModeledMemset *g_modeledMemset = nullptr;
+ObservedZeroFill *g_observedZeroFill = nullptr;
 
 uint32_t readLe32(const std::array<uint8_t, kExeHeaderSize> &header, std::size_t offset) {
   return static_cast<uint32_t>(header[offset]) | (static_cast<uint32_t>(header[offset + 1]) << 8U) |
@@ -165,6 +182,31 @@ bool parseModeledMemset(std::string_view text, ModeledMemset &model) {
   return true;
 }
 
+bool parseObservedZeroFill(std::string_view text, ObservedZeroFill &model) {
+  std::array<uint32_t, 4> values{};
+  for (uint32_t &value : values) {
+    const std::size_t separator = text.find(',');
+    const std::string_view field = text.substr(0, separator);
+    if (field.empty() || !parseAddress(field, value)) {
+      return false;
+    }
+    if (separator == std::string_view::npos) {
+      text = {};
+    } else {
+      text.remove_prefix(separator + 1);
+    }
+  }
+  const uint64_t size = static_cast<uint64_t>(values[2]) * 4;
+  const uint64_t virtualEnd = static_cast<uint64_t>(values[1]) + size;
+  const uint64_t physicalEnd = static_cast<uint64_t>(values[1] & (static_cast<uint32_t>(kRamSize) - 1U)) + size;
+  if (!text.empty() || values[0] == 0 || values[1] == 0 || (values[0] & 3U) != 0 || (values[1] & 3U) != 0 ||
+      values[2] == 0 || values[3] == 0 || values[3] > 0xFF || virtualEnd > 0x1'0000'0000ULL || physicalEnd > kRamSize) {
+    return false;
+  }
+  model = {values[0], values[1], values[2], values[3], false};
+  return true;
+}
+
 void restoreResidentState(Core &core, const std::array<uint32_t, 33> &state, uint32_t resumeTarget) {
   core.r[0] = 0;
   std::copy_n(state.begin(), 31, std::begin(core.r) + 1);
@@ -190,6 +232,15 @@ void captureBoundary(Core *core) {
     g_deviceBoundary->iStat = core->mem_r16(0x1F801070u) & 0x7FFu;
     g_deviceBoundary->iMask = core->mem_r16(0x1F801074u) & 0x7FFu;
     g_deviceBoundary->dpcr = core->mem_r32(0x1F8010F0u);
+  }
+  if (g_memoryBoundary != nullptr && g_observedZeroFill != nullptr) {
+    const ObservedZeroFill &model = *g_observedZeroFill;
+    g_memoryBoundary->destination = model.destination;
+    g_memoryBoundary->size = model.words * 4;
+    g_memoryBoundary->poison = model.poison;
+    for (uint32_t index = 0; index < model.words; ++index) {
+      g_memoryBoundary->nonzeroWords += core->mem_r32(model.destination + index * 4) != 0;
+    }
   }
   throw BoundaryReached{};
 }
@@ -254,6 +305,39 @@ void modelMemsetReturn(Core *core) {
   model.reached = true;
 }
 
+void observeZeroFill(Core *core) {
+  if (g_observedZeroFill == nullptr || g_observedZeroFill->reached) {
+    std::fprintf(stderr, "ctr_crt0_port_trace: REFUSING — zero-fill observer fired outside its one-shot boundary.\n");
+    std::abort();
+  }
+  ObservedZeroFill &model = *g_observedZeroFill;
+  if (core->r[4] != model.destination || core->r[5] != model.words) {
+    std::fprintf(stderr,
+                 "ctr_crt0_port_trace: REFUSING — zero-fill args changed: got (0x%08X,0x%08X), "
+                 "expected (0x%08X,0x%08X).\n",
+                 core->r[4],
+                 core->r[5],
+                 model.destination,
+                 model.words);
+    std::abort();
+  }
+  for (uint32_t index = 0; index < model.words; ++index) {
+    if (core->mem_r32(model.destination + index * 4) != 0) {
+      std::fprintf(stderr,
+                   "ctr_crt0_port_trace: REFUSING — zero-fill destination was not initially all zero "
+                   "before poison injection.\n");
+      std::abort();
+    }
+  }
+  const uint32_t poisonWord = model.poison * 0x01010101u;
+  for (uint32_t index = 0; index < model.words; ++index) {
+    core->mem_w32(model.destination + index * 4, poisonWord);
+  }
+  ctr::setRecompiledOverride(model.target, nullptr);
+  rec_dispatch(core, model.target);
+  model.reached = true;
+}
+
 void printRegisterBlock(const char *tag, const Boundary &boundary) {
   std::printf("# %s-REGS pc=0x%08X\n", tag, boundary.pc);
   for (std::size_t index = 1; index < boundary.registers.size(); ++index) {
@@ -279,6 +363,15 @@ void printDeviceBoundary(uint32_t target, const DeviceBoundary &devices) {
   std::printf("# PORT-DEVICE-REG DPCR value=0x%08X mask=0xFFFFFFFF\n", devices.dpcr);
 }
 
+void printMemoryBoundary(uint32_t target, const MemoryBoundary &memory) {
+  std::printf("# PORT-MEMORY-BOUNDARY schema=1 pc=0x%08X destination=0x%08X size=0x%08X poison=0x%02X\n",
+              target,
+              memory.destination,
+              memory.size,
+              memory.poison);
+  std::printf("# PORT-MEMORY-RESULT nonzero_words=0x%08X\n", memory.nonzeroWords);
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
@@ -298,8 +391,15 @@ int main(int argc, char **argv) {
       argc == 11 && std::string_view(argv[2]) == "--resume-target" && std::string_view(argv[4]) == "--capture-target" &&
       std::string_view(argv[6]) == "--state" && std::string_view(argv[8]) == "--model-memset" &&
       std::string_view(argv[10]) == "--capture-devices";
-  const bool anyMemsetReplay = residentReplayWithMemset || residentReplayWithMemsetAndDevices;
-  const bool captureDevices = residentReplayWithDevices || residentReplayWithMemsetAndDevices;
+  const bool residentReplayWithMemsetZeroFillAndDevices =
+      argc == 13 && std::string_view(argv[2]) == "--resume-target" && std::string_view(argv[4]) == "--capture-target" &&
+      std::string_view(argv[6]) == "--state" && std::string_view(argv[8]) == "--model-memset" &&
+      std::string_view(argv[10]) == "--probe-zero-fill" && std::string_view(argv[12]) == "--capture-devices";
+  const bool anyMemsetReplay =
+      residentReplayWithMemset || residentReplayWithMemsetAndDevices || residentReplayWithMemsetZeroFillAndDevices;
+  const bool captureDevices =
+      residentReplayWithDevices || residentReplayWithMemsetAndDevices || residentReplayWithMemsetZeroFillAndDevices;
+  const bool observeZeroFillReplay = residentReplayWithMemsetZeroFillAndDevices;
   const bool anyResidentReplay = residentReplay || residentReplayWithDevices || anyMemsetReplay;
   if (!firstBoundaryOnly && !postInitHeap && !residentReplay && !residentReplayWithDevices && !anyMemsetReplay) {
     std::fprintf(stderr,
@@ -307,7 +407,8 @@ int main(int argc, char **argv) {
                  "[--model-init-heap-return --post-target 0xADDR]\n"
                  "       ctr_crt0_port_trace <PS-X EXE> --resume-target 0xADDR "
                  "--capture-target 0xADDR --state AT,...,RA,LO,HI "
-                 "[--model-memset TARGET,DST,VALUE,SIZE,POISON] [--capture-devices]\n");
+                 "[--model-memset TARGET,DST,VALUE,SIZE,POISON] "
+                 "[--probe-zero-fill TARGET,DST,WORDS,POISON] [--capture-devices]\n");
     return 2;
   }
 
@@ -340,9 +441,17 @@ int main(int argc, char **argv) {
                  "TARGET,DST,BYTE,NONZERO_SIZE,DISTINCT_POISON.\n");
     return 2;
   }
+  ObservedZeroFill observedZeroFill{};
+  if (observeZeroFillReplay && !parseObservedZeroFill(argv[11], observedZeroFill)) {
+    std::fprintf(stderr,
+                 "ctr_crt0_port_trace: REFUSING — --probe-zero-fill must be "
+                 "TARGET,DST,NONZERO_WORDS,NONZERO_POISON_BYTE.\n");
+    return 2;
+  }
   if ((!anyResidentReplay && rec_func_index(layout.entry) < 0) || rec_func_index(target) < 0 ||
       ((postInitHeap || anyResidentReplay) && rec_func_index(postTarget) < 0) ||
-      (anyMemsetReplay && rec_func_index(modeledMemset.target) < 0)) {
+      (anyMemsetReplay && rec_func_index(modeledMemset.target) < 0) ||
+      (observeZeroFillReplay && rec_func_index(observedZeroFill.target) < 0)) {
     std::fprintf(stderr,
                  "ctr_crt0_port_trace: REFUSING — entry 0x%08X, observed target 0x%08X, and any post-return "
                  "target 0x%08X must exist in the shipping generated registry.\n",
@@ -362,14 +471,20 @@ int main(int argc, char **argv) {
   Boundary preModel{};
   Boundary modeledReturn{};
   DeviceBoundary deviceBoundary{};
+  MemoryBoundary memoryBoundary{};
   g_boundary = &boundary;
   g_deviceBoundary = captureDevices ? &deviceBoundary : nullptr;
+  g_memoryBoundary = observeZeroFillReplay ? &memoryBoundary : nullptr;
+  g_observedZeroFill = observeZeroFillReplay ? &observedZeroFill : nullptr;
   if (anyResidentReplay) {
     restoreResidentState(*core, residentState, target);
     ctr::setRecompiledOverride(postTarget, captureBoundary);
     if (anyMemsetReplay) {
       g_modeledMemset = &modeledMemset;
       ctr::setRecompiledOverride(modeledMemset.target, modelMemsetReturn);
+    }
+    if (observeZeroFillReplay) {
+      ctr::setRecompiledOverride(observedZeroFill.target, observeZeroFill);
     }
   } else if (postInitHeap) {
     g_preModel = &preModel;
@@ -390,18 +505,23 @@ int main(int argc, char **argv) {
   if (anyMemsetReplay) {
     ctr::setRecompiledOverride(modeledMemset.target, nullptr);
   }
+  if (observeZeroFillReplay) {
+    ctr::setRecompiledOverride(observedZeroFill.target, nullptr);
+  }
   if (postInitHeap) {
     ctr::setRecompiledOverride(postTarget, nullptr);
   }
   g_boundary = nullptr;
   g_deviceBoundary = nullptr;
+  g_memoryBoundary = nullptr;
   g_preModel = nullptr;
   g_modeledReturn = nullptr;
   g_modeledMemset = nullptr;
+  g_observedZeroFill = nullptr;
 
   const uint32_t expectedBoundary = (postInitHeap || anyResidentReplay) ? postTarget : target;
   if (!reached || boundary.pc != expectedBoundary || (postInitHeap && !g_modeledReturnReached) ||
-      (anyMemsetReplay && !modeledMemset.reached)) {
+      (anyMemsetReplay && !modeledMemset.reached) || (observeZeroFillReplay && !observedZeroFill.reached)) {
     std::fprintf(stderr,
                  "ctr_crt0_port_trace: REFUSING — generated execution did not reach the independently observed "
                  "%s boundary.\n",
@@ -413,6 +533,9 @@ int main(int argc, char **argv) {
     printBoundary(expectedBoundary, boundary);
     if (captureDevices) {
       printDeviceBoundary(expectedBoundary, deviceBoundary);
+    }
+    if (observeZeroFillReplay) {
+      printMemoryBoundary(expectedBoundary, memoryBoundary);
     }
   } else {
     printBoundary(target, preModel);
