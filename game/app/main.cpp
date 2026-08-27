@@ -1,12 +1,16 @@
 // CTR's shipping process entry composes the title runtime with psxport's machine services.
-#include "bootstrap_frontier.h"
+#include "command_line.h"
 #include "core.h"
 #include "ctr_runtime.h"
+#include "frame_loop_shell.h"
 #include "game.h"
 #include "hw_bind.h"
+#include "native_ownership.h"
 #include "recomp_register.h"
+#include "runtime_composition.h"
 
 #include <filesystem>
+#include <iostream>
 #include <lucent/log.h>
 #include <memory>
 
@@ -23,13 +27,17 @@ void rec_dispatch(Core *core, uint32_t address);
 namespace {
 
 constexpr const char *kDefaultExecutable = "scratch/raw/ctr/SCUS_944.26";
-constexpr uint32_t kMeasuredEntry = 0x8007793Cu;
-
 } // namespace
 
 int main(int argc, char **argv) {
-  if (argc != 1) {
+  const ctr::CommandLineAction action = ctr::parseCommandLine(argc, argv);
+  if (action == ctr::CommandLineAction::help) {
+    ctr::printUsage(std::cout, argv[0]);
+    return 0;
+  }
+  if (action == ctr::CommandLineAction::invalid) {
     lucent::error("boot", "ctr_port takes no executable override; run ./run.sh with the verified CTR USA disc");
+    ctr::printUsage(std::cerr, argv[0]);
     return 2;
   }
   const char *executable = kDefaultExecutable;
@@ -39,7 +47,8 @@ int main(int argc, char **argv) {
   }
 
   ctr::installRecompiledProgram();
-  static ctr::CtrRuntime runtime(rec_dispatch, kMeasuredEntry);
+  static ctr::CtrRuntime runtime(
+      rec_dispatch, ctr::native::kExecutableEntry, ctr::setRecompiledOverride, ctr::runRecompiledSuper);
   psxport_install_game(runtime);
 
   auto game = std::make_unique<Game>();
@@ -58,14 +67,12 @@ int main(int argc, char **argv) {
   game->spu_audio.init();
   game->gpu.gpu_native_init();
   game->pad.overridesInit();
-  core->runtime->registerOverrides(*game);
+  ctr::installRuntimeOwners(*game);
 
-  lucent::info("boot", "entering CTR at measured executable entry 0x{:08X}", kMeasuredEntry);
-  const ctr::BootstrapResult result = ctr::runBootstrapToSupportedFrontier(runtime, *core);
-  if (result != ctr::BootstrapResult::ReachedSupportedFrontier) {
-    lucent::error("boot", "CTR returned before reaching its supported bootstrap frontier");
-    return 2;
+  lucent::info("boot", "entering CTR at measured executable entry 0x{:08X}", ctr::native::kExecutableEntry);
+  FrameLoopShell shell;
+  shell.prepareProduct(*game);
+  for (uint32_t frame = 0;; ++frame) {
+    shell.step(*core, frame);
   }
-  lucent::info("boot", "CTR bootstrap reached the current supported boundary; gameplay is not available yet");
-  return 0;
 }

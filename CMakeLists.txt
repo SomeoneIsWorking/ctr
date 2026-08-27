@@ -29,6 +29,15 @@ add_subdirectory("${PSXPORT_DIR}" psxport_build)
 add_custom_target(ctr_scaffold DEPENDS psxport_smoke)
 include(CTest)
 
+add_library(ctr_command_line STATIC game/app/command_line.cpp)
+set_target_properties(ctr_command_line PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+target_include_directories(ctr_command_line PUBLIC game/app)
+
+add_executable(ctr_command_line_test tests/test_command_line.cpp)
+set_target_properties(ctr_command_line_test PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+target_link_libraries(ctr_command_line_test PRIVATE ctr_command_line)
+add_test(NAME ctr_command_line_contract COMMAND ctr_command_line_test)
+
 add_test(
   NAME ctr_provision_selftest
   COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/provision.py" --selftest)
@@ -38,6 +47,11 @@ add_test(
 add_test(
   NAME ctr_render_frontier_selftest
   COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/measure_render_frontier.py" --selftest)
+add_test(
+  NAME ctr_psxport_sync_contract
+  COMMAND "${Python3_EXECUTABLE}" -m unittest tools.test_psxport_sync)
+set_tests_properties(
+  ctr_psxport_sync_contract PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
 add_custom_target(
   ctr04_compare_selftest
@@ -60,9 +74,19 @@ add_custom_target(
 
 # CTR's process-lifetime derived runtime is asset-free and exposes no legacy GameConfig/GameHooks
 # view. The harness gives it the already-validated trace target before constructing Core.
-add_library(ctr_runtime STATIC game/core/ctr_runtime.cpp game/core/projection_hle_plan.cpp)
+add_library(
+  ctr_runtime STATIC
+  game/core/async_disc_owner.cpp
+  game/core/ctr_runtime.cpp
+  game/core/dma_callback_owner.cpp
+  game/core/frame_callback_owner.cpp
+  game/core/frame_driver.cpp
+  game/core/platform_hle_plan.cpp
+  game/core/runtime_composition.cpp
+  game/video/presentation_owner.cpp
+  game/video/projection_owner.cpp)
 set_target_properties(ctr_runtime PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
-target_include_directories(ctr_runtime PUBLIC game/core)
+target_include_directories(ctr_runtime PUBLIC game/core game/video)
 target_link_libraries(ctr_runtime PUBLIC psxport)
 
 add_executable(ctr_runtime_test tests/test_ctr_runtime.cpp)
@@ -105,7 +129,6 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generated/rec_sources.cmake")
   add_executable(
     ctr_port
     game/app/main.cpp
-    game/core/bootstrap_frontier.cpp
     game/core/recomp_register.cpp
     ${GEN_REC_SRCS})
   set_target_properties(
@@ -116,8 +139,16 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generated/rec_sources.cmake")
       ENABLE_EXPORTS ON
       RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/scratch/bin")
   target_include_directories(ctr_port PRIVATE game/core generated)
-  target_link_libraries(ctr_port PRIVATE ctr_runtime)
+  target_link_libraries(ctr_port PRIVATE ctr_command_line ctr_runtime)
   add_dependencies(ctr_port gen_gpu_shaders)
+
+  add_test(NAME ctr_help_without_assets COMMAND ctr_port --help)
+  add_test(NAME ctr_short_help_without_assets COMMAND ctr_port -h)
+  set_tests_properties(
+    ctr_help_without_assets ctr_short_help_without_assets
+    PROPERTIES
+      PASS_REGULAR_EXPRESSION "Usage: .*ctr_port \[--help\]"
+      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 
   add_custom_target(
     ctr04_check
@@ -433,7 +464,9 @@ add_custom_target(
   VERBATIM)
 add_custom_target(
   verify
-  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/psxport_sync.py" --check
+  COMMAND
+    "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/psxport_sync.py"
+    --check --resolved "${CMAKE_BINARY_DIR}/psxport_resolved.txt"
   COMMAND "$<TARGET_FILE:psxport_smoke>"
   COMMAND "$<TARGET_FILE:ctr_runtime_test>"
   DEPENDS

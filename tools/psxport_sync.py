@@ -143,17 +143,18 @@ def report(args):
     return 0
 
 
-def read_resolved():
+def read_resolved(path=RESOLVED):
     """(dir, sha) the last cmake configure resolved, or None. Written by CMakeLists."""
-    if not os.path.isfile(RESOLVED):
+    if not os.path.isfile(path):
         return None
     d = s = None
-    for line in open(RESOLVED):
-        k, _, v = line.partition("=")
-        if k.strip() == "dir":
-            d = v.strip()
-        elif k.strip() == "commit":
-            s = v.strip()
+    with open(path, encoding="utf-8") as resolved_file:
+        for line in resolved_file:
+            k, _, v = line.partition("=")
+            if k.strip() == "dir":
+                d = v.strip()
+            elif k.strip() == "commit":
+                s = v.strip()
     return (d, s) if s else None
 
 
@@ -249,9 +250,10 @@ def do_check(args):
     if not pin:
         print("[psxport] REFUSED: no psxport.pin — this check asserted NOTHING.")
         return 2
-    built = read_resolved()
+    resolved = args.resolved or RESOLVED
+    built = read_resolved(resolved)
     if not built:
-        print(f"[psxport] check: no build/psxport_resolved.txt — this tree has not been configured, so "
+        print(f"[psxport] check: no {resolved} — this tree has not been configured, so "
               f"there is nothing to compare the pin against. Asserting nothing (pin {pin[:8]}).")
         return 0
     bdir, bsha = built
@@ -275,6 +277,11 @@ def main():
     g.add_argument("--auto", action="store_true", help="link if a shared clone exists, else clone (run.sh)")
     g.add_argument("--bump", action="store_true", help="record the framework you are building against")
     g.add_argument("--check", action="store_true", help="fail if the built framework is not the pin")
+    ap.add_argument(
+        "--resolved",
+        metavar="PATH",
+        help="psxport_resolved.txt from the CMake build tree being checked",
+    )
     ap.add_argument("--force", action="store_true", help="allow --link to replace a real clone")
     args = ap.parse_args()
     if args.link:  return do_link(args)

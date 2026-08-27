@@ -32,8 +32,13 @@ unless a future measured framework fact genuinely requires it.
 
 The shipping path is `run.sh` -> locked `bootstrap.py`/`tools/run.py` -> CMake `ctr_port`.
 `game/app/main.cpp` composes the runtime and psxport machine owners;
-`game/core/recomp_register.cpp` owns generated registry installation; and
-`game/core/bootstrap_frontier.cpp` owns the one-shot stop before `0x800777E8`. The player executable
+`game/core/runtime_composition.cpp` installs PlatformHLE and the mandatory fatal VSync contract;
+`game/core/recomp_register.cpp` owns generated registry installation; and CTR's title
+`FrameDriver` owns one finite retail state-3 transition per host iteration. It preserves generated
+supers around exact post-VSync re-entry points, returns at `0x8003CEB4`, and never treats guest
+VSync as timing. `game/video/` separately owns the A/B-checked projection publication and explicit
+unpresented presentation fence. The runtime exposes only the implemented GTE player path; Native and
+temporal interpolation remain unavailable until game-state producers exist. The player executable
 takes no asset override and must only consume the executable verified by `tools/provision.py`.
 The launcher capability-probes the selected C and C++ compilers; never add a compiler identity
-whitelist or blacklist. Do not turn the bounded product stop into a trace dump or diagnostic default.
+whitelist or blacklist. This repeating unpresented boundary is not evidence of native rendering.

@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from tools import run
 
@@ -106,6 +108,46 @@ class LauncherContractTest(unittest.TestCase):
                 ("launch", (framework,), {"headless": False}),
             ],
         )
+
+    def test_player_and_agent_exec_environments_use_shared_policy(self) -> None:
+        framework = run.ROOT / "external/psxport"
+        poisoned = {
+            "PSXPORT_VK_WINDOW": "1",
+            "PSXPORT_VK_HEADLESS": "1",
+            "PSXPORT_NOAUDIO": "1",
+            "PSXPORT_NOPACE": "1",
+            "PSXPORT_ASSET_DIR": "/poisoned/framework",
+            "KEEP": "yes",
+        }
+        with (
+            mock.patch.dict(os.environ, poisoned, clear=True),
+            mock.patch.object(run.os, "execve") as execute,
+        ):
+            run.launch(framework, headless=False)
+            player = execute.call_args.args[2]
+            run.launch(framework, headless=True)
+            agent = execute.call_args.args[2]
+
+        self.assertEqual(player["PSXPORT_VK_WINDOW"], "1")
+        self.assertEqual(player["KEEP"], "yes")
+        self.assertEqual(player["PSXPORT_ASSET_DIR"], str(framework))
+        self.assertEqual(agent["PSXPORT_ASSET_DIR"], str(framework))
+        for key in ("PSXPORT_VK_HEADLESS", "PSXPORT_NOAUDIO", "PSXPORT_NOPACE"):
+            self.assertNotIn(key, player)
+            self.assertEqual(agent[key], "1")
+        self.assertNotIn("PSXPORT_VK_WINDOW", agent)
+
+    def test_launch_supplies_framework_asset_root_when_environment_is_missing(self) -> None:
+        framework = run.ROOT / "external/psxport"
+        with (
+            mock.patch.dict(os.environ, {"KEEP": "yes"}, clear=True),
+            mock.patch.object(run.os, "execve") as execute,
+        ):
+            run.launch(framework, headless=False)
+
+        environment = execute.call_args.args[2]
+        self.assertEqual(environment["PSXPORT_ASSET_DIR"], str(framework))
+        self.assertEqual(environment["KEEP"], "yes")
 
     def test_shell_shim_enters_only_frozen_uv_bootstrap(self) -> None:
         shim = (run.ROOT / "run.sh").read_text(encoding="utf-8")

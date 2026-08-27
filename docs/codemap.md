@@ -8,11 +8,16 @@ presentation owner decorates previous/current simulation state. Capability cover
 
 | Subsystem | Responsibility | Current / target location | Entry point | Deep doc |
 |---|---|---|---|---|
-| Player composition | Construct the title runtime and framework machine services, load the verified executable, and invoke the bounded product lifecycle | `game/app/main.cpp`, `game/core/bootstrap_frontier.{h,cpp}` | `main`, `ctr::runBootstrapToSupportedFrontier` | `README.md` |
-| Framework-facing runtime | Own CTR's process-lifetime executable facts, generated dispatch entry, platform-HLE fact slice, and guest-picture declaration | `game/core/ctr_runtime.{h,cpp}` | `ctr::CtrRuntime` | `AGENTS.md` |
+| Player composition | Parse asset-independent help before provisioning, construct title/framework services, bind CTR's direct native-disc key, install runtime owners and the effective render path through one production/test path, and delegate the only bounded product iteration to the framework shell | `game/app/command_line.{h,cpp}`, `game/app/main.cpp`, `game/core/runtime_composition.{h,cpp}` | `ctr::parseCommandLine`, `main`, `ctr::installRuntimeOwners`, `FrameLoopShell::step` | `README.md` |
+| Framework-facing runtime | Own CTR's process-lifetime executable facts, generated dispatch entry, platform-HLE fact slice, truthful player capabilities, and guest-picture declaration | `game/core/ctr_runtime.{h,cpp}` | `ctr::CtrRuntime` | `AGENTS.md` |
+| Native iteration boundary | Own one finite retail state-3 transition, field-counter tick, input and audio sample per host step; preserve generated supers around forbidden VSync calls; yield host fields across state-zero resource and startup-audio waits; and return at the measured frame-owner fence | `game/core/frame_driver.{h,cpp}`, `game/core/native_ownership.h` | `ctr::CtrFrameDriver::stepFrame` | `docs/re-frontier.md` |
+| Synchronous disc completion | Preserve CTR's generated CdRead wrapper, then publish the exact retail callback-state effects required by the shared synchronous transfer | `game/core/async_disc_owner.{h,cpp}` | `ctr::AsyncDiscOwner::startRead` | `docs/issues/0015-ctr-product-had-no-native-frame-loop-vsync-owner.md` |
+| SPU DMA callback delivery | Deliver only owed channel-4 completion through CTR's measured libapi slot while preserving DICR acknowledgement, BIOS nesting order, CPU context, and finite chained-transfer deferral | `game/core/dma_callback_owner.{h,cpp}` | `ctr::DmaCallbackOwner::serviceSpu` | `docs/issues/0015-ctr-product-had-no-native-frame-loop-vsync-owner.md` |
 | Framework dependency | Provide shared runtime, renderer, oracle, recompiler, and host services at the exact provenance recorded by the title | `external/psxport/` resolved from `psxport.pin` | `tools/psxport_sync.py`, CMake `PSXPORT_DIR` | `AGENTS.md` |
-| Generated-program adapter | Install the generated registry and expose invocation-scoped override wiring without leaking generated shard APIs into app composition | `game/core/recomp_register.{h,cpp}` | `ctr::installRecompiledProgram`, `ctr::setRecompiledOverride` | `docs/re-frontier.md` |
-| Projection HLE facts | Supply the identity-gated retail libgte leaf addresses and admitted executable window; generic handlers remain framework-owned | `game/core/projection_hle_plan.{h,cpp}` | `ctr::projectionHlePlan` | `titles/ctr/README.md` |
+| Generated-program adapter | Install the generated registry, expose frame-scoped override wiring, and preserve named raw generated supers without leaking shard APIs into app composition | `game/core/recomp_register.{h,cpp}` | `ctr::installRecompiledProgram`, `ctr::setRecompiledOverride`, `ctr::runRecompiledSuper` | `docs/re-frontier.md` |
+| Platform HLE facts | Supply identity-gated libgte, stock-libcd sync/read leaves, libgpu queue-timeout arm/check, retail VSync, and admitted executable windows; shared CD effects and the fatal VSync trap remain framework-owned while CTR's timeout pair consumes the host field clock | `game/core/platform_hle_plan.h`, `game/core/platform_hle_plan.cpp` | `ctr::platformHlePlan` | `README.md` |
+| Projection publication | Capture CTR's measured pre-GTE view facts, preserve the raw retail publication as an A/B super, and refuse disagreement with the published libgte state | `game/video/projection_owner.h`, `game/video/projection_owner.cpp` | `ctr::ProjectionOwner::publish` | `docs/issues/0016-ctr-advertised-native-and-temporal-rendering-bef.md` |
+| Presentation fence | Rotate exactly one framework fence at each measured frame-owner return, commit captured retail work through the compatibility presenter, and mark empty fields unpresented | `game/video/presentation_owner.h`, `game/video/presentation_owner.cpp` | `ctr::PresentationOwner::finishField` | `docs/issues/0015-ctr-product-had-no-native-frame-loop-vsync-owner.md` |
 | Bounded trace adapter | Execute generated boundaries and serialize CPU, device, and memory evidence for independent comparison | `game/core/crt0_port_trace.cpp` | `main` | `docs/re-frontier.md` |
 | Input provisioning | Resolve user-supplied disc media, extract transactionally, and enforce complete executable identity | `tools/provision.py`, `tools/emit_substrate.py` | `provision.py`, `emit_substrate.py` | `titles/ctr/README.md` |
 | Boot differential tooling | Construct exact bounded replay images and compare independent oracle state with shipping generated execution | `tools/resident_replay.py`, `tools/compare_crt0_trace.py`, `tools/compare_crt0_trace_selftest.py` | `compare_crt0_trace.py` | `docs/re-frontier.md` |
@@ -22,7 +27,7 @@ presentation owner decorates previous/current simulation state. Capability cover
 | Native video producers | Translate pre-GTE game camera/object/material state into typed native primitive commands | future producer modules under `game/` | target producer interfaces | `docs/project-goals.md` |
 | Native render queue and renderer | Own primitive lifetime, ordering/depth, materials, viewport/projection, and final presentation | future video modules under `game/` | target `RenderQueue`, `Renderer` | `docs/project-goals.md` |
 | Temporal presentation | Retain previous/current native transforms and calculate presentation-only interpolation without mutating simulation | future temporal presentation module under `game/` | target temporal decorator | `docs/project-goals.md` |
-| Build and launcher policy | Compose the frozen Python setup, generated inputs, Clang-verifiable CMake targets, and asset-free/asset-gated checks | `run.sh`, `bootstrap.py`, `tools/run.py`, `CMakeLists.txt`, `pyproject.toml`, `uv.lock` | `run.sh`, CMake `verify` | `README.md` |
+| Build and launcher policy | Compose the frozen Python setup, generated inputs, Clang-verifiable CMake targets, asset-free/asset-gated checks, and the final player environment including the linked framework's asset root | `run.sh`, `bootstrap.py`, `tools/run.py`, `CMakeLists.txt`, `pyproject.toml`, `uv.lock` | `run.sh`, `tools.run.launch`, CMake `verify` | `README.md` |
 
 ## Where does X go?
 
@@ -30,9 +35,14 @@ presentation owner decorates previous/current simulation state. Capability cover
 - Disc resolution and extraction: `tools/provision.py`
 - Resident generation: `tools/emit_substrate.py`, `game/recomp_seeds.json`
 - Framework-facing process ownership: `game/core/ctr_runtime.{h,cpp}`
-- Product boot boundary: `game/core/bootstrap_frontier.{h,cpp}`
+- Product runtime composition: `game/core/runtime_composition.{h,cpp}`
+- Asset-independent command line: `game/app/command_line.{h,cpp}`
+- Product iteration and measured frame transition: `game/core/frame_driver.{h,cpp}`, `game/core/native_ownership.h`
+- Synchronous title disc/DMA completion: `game/core/async_disc_owner.{h,cpp}`, `game/core/dma_callback_owner.{h,cpp}`
 - Generated registry installation: `game/core/recomp_register.{h,cpp}`
-- Measured projection leaf plan: `game/core/projection_hle_plan.{h,cpp}`
+- Measured platform-HLE plan: `game/core/platform_hle_plan.{h,cpp}`
+- Measured projection publication: `game/video/projection_owner.{h,cpp}`
+- Current compatibility presentation fence: `game/video/presentation_owner.{h,cpp}`
 - Exact CPU/device/memory replay: `tools/resident_replay.py`, `tools/compare_crt0_trace.py`
 - Static projection and primitive-producer census: `tools/measure_render_frontier.py`
 - Native camera and transforms: future simulation module under `game/`

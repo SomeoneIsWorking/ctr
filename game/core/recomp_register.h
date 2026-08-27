@@ -10,5 +10,6 @@ using RecompiledOverride = void (*)(Core *);
 // reaches generated symbols only through this narrow adapter.
 void installRecompiledProgram();
 void setRecompiledOverride(uint32_t address, RecompiledOverride overrideFunction);
+void runRecompiledSuper(Core *core, uint32_t address);
 
 } // namespace ctr

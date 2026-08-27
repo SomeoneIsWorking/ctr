@@ -1,9 +1,35 @@
 {
   // The PS-X EXE entry point is decoded from the executable header by the
-  // shipping emitter. Keep this manifest empty until a newly measured
-  // indirect target or overlay requires an explicit seed.
-  "main": [],
-  "main_reentry": [],
+  // shipping emitter. These measured main-function re-entry roots let the
+  // host-owned frame driver resume after forbidden guest VSync calls.
+  "main": [
+    // Dynamically reached through the retail interrupt element registered at 0x8008C7CC. The first
+    // live state-zero resource continuation invoked this pad/serial IRQ gate from 0x8003C94C.
+    "0x8007C9E0"
+  ],
+  "main_reentry": [
+    // Save the retail setjmp-style IRQ continuation itself, not merely its containing initialization
+    // function. The callback pointer at 0x8008AFD0 dispatches here after the pad/serial gate claims
+    // the interrupt; a normal function seed cannot make an interior return PC dispatchable.
+    "0x80077348",
+    // State-zero waits for its XA startup task in a host-starving loop. The native frame owner runs
+    // one preserved service call per field and resumes at this exact post-call poll instruction.
+    "0x8003C94C",
+    "0x80037880",
+    "0x80032074",
+    "0x8003C7E0",
+    "0x8003C7F4",
+    "0x8003C8D4",
+    "0x8003C8FC",
+    "0x8003C984",
+    // State-zero race/menu setup calls the same 0x80031FDC fifth-argument -1 branch and must resume
+    // at its own post-call instruction after the title-owned two-field wait. That suffix restores
+    // 0x80033610's frame and returns to the sole direct caller at 0x8003CC98.
+    "0x800336F8",
+    "0x8003CC98",
+    "0x8003CEB4",
+    "0x8003CF38"
+  ],
   "overlay_bases": {},
   "overlay_base_patterns": [],
   "overlay_seeds": {}

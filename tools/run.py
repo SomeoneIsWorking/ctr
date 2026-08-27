@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import os
 import platform
+import runpy
 import shutil
 import subprocess
 import sys
@@ -355,14 +356,16 @@ def prepare(disc: str | None, psxport: Path, cc: str, cxx: str) -> None:
 
 
 def launch(psxport: Path, *, headless: bool) -> None:
-    environment = os.environ.copy()
-    environment.setdefault("PSXPORT_ASSET_DIR", str(psxport))
+    policy = runpy.run_path(str(psxport / "tools/port/launch_environment.py"))
+    policy_name = "agent_environment" if headless else "player_environment"
+    environment = policy[policy_name](os.environ)
+    # CTR's product owns the framework checkout it just configured and linked. Its matching RmlUI
+    # assets must come from that same checkout; an inherited path can silently pair the executable
+    # with another framework tree or leave the overlay empty.
+    environment["PSXPORT_ASSET_DIR"] = str(psxport)
     if headless:
-        environment.pop("PSXPORT_VK_WINDOW", None)
-        environment["PSXPORT_NOAUDIO"] = "1"
         say("launching ctr_port headlessly…")
     else:
-        environment["PSXPORT_VK_WINDOW"] = "1"
         say("launching Crash Team Racing…")
     os.execve(PORT, [str(PORT)], environment)
 
