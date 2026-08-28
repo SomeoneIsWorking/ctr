@@ -29,7 +29,11 @@ The workspace authority in `../AGENTS.md` and framework-consumer authority in
   `CdReadCallback` slot `0x8008AD10` holds, with libcd's `CdlComplete`, restoring the interrupted
   register context. It transcribes no callback effects; the retail body owns them. Without that
   delivery the resource loader's busy flag at `gp+0x138` never clears and every field presents black
-  (issue 0019). `game/core/dma_callback_owner.{h,cpp}` owns only the measured channel-4
+  (issue 0019). WHEN it runs is part of the contract: never inside the CdRead leaf, because the
+  loader stores its allocated buffer into the queue entry only after the read call returns and the
+  completion chain reads that same field. The owner records an owed completion; the frame driver
+  delivers it at its per-field service seam, and the read leaf delivers any still owed before
+  starting another transfer (issue 0021). `game/core/dma_callback_owner.{h,cpp}` owns only the measured channel-4
   libapi slot and preserves DICR, `in_irq`, R3000, and chained-completion ordering. The safe delivery
   seam is startup loop `0x8003C94C`; B0:17 unwinds through `0x80077348`, so code after that generated
   super is unreachable and must not be reinstated.

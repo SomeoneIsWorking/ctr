@@ -10,15 +10,15 @@
 #include <lucent/log.h>
 
 namespace ctr {
-namespace {
 
-DiscReadOwner g_discRead;
-
-} // namespace
-
-void DiscReadOwner::deliverCompletion(Core &core, const CtrRuntime &runtime) {
-  const uint32_t callback = core.mem_r32(native::kCdReadCompletionCallback);
-  if (callback == 0u) {
+void DiscReadOwner::noteTransferComplete(Core &core) {
+  if (pending_) {
+    // One guest drive cannot have two transfers in flight; the read leaf delivers the previous
+    // completion before starting another, so reaching here means that ordering broke.
+    lucent::error("ctr-disc", "a second native CdRead completed with the previous completion still owed");
+    std::abort();
+  }
+  if (core.mem_r32(native::kCdReadCompletionCallback) == 0u) {
     // A caller which registered nothing waits through CdReadSync, which the shared native owner
     // already reports complete. Report the first one so "no callback delivered" is never
     // indistinguishable from a delivery that silently failed.
@@ -27,6 +27,21 @@ void DiscReadOwner::deliverCompletion(Core &core, const CtrRuntime &runtime) {
                    "native CdRead {} completed with no registered libcd callback; its caller polls CdReadSync",
                    polledReads_);
     }
+    return;
+  }
+  pending_ = true;
+}
+
+void DiscReadOwner::deliverPending(Core &core, const CtrRuntime &runtime) {
+  if (!pending_) {
+    return;
+  }
+  pending_ = false;
+  const uint32_t callback = core.mem_r32(native::kCdReadCompletionCallback);
+  if (callback == 0u) {
+    // The guest cancelled its own callback before the interrupt could arrive; retail would deliver
+    // nothing either. Counted as a polled read so the totals still account for every transfer.
+    ++polledReads_;
     return;
   }
 
@@ -42,7 +57,19 @@ void DiscReadOwner::deliverCompletion(Core &core, const CtrRuntime &runtime) {
   }
 }
 
+DiscReadOwner &discReadOwner() {
+  static DiscReadOwner owner;
+  return owner;
+}
+
 void cdReadWithCompletionCallback(Core *core) {
+  const GameRuntime *runtime = core->game ? core->game->runtime : nullptr;
+  if (runtime == nullptr) {
+    lucent::error("ctr-disc", "native CdRead has no bound CTR runtime to dispatch the completion callback");
+    std::abort();
+  }
+  const CtrRuntime &ctrRuntime = *static_cast<const CtrRuntime *>(runtime);
+  discReadOwner().deliverPending(*core, ctrRuntime);
   cd_read_stock_sync(core);
   if (core->r[2] == 0u) {
     // cd_read_stock_sync has already named the unreadable sector. Retail would deliver an error
@@ -51,12 +78,7 @@ void cdReadWithCompletionCallback(Core *core) {
     lucent::error("ctr-disc", "native CdRead failed; the retail completion callback cannot be delivered");
     std::abort();
   }
-  const GameRuntime *runtime = core->game ? core->game->runtime : nullptr;
-  if (runtime == nullptr) {
-    lucent::error("ctr-disc", "native CdRead has no bound CTR runtime to dispatch the completion callback");
-    std::abort();
-  }
-  g_discRead.deliverCompletion(*core, *static_cast<const CtrRuntime *>(runtime));
+  discReadOwner().noteTransferComplete(*core);
 }
 
 } // namespace ctr

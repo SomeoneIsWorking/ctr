@@ -120,7 +120,16 @@ names an honest remaining gap; `todo` is not started. No hacks are tracked.
   recompiled as 1, 270 and 152 functions. Five loader completion callbacks reached only through the
   queue's function-pointer slot are now `main` seeds, each proven a clean entry by the `jr ra` two
   words before it. The next real-disc run crossed all of that, performed four further module loads,
-  and reached state-1 `0x8003B934` before faulting in scratchpad helper `0x8006D79C` (issue 0021).
+  and reached state-1 `0x8003B934` before faulting in scratchpad helper `0x8006D79C`. Issue 0021 shows
+  that was a delivery-TIME defect in the callback of issue 0019, not a missing overlay: retail cannot
+  run the completion inside CdRead, because `FUN_80031E00` stores the allocated buffer into the queue
+  entry only after `FUN_800321B4` returns and the completion chain `FUN_80031D30` reads that field to
+  run the module's relocation pass (`FUN_800326B4` adds the load base to each offset in a patch
+  table). The owner now records an owed completion and delivers it at the title's per-field seam and
+  before any subsequent read. The product then crosses the null dereference, performs its later
+  module loads, presents at least 16 fields, and reaches the hand-written GTE library, failing fast on
+  an unresolved computed-jump continuation — `0x8006ACE0` reached from `jr t2` at `0x8006C948`, a
+  helper with no `jal` site anywhere in the executable (issue 0022).
   Platform composition binds measured VSync `0x80075350` to the fatal trap. The asset-free
   transition test covers startup, repeated frame resume, and teardown, but independent generated
   execution remains proven only through `0x800772E0`. A fresh Clang 22.1.8 tree against clean

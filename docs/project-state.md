@@ -161,9 +161,15 @@ rather than emitting without them. The three measured loads — archive entries 
 `0x8009F6FC`, `0x800A0CB8` and `0x800AB9F0` — recompiled as 1, 270 and 152 functions. The next
 real-disc run resolved `0x800B0B38`, ran the loader's five pointer-only completion callbacks (seeded
 after the miss moved to `0x80031B00`), performed four further module loads, and reached retail main
-state 1. It then faults inside scratchpad helper `0x8006D79C` on a pointer that is itself an
-instruction word; issue 0021 owns that frontier. Fields are still black, so no visible content is
-claimed.
+state 1. It then faulted inside scratchpad helper `0x8006D79C` on a null object pointer, which issue 0021
+traces to the DELIVERY TIME of the callback added in issue 0019: retail cannot run it inside CdRead,
+because the loader stores its allocated buffer into the queue entry only after the read call returns,
+and the completion chain reads that same field to run the module's relocation pass. The owner now
+records an owed completion and delivers it at the title's per-field seam, and before any subsequent
+read. With that ordering the product passes the null dereference, performs its later module loads,
+presents at least 16 fields, and reaches CTR's hand-written GTE assembly library, where it fails fast
+on an unresolved computed-jump continuation (`0x8006ACE0` from `jr t2` at `0x8006C948`, issue 0022).
+Fields are still black, so no visible content is claimed.
 
 ### S004 — Projection and primitive source evidence
 

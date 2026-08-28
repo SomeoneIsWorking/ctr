@@ -669,19 +669,30 @@ int main() {
     return 1;
   }
   ctr::DiscReadOwner discRead;
-  core.mem_w32(ctr::native::kCdReadCompletionCallback, 0u);
   const std::size_t dispatchesBeforeRead = g_dispatchCount;
-  discRead.deliverCompletion(core, runtime);
+  core.mem_w32(ctr::native::kCdReadCompletionCallback, 0u);
+  discRead.noteTransferComplete(core);
+  discRead.deliverPending(core, runtime);
   core.mem_w32(ctr::native::kCdReadCompletionCallback, kRetailReadCompletionCallback);
+  discRead.noteTransferComplete(core);
   core.r[2] = 0x0BADC0DEu;
   core.r[31] = 0x0F1E2D3Cu;
-  discRead.deliverCompletion(core, runtime);
+  // A registered callback must be OWED, not run inside the read: the retail loader stores its
+  // allocated buffer into the queue entry only after the read call returns.
+  if (!discRead.hasPendingCompletion() || g_dispatchCount != dispatchesBeforeRead ||
+      discRead.deliveredCallbacks() != 0u || discRead.polledReads() != 1u) {
+    std::fprintf(stderr, "CTR disc-read owner ran the retail completion callback inside the read\n");
+    return 1;
+  }
+  discRead.deliverPending(core, runtime);
+  discRead.deliverPending(core, runtime);
   if (g_dispatchCount != dispatchesBeforeRead + 1u ||
       g_dispatchTrace[g_dispatchCount - 1u] != kRetailReadCompletionCallback ||
       g_dispatchA0Trace[g_dispatchCount - 1u] != ctr::native::kCdlComplete ||
       core.mem_r32(ctr::native::kCdReadCompletionCallback) != 0u || core.r[2] != 0x0BADC0DEu ||
-      core.r[31] != 0x0F1E2D3Cu || discRead.deliveredCallbacks() != 1u || discRead.polledReads() != 1u) {
-    std::fprintf(stderr, "CTR disc-read owner did not deliver the retail libcd read-completion callback\n");
+      core.r[31] != 0x0F1E2D3Cu || discRead.hasPendingCompletion() || discRead.deliveredCallbacks() != 1u ||
+      discRead.polledReads() != 1u) {
+    std::fprintf(stderr, "CTR disc-read owner did not deliver the retail libcd read-completion callback once\n");
     return 1;
   }
   ctr::CtrRuntime dmaRuntime(captureDmaDispatch, ctr::native::kExecutableEntry);

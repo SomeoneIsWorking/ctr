@@ -1,5 +1,6 @@
 #include "frame_driver.h"
 
+#include "async_disc_owner.h"
 #include "core.h"
 #include "ctr_runtime.h"
 #include "game.h"
@@ -113,6 +114,10 @@ void CtrFrameDriver::stepFrame(Core &core, uint32_t frame) {
     // 0x8008D708 to finish, so every host-owned field must advance audio even before the first
     // visible presentation; otherwise the decoded ring fills and retail execution cannot leave.
     core.game->spu_audio.frame();
+    // A libcd read completion is an interrupt in retail, so it is delivered at this per-field seam
+    // rather than inside the CdRead leaf: the loader stores its allocated buffer into the queue
+    // entry only after the read call returns, and the completion chain reads that same field.
+    discReadOwner().deliverPending(core, runtime_);
     dmaCallbacks_.serviceSpu(core, runtime_);
     if (dmaCallbacks_.hasPendingSpu()) {
       throw FrameCompleted{};
