@@ -43,9 +43,6 @@ void runRecompiledSuper(Core *core, uint32_t address) {
   case native::kBootResourceWait:
     gen_func_80031FDC(core);
     return;
-  case native::kAsyncDiscRead:
-    gen_func_80032594(core);
-    return;
   case native::kStartupAudioService:
     gen_func_8001D06C(core);
     return;

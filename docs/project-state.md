@@ -17,11 +17,15 @@ Factual capability coverage for the Crash Team Racing port. Epic intent lives in
 
 ## Current focus
 
-S003 is the current focus: the identity-verified product now crosses the finite frame owner and
-submits a real GTE presentation without letting guest VSync return. Capture and inspect that first
-image through the shipping launcher environment, then identify the first later residual VSync or
-sustained-field boundary. Independent differential execution still ends at `0x800772E0`; the live
-product result does not extend that separate proof window.
+S003 is the current focus: the identity-verified product sustains presentation without letting guest
+VSync return, and those presented images have now been captured and inspected. They were 0.00%
+non-black because the resource loader never completed a single load — the retail libcd
+read-completion callback was never delivered (issue 0019, claim C019). With the CdRead leaf owner
+delivering it, the state-3 screen loader advances 2 -> 3 -> 4 -> 5 and the product fails fast at the
+next honest boundary: a recomp-MISS on overlay code at `0x800B0B38`, which the emitter never
+discovered (issue 0020). Recompiling the overlays the loader calls is the next dependency for a
+visible frame. Independent differential execution still ends at `0x800772E0`; the live product result
+does not extend that separate proof window.
 
 ## Capability details
 
@@ -134,6 +138,21 @@ shared checkout, and selected build record all name that exact framework commit.
 and resolves the gate defect which initially read a stale fixed build directory instead of the active
 CMake record. This remains non-runtime integration evidence; the earlier fb08d30f product run owns
 the live frame/presentation result.
+
+Claim C019 records the first inspection of those presented images and what it exposed. Present-stage
+and guest-VRAM captures at fields 1-4 both measured 0.00% non-black over 691,200 and 110,592 pixels,
+while `PSXPORT_GP0RAW`/`PSXPORT_PRIMDUMP` showed only 40 command words and two degenerate quads per
+field: an empty ordering table, not a rasterization fault. Watchpoints on retail `gp`+0x188/0x18C
+proved resident main entered state 3 once and its screen loader `0x80033610` then returned stage 2 for
+161,226 consecutive fields. The cause was measured, not inferred: the loader busy flag at `gp`+0x138
+never cleared because `FUN_800321B4` registers a libcd read-completion callback and relies on the CD
+interrupt, and psxport's native synchronous CdRead delivered nothing — slot `0x8008AD10` held
+`0x80032110` for the rest of the run. CTR now owns the CdRead leaf, running the shared transfer and
+dispatching the exact registered retail callback with `CdlComplete`; the previous hand-transcribed
+`0x80032594` owner is superseded and removed. A live real-disc rerun advanced the loader 2, 3, 4, 5
+across fields 1-4 and then failed fast on a recomp-MISS at overlay address `0x800B0B38` (caller
+`0x800368BC`), which the emitter reports as `0 overlay module(s)`. Issue 0019 records the resolved
+stall; issue 0020 owns the overlay gap.
 
 ### S004 — Projection and primitive source evidence
 

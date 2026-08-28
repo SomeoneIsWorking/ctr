@@ -1,6 +1,5 @@
 #pragma once
 
-#include "async_disc_owner.h"
 #include "dma_callback_owner.h"
 #include "frame_callback_owner.h"
 #include "game_runtime.h"
@@ -39,7 +38,6 @@ private:
   static void skipSecondStartupVSync(Core *core);
   static void waitForBootResourceWithoutVSync(Core *core);
   static void pumpBootResourceWithoutBusyWait(Core *core);
-  static void startSynchronousDiscRead(Core *core);
   static void serviceStartupAudioWithoutBusyWait(Core *core);
   static void continueStartupAudioLoop(Core *core);
   static void skipShutdownVSync(Core *core);
@@ -64,7 +62,6 @@ private:
   void publishMeasuredProjection(Core &core);
 
   CtrRuntime &runtime_;
-  AsyncDiscOwner asyncDisc_;
   DmaCallbackOwner dmaCallbacks_;
   FrameCallbackOwner frameCallbacks_;
   ProjectionOwner projection_;

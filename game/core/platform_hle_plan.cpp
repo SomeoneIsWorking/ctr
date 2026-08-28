@@ -1,5 +1,6 @@
 #include "platform_hle_plan.h"
 
+#include "async_disc_owner.h"
 #include "cd_control.h"
 #include "core.h"
 #include "game.h"
@@ -75,7 +76,7 @@ const PlatformHlePlan kPlatformHlePlan{
     .vsyncAddress = native::kVSync,
     .bindings = {{native::kGpuTimeoutArm, gpuTimeoutArm},
                  {native::kGpuTimeoutCheck, gpuTimeoutCheck},
-                 {native::kCdRead, cd_read_stock_sync},
+                 {native::kCdRead, cdReadWithCompletionCallback},
                  {native::kCdReadSync, cd_readsync_stock_sync},
                  {native::kCdSync, cdSync},
                  {native::kCdControl, cdControl}},

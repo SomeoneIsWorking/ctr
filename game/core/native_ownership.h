@@ -96,15 +96,11 @@ inline constexpr uint32_t kGpuTimeoutDeadline = 0x8008AEBCu;
 inline constexpr uint32_t kGpuTimeoutPollCount = 0x8008AEC0u;
 inline constexpr uint32_t kCdRead = 0x80076F10u;
 inline constexpr uint32_t kCdReadSync = 0x800770ACu;
-// CTR wraps CdRead in an interrupt-completed state machine. psxport's native CdRead completes the
-// transfer synchronously, so the title owner publishes the measured success-callback effects before
-// returning to the generated caller.
-inline constexpr uint32_t kAsyncDiscRead = 0x80032594u;
-inline constexpr uint32_t kAsyncDiscCompletionCallback = 0x8003254Cu;
-inline constexpr uint32_t kAsyncDiscCompletionStateGpOffset = 2260u;
-inline constexpr uint32_t kCdReadyCallback = 0x8008AD10u;
-inline constexpr uint32_t kAsyncDiscAwaitingCallback = 1u;
-inline constexpr uint32_t kAsyncDiscComplete = 0u;
+// Stock libcd read-completion callback slot, written by CdReadCallback 0x800771B0 and invoked from
+// the CD interrupt in retail. psxport's native CdRead completes the transfer before it returns, so
+// the title owner dispatches whatever callback this slot holds with libcd's CdlComplete status.
+inline constexpr uint32_t kCdReadCompletionCallback = 0x8008AD10u;
+inline constexpr uint32_t kCdlComplete = 2u;
 inline constexpr uint32_t kSetGeomScreen = 0x8007781Cu;
 inline constexpr uint32_t kSetGeomOffset = 0x8007782Cu;
 inline constexpr uint32_t kProjectionWindowEnd = 0x80077844u;

@@ -30,12 +30,12 @@ namespace {
 
 Core *g_dispatchedCore = nullptr;
 constexpr uint32_t kFakeView = 0x00040000u;
-constexpr std::array<uint32_t, 11> kOverrideAddresses{
+constexpr uint32_t kRetailReadCompletionCallback = 0x80032110u;
+constexpr std::array<uint32_t, 10> kOverrideAddresses{
     ctr::native::kStartupGpuInit,
     ctr::native::kStartupDisplayInit,
     ctr::native::kBootResourceWait,
     ctr::native::kBootResourcePump,
-    ctr::native::kAsyncDiscRead,
     ctr::native::kStartupAudioService,
     ctr::native::kStartupAudioLoop,
     ctr::native::kShutdownDisplay,
@@ -183,6 +183,13 @@ void captureDispatch(Core *core, uint32_t address) {
   case 0x800321B4u:
     core->r[2] = 0x00ABCDEFu;
     return;
+  // The measured retail read-completion callback: its first act is CdReadCallback(0). Clobbering
+  // v0/ra here is what proves the owner restores the interrupted context.
+  case kRetailReadCompletionCallback:
+    core->mem_w32(ctr::native::kCdReadCompletionCallback, 0u);
+    core->r[2] = 0u;
+    core->r[31] = 0u;
+    return;
   case 0x8003E978u:
     core->r[2] = 0u;
     return;
@@ -231,11 +238,6 @@ void captureSuper(Core *core, uint32_t address) {
   } else if (address == ctr::native::kProjectionProducer) {
     core->rsub.projParams.setGeomOffset(160.0f, 120.0f);
     core->rsub.projParams.setGeomScreen(512.0f);
-  } else if (address == ctr::native::kAsyncDiscRead) {
-    core->mem_w32(core->r[28] + ctr::native::kAsyncDiscCompletionStateGpOffset,
-                  ctr::native::kAsyncDiscAwaitingCallback);
-    core->mem_w32(ctr::native::kCdReadyCallback, ctr::native::kAsyncDiscCompletionCallback);
-    core->r[2] = 1u;
   } else if (address == ctr::native::kStartupAudioService) {
     if (++g_startupAudioServiceCalls == 2u) {
       core->mem_w32(ctr::native::kStartupAudioWaitState, 0u);
@@ -666,15 +668,20 @@ int main() {
     std::fprintf(stderr, "presentation owner would discard a captured retail render item\n");
     return 1;
   }
-  ctr::AsyncDiscOwner asyncDisc;
-  core.mem_w32(kFakeGp + ctr::native::kAsyncDiscCompletionStateGpOffset, 0xFFFFFFFFu);
-  core.mem_w32(ctr::native::kCdReadyCallback, 0xFFFFFFFFu);
-  asyncDisc.startRead(core, runtime);
-  if (core.r[2] != 1u ||
-      core.mem_r32(kFakeGp + ctr::native::kAsyncDiscCompletionStateGpOffset) != ctr::native::kAsyncDiscComplete ||
-      core.mem_r32(ctr::native::kCdReadyCallback) != 0u ||
-      g_superTrace[g_superCount - 1u] != ctr::native::kAsyncDiscRead) {
-    std::fprintf(stderr, "native CTR async-disc owner did not publish the measured synchronous callback result\n");
+  ctr::DiscReadOwner discRead;
+  core.mem_w32(ctr::native::kCdReadCompletionCallback, 0u);
+  const std::size_t dispatchesBeforeRead = g_dispatchCount;
+  discRead.deliverCompletion(core, runtime);
+  core.mem_w32(ctr::native::kCdReadCompletionCallback, kRetailReadCompletionCallback);
+  core.r[2] = 0x0BADC0DEu;
+  core.r[31] = 0x0F1E2D3Cu;
+  discRead.deliverCompletion(core, runtime);
+  if (g_dispatchCount != dispatchesBeforeRead + 1u ||
+      g_dispatchTrace[g_dispatchCount - 1u] != kRetailReadCompletionCallback ||
+      g_dispatchA0Trace[g_dispatchCount - 1u] != ctr::native::kCdlComplete ||
+      core.mem_r32(ctr::native::kCdReadCompletionCallback) != 0u || core.r[2] != 0x0BADC0DEu ||
+      core.r[31] != 0x0F1E2D3Cu || discRead.deliveredCallbacks() != 1u || discRead.polledReads() != 1u) {
+    std::fprintf(stderr, "CTR disc-read owner did not deliver the retail libcd read-completion callback\n");
     return 1;
   }
   ctr::CtrRuntime dmaRuntime(captureDmaDispatch, ctr::native::kExecutableEntry);

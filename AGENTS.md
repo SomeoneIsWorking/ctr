@@ -24,8 +24,12 @@ The workspace authority in `../AGENTS.md` and framework-consumer authority in
   completed step ends when the owner
   restores `0x8003CEB4`; the driver advances CTR's native field counter and samples input once at
   that finite host boundary. This is a repeating, unpresented fence, not native-renderer ownership.
-- `game/core/async_disc_owner.{h,cpp}` publishes CTR's measured callback-state transition after the
-  shared synchronous CdRead. `game/core/dma_callback_owner.{h,cpp}` owns only the measured channel-4
+- `game/core/async_disc_owner.{h,cpp}` owns the measured stock libcd CdRead leaf `0x80076F10`: it runs
+  psxport's shared synchronous transfer and then dispatches whatever callback the retail
+  `CdReadCallback` slot `0x8008AD10` holds, with libcd's `CdlComplete`, restoring the interrupted
+  register context. It transcribes no callback effects; the retail body owns them. Without that
+  delivery the resource loader's busy flag at `gp+0x138` never clears and every field presents black
+  (issue 0019). `game/core/dma_callback_owner.{h,cpp}` owns only the measured channel-4
   libapi slot and preserves DICR, `in_irq`, R3000, and chained-completion ordering. The safe delivery
   seam is startup loop `0x8003C94C`; B0:17 unwinds through `0x80077348`, so code after that generated
   super is unreachable and must not be reinstated.

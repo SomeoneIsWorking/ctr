@@ -87,12 +87,11 @@ void CtrFrameDriver::stepFrame(Core &core, uint32_t frame) {
     std::abort();
   }
 
-  const std::array<OverrideBinding, 11> bindings{{
+  const std::array<OverrideBinding, 10> bindings{{
       {native::kStartupGpuInit, skipFirstStartupVSync},
       {native::kStartupDisplayInit, skipSecondStartupVSync},
       {native::kBootResourceWait, waitForBootResourceWithoutVSync},
       {native::kBootResourcePump, pumpBootResourceWithoutBusyWait},
-      {native::kAsyncDiscRead, startSynchronousDiscRead},
       {native::kStartupAudioService, serviceStartupAudioWithoutBusyWait},
       {native::kStartupAudioLoop, continueStartupAudioLoop},
       {native::kShutdownDisplay, skipShutdownVSync},
@@ -178,10 +177,6 @@ void CtrFrameDriver::waitForBootResourceWithoutVSync(Core *core) {
 
 void CtrFrameDriver::pumpBootResourceWithoutBusyWait(Core *core) {
   active_->beginBootResourcePump(*core);
-}
-
-void CtrFrameDriver::startSynchronousDiscRead(Core *core) {
-  active_->asyncDisc_.startRead(*core, active_->runtime_);
 }
 
 void CtrFrameDriver::serviceStartupAudioWithoutBusyWait(Core *core) {
