@@ -45,6 +45,13 @@ The workspace authority in `../AGENTS.md` and framework-consumer authority in
   it reinstalls the fatal VSync trap after title hooks. Capability bits describe implemented owners,
   not target scope: CTR currently exposes GTE only and refuses Native/FPS60 until their products
   exist.
+- CTR's overlays are entries inside `BIGFILE.BIG`, not separate disc files.
+  `tools/extract_overlays.py` owns that layer: archive identity, index parsing, and slicing the
+  entries `game/recomp_seeds.json` names into `scratch/raw/ctr/overlays/BF<id>.BIN` at their exact
+  index byte size. A stem names an ARCHIVE ENTRY, never a run; slicing the sector-padded image
+  instead makes adjacent modules overlap. `tools/emit_substrate.py` runs it and refuses when a
+  declared overlay has no image — never emit without overlays, because the product then fails much
+  later as an unexplained recomp-MISS. New load bases come from `PSXPORT_DEBUG=cd` over a real boot.
 - `tools/measure_render_frontier.py` is the authority for the current static projection/primitive
   boundary. Dynamic render ownership requires a serialized live trace after the boot frontier; do
   not launch concurrently with another game instance in the workspace.

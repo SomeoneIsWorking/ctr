@@ -5,7 +5,16 @@
   "main": [
     // Dynamically reached through the retail interrupt element registered at 0x8008C7CC. The first
     // live state-zero resource continuation invoked this pad/serial IRQ gate from 0x8003C94C.
-    "0x8007C9E0"
+    "0x8007C9E0",
+    // Resource-loader completion callbacks. The loader stores these as function POINTERS in its
+    // queue entry (FUN_80032D30 arg 5) and the pump calls them indirectly, so no jal names them.
+    // Each is a clean entry: the word two before it is `jr ra`. Measured as the first recomp-MISS
+    // once BIGFILE overlay BF0233 resolved (0x80031B00 from caller 0x80031DE4).
+    "0x800319E8",
+    "0x80031A64",
+    "0x80031A78",
+    "0x80031AA4",
+    "0x80031B00"
   ],
   "main_reentry": [
     // Save the retail setjmp-style IRQ continuation itself, not merely its containing initialization
@@ -30,7 +39,16 @@
     "0x8003CEB4",
     "0x8003CF38"
   ],
-  "overlay_bases": {},
+  // BIGFILE.BIG module images and the load bases measured with PSXPORT_DEBUG=cd over a real boot.
+  // The BIGFILE index is a table of (sector offset, byte size) pairs from word 2 of the archive; the
+  // stem number is that entry's index, so a stem names an archive entry, never a run. The retail
+  // executable calls into this slot at absolute addresses (0x800B0B38 from 0x800368BC and the
+  // 0x800B4364 family from 0x80033610), so the destinations are deterministic game facts.
+  "overlay_bases": {
+    "BF0225": "0x8009F6FC",
+    "BF0226": "0x800A0CB8",
+    "BF0233": "0x800AB9F0"
+  },
   "overlay_base_patterns": [],
   "overlay_seeds": {}
 }

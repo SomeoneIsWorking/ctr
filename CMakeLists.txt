@@ -42,6 +42,9 @@ add_test(
   NAME ctr_provision_selftest
   COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/provision.py" --selftest)
 add_test(
+  NAME ctr_overlay_extract_selftest
+  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/extract_overlays.py" --selftest)
+add_test(
   NAME ctr_crt0_compare_selftest
   COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py" --selftest)
 add_test(
@@ -56,6 +59,11 @@ set_tests_properties(
 add_custom_target(
   ctr04_compare_selftest
   COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py" --selftest
+  USES_TERMINAL
+  VERBATIM)
+add_custom_target(
+  overlay_extract_selftest
+  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/extract_overlays.py" --selftest
   USES_TERMINAL
   VERBATIM)
 add_custom_target(
@@ -472,6 +480,7 @@ add_custom_target(
   DEPENDS
     cpp_policy
     provision_selftest
+    overlay_extract_selftest
     ctr04_compare_selftest
     ctr05_render_frontier_selftest
     psxport_smoke

@@ -9,8 +9,8 @@ import pathlib
 import subprocess
 import sys
 
-from provision import CTR_USA, ProvisionError, ROOT, verify_executable
-
+from extract_overlays import OVERLAY_DIR, extract, seed_stems
+from provision import CTR_USA, ROOT, ProvisionError, verify_executable
 
 DEFAULT_EXE = ROOT / "scratch" / "raw" / "ctr" / CTR_USA.name
 OUTPUT = ROOT / "generated" / "recompiled.c"
@@ -36,14 +36,38 @@ def main() -> int:
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     environment = os.environ.copy()
     environment["PSXPORT_SHARDS"] = str(arguments.shards)
+    command = [
+        sys.executable,
+        str(EMITTER),
+        str(arguments.exe),
+        str(OUTPUT),
+        "--seeds",
+        str(SEEDS),
+    ]
+    # CTR's overlays live inside BIGFILE.BIG, so the emitter's overlay input has to be produced from
+    # the selected disc. Declaring a base and emitting without the image would silently drop every
+    # overlay function and fail much later as an unexplained recomp-MISS, so this refuses instead.
+    stems = seed_stems(SEEDS)
+    if stems:
+        extract(None, None)
+        missing = sorted(
+            stem for stem in stems if not (OVERLAY_DIR / f"{stem}.BIN").is_file()
+        )
+        if missing:
+            raise ProvisionError(
+                f"overlay extraction produced no image for {', '.join(missing)}"
+            )
+        command += ["--overlays", str(OVERLAY_DIR)]
     result = subprocess.run(
-        [sys.executable, str(EMITTER), str(arguments.exe), str(OUTPUT), "--seeds", str(SEEDS)],
+        command,
         cwd=ROOT,
         env=environment,
         check=False,
     )
     if result.returncode:
-        raise ProvisionError(f"shipping recompiler failed with exit {result.returncode}")
+        raise ProvisionError(
+            f"shipping recompiler failed with exit {result.returncode}"
+        )
     print(f"[emit] verified executable: {arguments.exe}")
     print(f"[emit] generated substrate: {OUTPUT.parent.relative_to(ROOT)}/")
     return 0

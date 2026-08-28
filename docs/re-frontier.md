@@ -109,8 +109,18 @@ names an honest remaining gap; `todo` is not started. No hacks are tracked.
   transfer, then a dispatch of the exact registered callback with `CdlComplete` and full register
   restoration; the transcribed `0x80032594` owner is removed rather than annotated. A serialized
   real-disc rerun advanced the loader 2, 3, 4, 5 across fields 1-4 and then failed fast on a
-  recomp-MISS at `0x800B0B38` from caller `0x800368BC` — disc-loaded overlay code the emitter reports
-  as `0 overlay module(s)`. Issue 0020 owns that gap.
+  recomp-MISS at `0x800B0B38` from caller `0x800368BC` — disc-loaded overlay code the emitter reported
+  as `0 overlay module(s)`.
+  C020/I016 then ground the overlay layer. `BIGFILE.BIG` is identity-verified and its index parses as
+  608 monotonic (sector offset, byte size) entries from word 2; `PSXPORT_DEBUG=cd` named archive
+  entries 225, 226 and 233 loading to `0x8009F6FC`, `0x800A0CB8` and `0x800AB9F0`, with `0x800B0B38`
+  inside entry 233. `tools/extract_overlays.py` slices exactly those entries at their index byte size
+  (the sector-padded slice made entry 226 overlap entry 233's base, which the emitter reported), and
+  `emit_substrate.py` refuses to emit when a declared overlay has no image. The three modules
+  recompiled as 1, 270 and 152 functions. Five loader completion callbacks reached only through the
+  queue's function-pointer slot are now `main` seeds, each proven a clean entry by the `jr ra` two
+  words before it. The next real-disc run crossed all of that, performed four further module loads,
+  and reached state-1 `0x8003B934` before faulting in scratchpad helper `0x8006D79C` (issue 0021).
   Platform composition binds measured VSync `0x80075350` to the fatal trap. The asset-free
   transition test covers startup, repeated frame resume, and teardown, but independent generated
   execution remains proven only through `0x800772E0`. A fresh Clang 22.1.8 tree against clean

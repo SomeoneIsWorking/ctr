@@ -20,6 +20,7 @@ presentation owner decorates previous/current simulation state. Capability cover
 | Presentation fence | Rotate exactly one framework fence at each measured frame-owner return, commit captured retail work through the compatibility presenter, and mark empty fields unpresented | `game/video/presentation_owner.h`, `game/video/presentation_owner.cpp` | `ctr::PresentationOwner::finishField` | `docs/issues/0015-ctr-product-had-no-native-frame-loop-vsync-owner.md` |
 | Bounded trace adapter | Execute generated boundaries and serialize CPU, device, and memory evidence for independent comparison | `game/core/crt0_port_trace.cpp` | `main` | `docs/re-frontier.md` |
 | Input provisioning | Resolve user-supplied disc media, extract transactionally, and enforce complete executable identity | `tools/provision.py`, `tools/emit_substrate.py` | `provision.py`, `emit_substrate.py` | `titles/ctr/README.md` |
+| Overlay image provisioning | Verify BIGFILE.BIG identity, parse its entry index, and slice the declared code modules into the emitter's overlay input | `tools/extract_overlays.py` | `extract_overlays.py` | `docs/issues/0020-ctr-calls-overlay-code-the-emitter-never-discove.md` |
 | Boot differential tooling | Construct exact bounded replay images and compare independent oracle state with shipping generated execution | `tools/resident_replay.py`, `tools/compare_crt0_trace.py`, `tools/compare_crt0_trace_selftest.py` | `compare_crt0_trace.py` | `docs/re-frontier.md` |
 | Static render-source measurement | Verify exact projection leaves, producer signatures, callers, and GTE control/command census in the selected executable | `tools/measure_render_frontier.py` | `measure_render_frontier.py` | `docs/issues/0013-ctr-render-artifacts-had-no-binary-grounded-proj.md` |
 | Runtime seam verification | Exercise the production direct-runtime install, executable extent, projection plan, generic handlers, picture declaration, and dispatch contract | `tests/test_ctr_runtime.cpp` | `ctr_runtime_test` | `docs/project-state.md` |
@@ -32,7 +33,7 @@ presentation owner decorates previous/current simulation state. Capability cover
 ## Where does X go?
 
 - Executable identity and load map: `titles/ctr/README.md`
-- Disc resolution and extraction: `tools/provision.py`
+- Disc resolution and extraction: `tools/provision.py`, `tools/extract_overlays.py`
 - Resident generation: `tools/emit_substrate.py`, `game/recomp_seeds.json`
 - Framework-facing process ownership: `game/core/ctr_runtime.{h,cpp}`
 - Product runtime composition: `game/core/runtime_composition.{h,cpp}`

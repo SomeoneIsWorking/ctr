@@ -151,8 +151,19 @@ interrupt, and psxport's native synchronous CdRead delivered nothing — slot `0
 dispatching the exact registered retail callback with `CdlComplete`; the previous hand-transcribed
 `0x80032594` owner is superseded and removed. A live real-disc rerun advanced the loader 2, 3, 4, 5
 across fields 1-4 and then failed fast on a recomp-MISS at overlay address `0x800B0B38` (caller
-`0x800368BC`), which the emitter reports as `0 overlay module(s)`. Issue 0019 records the resolved
-stall; issue 0020 owns the overlay gap.
+`0x800368BC`), which the emitter reported as `0 overlay module(s)`. Issue 0019 records the resolved
+stall.
+
+Claim C020 then closes that overlay gap. CTR's overlays live inside `BIGFILE.BIG`, whose identity is
+now verified and whose index parses as 608 monotonic (sector offset, byte size) entries;
+`tools/extract_overlays.py` slices the entries the seed file names, and `emit_substrate.py` refuses
+rather than emitting without them. The three measured loads — archive entries 225, 226 and 233 to
+`0x8009F6FC`, `0x800A0CB8` and `0x800AB9F0` — recompiled as 1, 270 and 152 functions. The next
+real-disc run resolved `0x800B0B38`, ran the loader's five pointer-only completion callbacks (seeded
+after the miss moved to `0x80031B00`), performed four further module loads, and reached retail main
+state 1. It then faults inside scratchpad helper `0x8006D79C` on a pointer that is itself an
+instruction word; issue 0021 owns that frontier. Fields are still black, so no visible content is
+claimed.
 
 ### S004 — Projection and primitive source evidence
 
