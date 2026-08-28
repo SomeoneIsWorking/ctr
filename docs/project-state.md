@@ -17,15 +17,16 @@ Factual capability coverage for the Crash Team Racing port. Epic intent lives in
 
 ## Current focus
 
-S003 is the current focus: the identity-verified product sustains presentation without letting guest
-VSync return, and those presented images have now been captured and inspected. They were 0.00%
-non-black because the resource loader never completed a single load — the retail libcd
-read-completion callback was never delivered (issue 0019, claim C019). With the CdRead leaf owner
-delivering it, the state-3 screen loader advances 2 -> 3 -> 4 -> 5 and the product fails fast at the
-next honest boundary: a recomp-MISS on overlay code at `0x800B0B38`, which the emitter never
-discovered (issue 0020). Recompiling the overlays the loader calls is the next dependency for a
-visible frame. Independent differential execution still ends at `0x800772E0`; the live product result
-does not extend that separate proof window.
+S003 is the current focus. The GTE macro library's dispatch shape is now resolved (issue 0022): the
+library calls its helpers `jalr t2, v1` with the return address in t2 and $ra holding a
+runtime-built parameter block, and the emitter derives every non-ra jalr link as a dispatchable
+re-entry (RECOMP_VERSION 2026-08-28.1, framework tree dirty awaiting operator landing) plus forgets
+coroutine-resume proofs at re-entry boundaries; the two block-slot entries no scan can see
+(0x8006A8E0, 0x8006BF30) are seeded in `main_reentry` with provenance. The serialized real-disc
+product now executes the whole chain end-to-end and repeatedly and fails fast later, inside the
+chain, on a guest data fault: garbage a2=0x0CC22321 read at a2+0x74 (issue 0023) — a frontier, not a
+regression; no verified path moved. Independent differential execution still ends at `0x800772E0`;
+the live product result does not extend that separate proof window.
 
 ## Capability details
 

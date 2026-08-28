@@ -125,11 +125,23 @@ names an honest remaining gap; `todo` is not started. No hacks are tracked.
   run the completion inside CdRead, because `FUN_80031E00` stores the allocated buffer into the queue
   entry only after `FUN_800321B4` returns and the completion chain `FUN_80031D30` reads that field to
   run the module's relocation pass (`FUN_800326B4` adds the load base to each offset in a patch
-  table). The owner now records an owed completion and delivers it at the title's per-field seam and
+  table).   The owner now records an owed completion and delivers it at the title's per-field seam and
   before any subsequent read. The product then crosses the null dereference, performs its later
   module loads, presents at least 16 fields, and reaches the hand-written GTE library, failing fast on
   an unresolved computed-jump continuation — `0x8006ACE0` reached from `jr t2` at `0x8006C948`, a
   helper with no `jal` site anywhere in the executable (issue 0022).
+  Issue 0022 is now RESOLVED by measurement: the library uses t2 as an alternate link register
+  (`jalr t2, v1` with the return address in t2; $ra holds a runtime-built 244-byte-stride parameter
+  block whose heap blocks hold nine distinct library interior entries). The framework emitter
+  (RECOMP_VERSION 2026-08-28.1, dirty awaiting operator landing) now derives every non-ra jalr link
+  (35 sites → 35 continuations on CTR MAIN) as a dispatchable re-entry and forgets
+  coroutine-resume proofs at re-entry boundaries (MAIN false coroutines 8 → 4 of 1255); red/green
+  in tools/recomp/test_emit.py (61/61), decoder 9/9, framework ctest 119/119, CTR asset-free
+  ctest 14/14. The two block-slot entries no scan can link (0x8006A8E0, 0x8006BF30 — the
+  constructor-pointer scan cannot tie a store site to a dispatch site across fragments, Vagrant
+  issue #23's open class) are `main_reentry` seeds with provenance. The serialized real-disc run
+  then executes the whole chain end-to-end, repeatedly, and fails fast later INSIDE the chain on a
+  garbage a2=0x0CC22321 read at a2+0x74 — issue 0023 owns that boundary; scratch/logs/altlink-live4.log.
   Platform composition binds measured VSync `0x80075350` to the fatal trap. The asset-free
   transition test covers startup, repeated frame resume, and teardown, but independent generated
   execution remains proven only through `0x800772E0`. A fresh Clang 22.1.8 tree against clean

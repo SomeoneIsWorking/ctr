@@ -37,7 +37,20 @@
     "0x800336F8",
     "0x8003CC98",
     "0x8003CEB4",
-    "0x8003CF38"
+    "0x8003CF38",
+    // Hand-written GTE macro library interior entries, reached ONLY through the runtime-built GTE
+    // parameter blocks (244-byte strides, e.g. 0x800FEAA8+ in the miss RAM dump): init code builds
+    // each block with lui/ori pairs (0x80071484/0x8007148C constructs 0x8006A8E0; its alternate
+    // flag branch constructs 0x8007B23C) and `sw t0, 0xF0(fp)` stores it, and the library dispatches
+    // with `lw s6, 0xF0(a2)` then `jalr ra, s6` (0x8006A52C). No scan can link the store site to
+    // the dispatch site across fragments, so the emitter's constructor-pointer scan correctly
+    // declines them; the live [recomp-MISS] named them. Both are clean interior entries: the
+    // preceding word is not a branch/jump, and each opens a parallel variant body. Measured live:
+    // the nine distinct in-text values in the blocks were 0x8006A52C 0x8006A8E0 0x8006AD88
+    // 0x8006B030 0x8006BF30 0x8006C948 0x8006D428 0x8006D55C 0x8006D59C; all but these two were
+    // already emitted.
+    "0x8006A8E0",
+    "0x8006BF30"
   ],
   // BIGFILE.BIG module images and the load bases measured with PSXPORT_DEBUG=cd over a real boot.
   // The BIGFILE index is a table of (sector offset, byte size) pairs from word 2 of the archive; the
