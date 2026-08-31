@@ -6,6 +6,7 @@ symptom: "FATAL: UNMAPPED RAM read32 @ 0x0CC22395 (= a2+0x74) from gen_func_8006
 state_items: S003,S005
 tags: gte,frontier,data-fault
 created: 2026-08-28
+updated: 2026-08-31
 ---
 
 ## Symptom
@@ -50,14 +51,16 @@ convention keeps as a parameter-block pointer — 0xF24BCDEE is not RAM).
   producer for the bad pair.
 - Everything past 0x8006ACE0's dispatch is NEW execution territory — no verified path is affected;
   this is a frontier, not a regression of 0022's fix.
+- The pre-frame whole-run range watch is now decisive: `0x8010B2D4` is `0x495C0` bytes into the
+  valid 203-sector `CdRead` from LBA 137170 to `0x800C1D14` (ending `0x80127514`), mode `0x80`.
+  Its first eight bytes are the reproduced pair. The host chain is
+  `Core::mem_w8 <- cd_read_stock_sync <- ctr::cdReadWithCompletionCallback <- func_80076F10`;
+  the watcher's `pc=0x80076F10`, `ra=0x80032644`, `a0=203`, `a1=0x800C1D14`, and `a2=0x80` agree.
+  The pair is raw disc payload, not an allocator write, GTE mutation, or watcher-attribution bug.
 
 ## What is not yet known
 
-Which earlier producer owns the two words at the allocator result. The next decisive live
-observation is a whole-run, word-range watch of the reproduced pair
-`PSXPORT_WWATCH=8010B2D4,8010B2DC` with `PSXPORT_DEBUG=wwatch` and
-`PSXPORT_WWATCH_BT=1`, armed before the first frame. It reports every writer's guest PC, registers,
-and host chain; its first write to either word distinguishes stale-arena reuse from a malformed
-producer. If the allocation address changes, first capture the returned `0x8003E874` value and arm
-that exact eight-byte range before rerunning. Do not patch the GTE macro or substitute an address —
-that would conceal the producer fault.
+Which resource-loading stage consumes or relocates this valid archive payload into the descriptor
+list the GTE macro expects. Next, trace the archive source, destination placement, relocation and
+decompression/pointer construction after the completed read; do not patch the GTE macro, CdRead
+range, or substitute an address, because each would conceal that semantic loader boundary.
