@@ -28,19 +28,26 @@ convention keeps as a parameter-block pointer — 0xF24BCDEE is not RAM).
 
 ## What is known
 
-- The faulting read is a2+0x74; fragment [0x8006ACE0,0x8006AD6C) has NO +116(a2) load, so the
-  faulting instruction is likely inside a flood-fill DUPLICATED tail executing in that C frame, or
-  a2 was different at the load and changed afterwards. Pin the exact guest PC first (a diagnostic
-  that names the faulting instruction is the missing instrument).
-- The chain was entered from resident main's resume path (func_8003CC98 frame) — the caller that
-  set a2 before dispatching 0x8006A52C has not been identified; the dispatch does not appear in the
-  direct [0x8003CC98,0x8003CEB4) window, so it is inside duplicated-tail code.
+- The faulting instruction is exactly `lw v1, 0x74(a2)` at `0x8006AB00`, the loop body shared by
+  `0x8006AAA8` and its alternate-link continuation at `0x8006ACE0`. Ghidra and emitted code agree:
+  the macro consumes consecutive `(return-or-zero, descriptor*)` pairs from `a0`; it loads the
+  descriptor pointer into `a2`, then reads `a2+0x74`.
+- The corrupt pair already exists at the macro boundary. The live fault had `a0=0x8010B2D4`, whose
+  first two words were `0x252C0001, 0x043DFFDA`; the latter is the unmapped `a2`. This excludes an
+  alternate-link return mapping as the immediate cause: the `jalr t2,v1` return reaches the correct
+  loop, but its caller-supplied input list is invalid before the helper call.
+- Resident frame owner `0x80035E70` reaches the macro only when game-state flags `+0x256C & 0x20`
+  are set. It passes the list stored at game-state `+0x1C94` and a descriptor base at
+  `*(gameState+0x10)+0x74`. The list slot has one static writer: the `0x8003B5E0` sequence in
+  `0x8003B43C`, which obtains a fresh buffer from `0x8003E874` and splices nodes from the three
+  state lists at `+0x1920`, `+0x1948`, and `+0x1970`.
 - Everything past 0x8006ACE0's dispatch is NEW execution territory — no verified path is affected;
   this is a frontier, not a regression of 0022's fix.
 
 ## What is not yet known
 
-Who sets a2 for this library entry and what value it should hold; whether the garbage comes from an
-un-emitted overlay module (a module at ~0x800FExxx was live in earlier runs and is still not in
-`overlay_bases` — capture bases with PSXPORT_DEBUG=cd), an unimplemented leaf returning wrong data,
-or an upstream mis-emission.
+Which producer writes the bad second word into that per-frame list: one of the three spliced source
+lists, the list-building path, or a prior write into the freshly allocated buffer. The next decisive
+live observation is a single write trace for the first two words of the buffer immediately after
+`0x8003B5E0` publishes it at game-state `+0x1C94`; it must record writer PC and the pair values.
+Do not patch the GTE macro or substitute an address — that would conceal the producer fault.
