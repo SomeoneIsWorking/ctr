@@ -64,8 +64,11 @@ The CD stream is not on the module relocation path: its callback only completes 
 the separate module chain is `0x800321B4 -> 0x80032110 -> 0x80031D30 -> 0x800326B4`. The missing
 transition is the render-list population after `0x8003B43C` allocates and publishes
 `game+0x1C94 = 0x8010B2D4`: it links the source lists at `game+0x1920/+0x1948/+0x1970` through
-node `+8`, but does not write the first `(return, descriptor*)` pair. Next, dynamically arm that
-returned list pointer at the `0x8003B43C`/GTE boundary and report its heads, linked-node count,
-post-publication pair stores, and first writer PC; then trace the consumers/handlers of those
-node+8 lists. Do not patch the GTE macro, CdRead range, or substitute an address, because each
-would conceal this render-list integration boundary.
+node `+8`, but does not write the first `(return, descriptor*)` pair. The debug-only
+`RenderListBoundaryDiagnostic`, enabled with `PSXPORT_DEBUG=ctr-render-list`, now preserves that
+generated publisher as a super-call, reports the three bounded source chains, and arms Core's
+existing write observer on the returned pair for the rest of the field. Its hermetic fixture proves
+the post-publication zero-store state and records a later bounded pair write; a real-disc run still must establish the
+actual store denominator and first writer before any GTE, CD, or consumer change. Do not patch the
+GTE macro, CdRead range, or substitute an address, because each would conceal this render-list
+integration boundary.

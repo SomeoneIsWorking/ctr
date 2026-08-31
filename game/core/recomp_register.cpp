@@ -61,6 +61,9 @@ void runRecompiledSuper(Core *core, uint32_t address) {
   case native::kProjectionProducer:
     gen_func_80042910(core);
     return;
+  case native::kRenderListPublisher:
+    gen_func_8003B43C(core);
+    return;
   default:
     lucent::error("ctr-recomp", "no preserved generated super for 0x{:08X}", address);
     std::abort();

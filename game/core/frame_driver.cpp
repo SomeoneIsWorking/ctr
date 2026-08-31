@@ -1,6 +1,7 @@
 #include "frame_driver.h"
 
 #include "async_disc_owner.h"
+#include "cfg.h"
 #include "core.h"
 #include "ctr_runtime.h"
 #include "game.h"
@@ -75,7 +76,8 @@ private:
 
 CtrFrameDriver *CtrFrameDriver::active_ = nullptr;
 
-CtrFrameDriver::CtrFrameDriver(CtrRuntime &runtime) : runtime_(runtime) {}
+CtrFrameDriver::CtrFrameDriver(CtrRuntime &runtime)
+    : runtime_(runtime), renderListDiagnostic_(cfg_dbg("ctr-render-list") != 0) {}
 
 void CtrFrameDriver::stepFrame(Core &core, uint32_t frame) {
   if (!core.game) {
@@ -88,7 +90,7 @@ void CtrFrameDriver::stepFrame(Core &core, uint32_t frame) {
     std::abort();
   }
 
-  const std::array<OverrideBinding, 10> bindings{{
+  const std::array<OverrideBinding, 11> bindings{{
       {native::kStartupGpuInit, skipFirstStartupVSync},
       {native::kStartupDisplayInit, skipSecondStartupVSync},
       {native::kBootResourceWait, waitForBootResourceWithoutVSync},
@@ -99,8 +101,11 @@ void CtrFrameDriver::stepFrame(Core &core, uint32_t frame) {
       {native::kVblankCallbackInstall, observeVblankCallback},
       {native::kFrameTiming, finishFrameWithoutDebugVSync},
       {native::kProjectionProducer, publishProjection},
+      {native::kRenderListPublisher, renderListDiagnostic_.enabled() ? observeRenderListPublication : nullptr},
   }};
-  ScopedFrameOverrides overrides(runtime_, std::span{bindings});
+  const std::span activeBindings =
+      std::span{bindings}.first(renderListDiagnostic_.enabled() ? bindings.size() : bindings.size() - 1u);
+  ScopedFrameOverrides overrides(runtime_, activeBindings);
   ScopedActiveDriver active(active_, *this);
   const int attributionDepth = core.idiag.otattr_depth;
 
@@ -145,6 +150,7 @@ void CtrFrameDriver::stepFrame(Core &core, uint32_t frame) {
     // The finite owner intentionally unwinds through generated func_* wrappers before their manual
     // otattrPop executes. Restore the entry depth at the same ownership transfer.
     core.idiag.otattr_depth = attributionDepth;
+    renderListDiagnostic_.finishField(core, frame);
     presentation_.finishField(core);
     ++completedFrames_;
     return;
@@ -215,6 +221,10 @@ void CtrFrameDriver::finishFrameWithoutDebugVSync(Core *core) {
 
 void CtrFrameDriver::publishProjection(Core *core) {
   active_->publishMeasuredProjection(*core);
+}
+
+void CtrFrameDriver::observeRenderListPublication(Core *core) {
+  active_->observePublishedRenderList(*core);
 }
 
 void CtrFrameDriver::continueAfterVSync(
@@ -521,6 +531,12 @@ void CtrFrameDriver::publishMeasuredProjection(Core &core) {
   }
   projection_.publish(core, [this](Core &projectionCore) {
     runtime_.runRecompiledSuper(projectionCore, native::kProjectionProducer);
+  });
+}
+
+void CtrFrameDriver::observePublishedRenderList(Core &core) {
+  renderListDiagnostic_.observePublication(core, [this](Core &publisherCore) {
+    runtime_.runRecompiledSuper(publisherCore, native::kRenderListPublisher);
   });
 }
 

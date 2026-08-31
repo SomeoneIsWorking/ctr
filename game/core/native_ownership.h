@@ -85,6 +85,11 @@ inline constexpr uint32_t kProjectionReturnLensflare = 0x80024CD4u;
 inline constexpr uint32_t kProjectionReturnState = 0x8003BD34u;
 inline constexpr uint32_t kProjectionReturnOverlay = 0x8003F5C8u;
 
+// This publisher allocates the transient descriptor-pair list in gameState+0x1C94 and splices the
+// three source lists through node+8. It remains generated; the debug-only boundary observer calls
+// it as a super and watches only the published pair after it returns.
+inline constexpr uint32_t kRenderListPublisher = 0x8003B43Cu;
+
 inline constexpr uint32_t kVSync = 0x80075350u;
 inline constexpr uint32_t kVSyncEnd = 0x80075560u;
 // PsyQ libgpu's DMA-queue timeout pair reads VSync(-1) only as a field clock. The native GPU

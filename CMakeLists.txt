@@ -90,6 +90,7 @@ add_library(
   game/core/frame_callback_owner.cpp
   game/core/frame_driver.cpp
   game/core/platform_hle_plan.cpp
+  game/core/render_list_boundary_diagnostic.cpp
   game/core/runtime_composition.cpp
   game/video/presentation_owner.cpp
   game/video/projection_owner.cpp)

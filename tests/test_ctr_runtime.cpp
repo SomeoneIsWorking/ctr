@@ -11,6 +11,7 @@
 #include "hw_bind.h"
 #include "native_ownership.h"
 #include "platform_hle.h"
+#include "render_list_boundary_diagnostic.h"
 #include "runtime_composition.h"
 
 #include <algorithm>
@@ -66,6 +67,51 @@ bool g_chainDmaDuringDispatch = false;
 std::array<uint32_t, 2> g_frameCallbackTrace{};
 std::size_t g_frameCallbackCount = 0;
 bool g_frameCallbackInIrq = false;
+
+void checkRenderListBoundaryDiagnostic() {
+  constexpr uint32_t kGameState = 0x80040000u;
+  constexpr uint32_t kList = 0x80050000u;
+  constexpr uint32_t kFirst = 0x80051000u;
+  constexpr uint32_t kSecond = 0x80051100u;
+  constexpr uint32_t kThird = 0x80051200u;
+  auto core = std::make_unique<Core>();
+  core->r[4] = kGameState;
+  core->mem_w32(kGameState + 0x1920u, kFirst);
+  core->mem_w32(kGameState + 0x1948u, kThird);
+  core->mem_w32(kGameState + 0x1970u, 0u);
+  core->mem_w32(kFirst, kSecond);
+  core->mem_w32(kSecond, 0u);
+  core->mem_w32(kThird, 0u);
+
+  ctr::RenderListBoundaryDiagnostic diagnostic(true);
+  diagnostic.observePublication(*core, [&](Core &publisherCore) {
+    publisherCore.mem_w32(kGameState + 0x1C94u, kList);
+    publisherCore.mem_w32(kFirst + 8u, kList + 8u);
+    publisherCore.mem_w32(kSecond + 8u, kList + 8u);
+    publisherCore.mem_w32(kThird + 8u, kList + 8u);
+  });
+  const ctr::RenderListObservation &published = diagnostic.latest();
+  if (!published.validGameState || !published.validList || published.list != kList || published.pairStores != 0u ||
+      !published.pairWatchArmed || published.sourceLists[0].nodes != 2u || published.sourceLists[0].tail != kSecond ||
+      published.sourceLists[0].tailLink != kList + 8u || published.sourceLists[1].nodes != 1u ||
+      published.sourceLists[2].nodes != 0u || !published.sourceLists[2].terminated) {
+    std::abort();
+  }
+
+  core->pc = 0x8003B600u;
+  core->r[31] = 0x8003B688u;
+  core->mem_w32(kList + 4u, 0x12345678u);
+  if (diagnostic.latest().pairStores != 1u || !diagnostic.latest().firstWriter.seen ||
+      diagnostic.latest().firstWriter.address != kList + 4u || diagnostic.latest().firstWriter.value != 0x12345678u ||
+      diagnostic.latest().firstWriter.width != 4u || diagnostic.latest().firstWriter.pc != core->pc ||
+      diagnostic.latest().firstWriter.returnAddress != core->r[31]) {
+    std::abort();
+  }
+  diagnostic.finishField(*core, 7u);
+  if (core->storeWatchCb != nullptr) {
+    std::abort();
+  }
+}
 
 bool fakeDmaOwed(int channel) {
   return channel == ctr::native::kSpuDmaChannel && g_dmaCompletionOwed;
@@ -312,6 +358,8 @@ void invokeProjectionMismatch(void *context) {
 } // namespace
 
 int main() {
+  checkRenderListBoundaryDiagnostic();
+
   static_assert(std::is_base_of_v<GameRuntime, ctr::CtrRuntime>);
   static_assert(ctr::native::kGuestMain == 0x8003C58Cu);
   static_assert(ctr::native::kLoopTop == 0x8003C5D0u);

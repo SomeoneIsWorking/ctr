@@ -5,6 +5,7 @@
 #include "game_runtime.h"
 #include "presentation_owner.h"
 #include "projection_owner.h"
+#include "render_list_boundary_diagnostic.h"
 
 #include <cstdint>
 
@@ -44,6 +45,7 @@ private:
   static void observeVblankCallback(Core *core);
   static void finishFrameWithoutDebugVSync(Core *core);
   static void publishProjection(Core *core);
+  static void observeRenderListPublication(Core *core);
 
   void
   continueAfterVSync(Core &core, uint32_t superAddress, uint32_t expectedReturn, uint32_t continuation, uint32_t mode);
@@ -60,12 +62,14 @@ private:
   void resumeFrameSuffix(Core &core);
   [[nodiscard]] bool frameSuffixIsWaiting(Core &core) const;
   void publishMeasuredProjection(Core &core);
+  void observePublishedRenderList(Core &core);
 
   CtrRuntime &runtime_;
   DmaCallbackOwner dmaCallbacks_;
   FrameCallbackOwner frameCallbacks_;
   ProjectionOwner projection_;
   PresentationOwner presentation_;
+  RenderListBoundaryDiagnostic renderListDiagnostic_;
   uint32_t completedFrames_ = 0;
   uint32_t bootResourceWaitFields_ = 0;
   uint32_t bootResourceWaitResume_ = 0;
