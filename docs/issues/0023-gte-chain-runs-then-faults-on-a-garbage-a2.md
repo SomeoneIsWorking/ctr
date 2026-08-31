@@ -41,13 +41,23 @@ convention keeps as a parameter-block pointer — 0xF24BCDEE is not RAM).
   `*(gameState+0x10)+0x74`. The list slot has one static writer: the `0x8003B5E0` sequence in
   `0x8003B43C`, which obtains a fresh buffer from `0x8003E874` and splices nodes from the three
   state lists at `+0x1920`, `+0x1948`, and `+0x1970`.
+- Static follow-up: `0x8003E874` is a bump allocator, not a constructor: it returns its current
+  cursor at allocator `+0x14`, advances that cursor by the aligned request, and writes no payload.
+  After `0x8003B5E0` publishes that return, `0x8003B43C` writes only the game-state slot and the
+  `+8` links of the three existing source lists; it never writes either word at the returned buffer
+  address. `0x8003E978` likewise records the current cursor into an allocator epoch slot rather
+  than clearing the arena. Therefore a watch armed only after publication cannot identify a
+  producer for the bad pair.
 - Everything past 0x8006ACE0's dispatch is NEW execution territory — no verified path is affected;
   this is a frontier, not a regression of 0022's fix.
 
 ## What is not yet known
 
-Which producer writes the bad second word into that per-frame list: one of the three spliced source
-lists, the list-building path, or a prior write into the freshly allocated buffer. The next decisive
-live observation is a single write trace for the first two words of the buffer immediately after
-`0x8003B5E0` publishes it at game-state `+0x1C94`; it must record writer PC and the pair values.
-Do not patch the GTE macro or substitute an address — that would conceal the producer fault.
+Which earlier producer owns the two words at the allocator result. The next decisive live
+observation is a whole-run, word-range watch of the reproduced pair
+`PSXPORT_WWATCH=8010B2D4,8010B2DC` with `PSXPORT_DEBUG=wwatch` and
+`PSXPORT_WWATCH_BT=1`, armed before the first frame. It reports every writer's guest PC, registers,
+and host chain; its first write to either word distinguishes stale-arena reuse from a malformed
+producer. If the allocation address changes, first capture the returned `0x8003E874` value and arm
+that exact eight-byte range before rerunning. Do not patch the GTE macro or substitute an address —
+that would conceal the producer fault.
