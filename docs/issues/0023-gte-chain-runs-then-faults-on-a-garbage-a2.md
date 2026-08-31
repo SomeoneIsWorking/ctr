@@ -60,7 +60,12 @@ convention keeps as a parameter-block pointer — 0xF24BCDEE is not RAM).
 
 ## What is not yet known
 
-Which resource-loading stage consumes or relocates this valid archive payload into the descriptor
-list the GTE macro expects. Next, trace the archive source, destination placement, relocation and
-decompression/pointer construction after the completed read; do not patch the GTE macro, CdRead
-range, or substitute an address, because each would conceal that semantic loader boundary.
+The CD stream is not on the module relocation path: its callback only completes the resource stage;
+the separate module chain is `0x800321B4 -> 0x80032110 -> 0x80031D30 -> 0x800326B4`. The missing
+transition is the render-list population after `0x8003B43C` allocates and publishes
+`game+0x1C94 = 0x8010B2D4`: it links the source lists at `game+0x1920/+0x1948/+0x1970` through
+node `+8`, but does not write the first `(return, descriptor*)` pair. Next, dynamically arm that
+returned list pointer at the `0x8003B43C`/GTE boundary and report its heads, linked-node count,
+post-publication pair stores, and first writer PC; then trace the consumers/handlers of those
+node+8 lists. Do not patch the GTE macro, CdRead range, or substitute an address, because each
+would conceal this render-list integration boundary.
