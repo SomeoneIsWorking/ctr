@@ -20,6 +20,7 @@ const RecompRegistry kCtrRecompiledProgram{
     .overlays = g_rec_overlays,
     .overlay_count = g_rec_overlay_count,
     .shard_set_override = shard_set_override,
+    .substrate_id = g_rec_substrate_id,
 };
 
 } // namespace
