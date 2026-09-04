@@ -3,6 +3,10 @@
 Statuses: `re-verified` means binary/disc ground truth plus executable verification; `re-partial`
 names an honest remaining gap; `todo` is not started. No hacks are tracked.
 
+The execution-method migration is ordered in `docs/migration.md`. Static-path observations below
+are frozen evidence for the boundary Lightrec must reproduce; they are not instructions to emit,
+build, or run that route, and they do not make it a product fallback.
+
 ## Boot spine
 
 ### CTR-01 — Select and measure the target executable
@@ -26,16 +30,19 @@ names an honest remaining gap; `todo` is not started. No hacks are tracked.
 - deps: CTR-02
 - evidence: C003/I003. The asset-gated `oracle_boot_check` re-provisioned the measured executable, ran the independent oracle's 22-check positive/negative/stepping/mirroring fixture, then executed the real CTR crt0 in the vendored Beetle/Mednafen CPU. The execution left mapped text at the InitHeap boundary after 92,378 steps and agreed with the independent symbolic decoder on 7 of 7 comparable fields.
 - where: CMake `oracle_boot_check`; framework `oracle_trace` and `crossvalidate_crt0.py`; gitignored boundary trace
-- gap: None for the independent first-call oracle. CTR-04 now owns the generated side; no later BIOS or hardware behavior follows from this step.
+- gap: None for the independent first-call oracle. CTR-04 records the later boundary evidence; no later BIOS or hardware behavior follows from this step alone.
 - notes: The asset-gated target is deliberately separate from normal verification. Its oracle fixture demonstrates both a clean executed program and a named hardware-stop answer before the real executable is accepted as evidence.
 
-### CTR-04 — Recompile through the first real divergence
+### CTR-04 — Preserve the current execution frontier
 - status: re-partial
 - deps: CTR-03
 - evidence: C004/I004, C005/I005, C006/I006, C007/I007, C009/I008, C010/I009, C011/I010, C012/I011, C013, and C017/I012. `tools/emit_substrate.py` re-verified the complete USA executable identity before invoking the shipping emitter. The executable-header entry, direct-call discovery, and five measured main re-entry roots now emit 1,457 functions in eight shards (recompiler version 2026-08-26.14). The chained gates preserve the independent pre-BIOS 34/34 proof, explicitly model A(39h) InitHeap and A(2Bh) memset, validate every replayed code/data range, and agree with generated execution at each reproducible resident boundary. On exact clean framework `99a42aa3`, the dispatcher window proved 34/34 at indirect target `0x800772E0`; its forced register mismatch produced the sole 33/34 mismatch. The exact operator-run product exited zero after loading `SCUS_944.26`, entering `0x8007793C`, servicing InitHeap, and reaching its supported stop at `0x800772E0`; it explicitly reported that gameplay is unavailable.
 - where: `game/recomp_seeds.json`, `game/app/main.cpp`, `game/core/{ctr_runtime,recomp_register,frame_driver,runtime_composition,crt0_port_trace}.{h,cpp}`, `game/core/native_ownership.h`, `tools/emit_substrate.py`, `tools/compare_crt0_trace.py`, `tools/compare_crt0_trace_selftest.py`, `tools/resident_replay.py`, CMake `ctr04_*_check` chain ending in `ctr04_startup_zero_fill_next_call_check`; gitignored `generated/`, executable, replay, and trace outputs under `scratch/`
-- gap: The reproducible execution window stops before the first instruction of `0x800772E0`. Candidate initializer-device and poisoned zero-fill gates remain implemented, but claims C014 and C015 are falsified because their earlier measurements depended on an unlanded oracle `--capture-devices` slice. Exact `99a42aa3` refuses that option, so issue 0014 must land the shared capture interface and rerun 37/37 plus 41/41 negative-controlled comparisons before `0x800777E8` or `0x80080260` can re-enter the verified frontier. Static RE identifies `0x80080260` as A0:13 `setjmp`; the later path reaches Timer1 MODE at `0x1F801114`, which also requires proper timer semantics rather than a discarded write.
+- gap: The reproducible independent window stops before the first instruction of `0x800772E0`. Claims C014 and C015 remain falsified because their device/zero-fill measurements depended on an unlanded oracle capture slice; `0x800777E8` and `0x80080260` are not verified boundaries. Static RE identifies `0x80080260` as A0:13 `setjmp`, and the later path reaches Timer1 MODE at `0x1F801114`, which requires measured timer semantics. Any new comparison is made against the Lightrec product or separate oracle, never by extending the static route.
 - notes: The generated tracer takes interception targets from canonical oracle output and independently requires them in the generated registry. The resident replay is not general continuation: each captured boundary is valid only because every traversed code range, executable-backed data input, and stack-write span is mechanically checked and excluded from trampoline placement. External leaves with RAM effects are boundaries, not register-only returns; the A(2Bh) memset is the first modeled RAM-mutating leaf, and its model is proven by destination poisoning — a missing or wrong write cannot pass silently. Device state is a separate evidence surface; CPU equality cannot hide a DPCR mismatch. The emitter reported 28 unresolved `lw $ra` bases, so the emitted entries are substrate inventory, not a claim that every unexecuted return edge is resolved.
+  This complete static-path narrative is retained only as recorded evidence. Do not regenerate,
+  build, run, or extend it; new execution evidence comes from Lightrec, the independent emulator or
+  hardware, or binary analysis.
   Product ownership is wider than execution proof: static RE grounds resident main `0x8003C58C`,
   state-3 frame owner `0x80035E70`, its post-timing suffix `0x80037880`, and return/resume
   `0x8003CEB4`. `FrameLoopShell` delegates one finite step to CTR's driver; the driver preserves raw
@@ -159,7 +166,7 @@ names an honest remaining gap; `todo` is not started. No hacks are tracked.
 - deps: CTR-04
 - evidence: C016/I015. On identity-verified SCUS_944.26, `tools/measure_render_frontier.py` proves the exact libgte leaves `SetGeomScreen [0x8007781C,0x80077828)` and `SetGeomOffset [0x8007782C,0x80077844)`, their direct callers, and the complete raw CR24/CR25/CR26 text-word census (17/17/16). Boot sets OFX=256, OFY=120, H=320. Function `[0x80042910,0x80042974)` derives OFX/OFY/H from view offsets `+0x20/+0x22/+0x18` and is called at `0x80024CCC`, `0x8003BD2C`, and `0x8003F5C0`. Ghidra independently decompiled `[0x80024C4C,0x80025138)` as a `lensflare` primitive producer: it calls `0x80042910`, runs MVMVA plus three RTPT operations, copies SXY results into four `0x0C`-tagged packets, and inserts the packet chain into the ordering table. Registrar `0x80025138` passes `0x80024C4C` as a callback to `0x8004205C`; a complete raw JAL scan finds no direct caller.
 - where: `tools/measure_render_frontier.py`; `game/core/platform_hle_plan.{h,cpp}`; Ghidra outputs under gitignored `scratch/decomp/render/`; CMake `ctr05_render_frontier_{selftest,check}`
-- gap: This is a static producer boundary, not a visible-frame or camera-ownership proof. The typed leaf HLE observes only calls through the two libgte setters; 16/16/15 other raw CR24/CR25/CR26 words bypass those leaves. After CTR-04 first restores reproducible device/zero-fill evidence, crosses the A0:13 `setjmp` thunk, and implements later timer/hardware semantics, a serialized live capture must prove which `0x8004205C` registration and indirect producer callbacks execute in the first real frame, then follow the view object back to its simulation-owned camera/transforms. OT, GP0, SXY, and quantized GTE output remain diagnostic evidence, never native producer input.
+- gap: This is a static producer boundary, not a visible-frame or camera-ownership proof. The typed leaf HLE observes only calls through the two libgte setters; 16/16/15 other raw CR24/CR25/CR26 words bypass those leaves. After CTR-JIT-02 reproduces the current live frontier, a serialized Lightrec capture must identify the active `0x8004205C` registration and indirect producer callbacks, then follow the view object to simulation-owned camera/transforms. OT, GP0, SXY, and quantized GTE output remain diagnostic evidence, never native producer input.
 - notes: The CTR runtime supplies only the two measured addresses and exact half-open library window to framework-owned typed handlers. The test records the measured boot projection through those shipping handlers; it does not enable widescreen or claim native rendering.
   C018 records the title's scoped `0x80042910` A/B override: `ProjectionOwner` captures its pre-GTE view
   width/height/centre/H, calls the raw generated super, and refuses if the published libgte values
@@ -182,8 +189,34 @@ names an honest remaining gap; `todo` is not started. No hacks are tracked.
 
 ### CTR-08 — Reach the first visible frame and own a native primitive renderer
 - status: re-partial
-- deps: CTR-04, CTR-05
+- deps: CTR-JIT-02, CTR-05
 - evidence: Identity-gated static RE identifies resident main `0x8003C58C`, loop top `0x8003C5D0`, the state-3 call to frame owner `0x80035E70`, its timing call return `0x8003785C`, post-VSync suffix `0x80037880`, and main resume `0x8003CEB4`. The title driver preserves generated supers around these exact boundaries and a production-composition test advances startup plus repeated and teardown transitions without allowing VSync to return. `PresentationOwner` rotates exactly one fence at every measured return, committing captured retail work and marking empty fields unpresented. C016 separately identifies projection producer `0x80042910` and a binary-grounded primitive-producer family; the projection owner preserves the generated super and checks the retail publication against pre-GTE view input. Capability exposure selects GTE and refuses Native/temporal products which do not exist. Serialized PID 3531982 crossed the later frame/callback chain, initialized the Vulkan GTE presenter, and submitted a 960x720 product image with the fatal VSync trap intact. The run stopped before screenshot/pixel inspection, so this is presentation-boundary evidence rather than a visible-content or native-renderer claim.
 - where: future frame driver, producer-owned camera/transforms, render queue, and native renderer under cohesive `game/` modules
-- gap: The first submitted images have now been captured and inspected and were empty, not wrong: C019 measures 0.00% non-black at both the present stage and guest VRAM, with two degenerate quads per field, because the state-3 screen loader never completed a load. That stall is fixed by delivering the retail libcd read-completion callback, and the loader now advances to stage 5 before the product fails fast on un-emitted overlay code at `0x800B0B38` (issue 0020). Recompiling the overlays the loader calls is the next dependency; only then can a live run identify which of the three admitted `0x80042910` callers executes, the first display/OT submission and `0x8004205C` callback, queue count at `0x8003CEB4`, and sustained display-field cadence. Independent device/zero-fill comparison through `0x80080260` remains a separate CTR-04 gap. Native render ownership then begins by replacing one dynamically observed primitive producer with a runtime override that preserves its generated super-call for A/B comparison; the host renderer consumes producer-owned primitives and depth/order, never reverse-engineered framebuffer pixels. Native and temporal capability bits remain false until the corresponding camera/transform/primitive and interpolation owners exist.
+- gap: C019 measured the first captured compatibility images as empty because the state-3 loader's retail CD completion never arrived; that timing defect and the later overlay-discovery gap were resolved before issue 0023 became the live boundary. CTR-JIT-02 must first reproduce that current boundary through Lightrec. A later live capture identifies active projection/producer callbacks and sustained cadence. Native render ownership then replaces one dynamically observed producer with a native override and Lightrec original-call comparison; the host renderer consumes producer-owned primitives and depth/order, never framebuffer pixels. Native and temporal capabilities remain unavailable until their owners exist.
 - notes: This step is deliberately the common dependency for widescreen and interpolation. Visible guest output alone would not satisfy native render ownership.
+
+## Runtime execution migration
+
+### CTR-JIT-01 — replace generated dispatch and `FrameCompleted` unwinding
+- status: todo
+- deps: CTR-02, CTR-03, CTR-04
+- evidence: The portfolio plan selects psxport's pinned Lightrec integration. `game/core/frame_driver.cpp` currently throws and catches local `FrameCompleted` at wait, service, and frame-completion boundaries; that host-stack unwind cannot cross JIT frames.
+- where: psxport's target per-`Core` executor; `game/core/{ctr_runtime,runtime_composition,frame_driver,native_ownership}.*`; existing native owner modules
+- gap: Map authenticated resident/overlay images, register native overrides by image generation plus address, replace generated dispatch and `super` calls with executor dispatch/original calls, and replace every `FrameCompleted` throw with a typed executor-exit request. Lightrec must return normally at a safe boundary with synchronized state; the frame driver validates the reason, restores diagnostic depth, finishes exactly one field fence, and rejects stale/unknown exits.
+- notes: Product link/selector inspection must prove nonzero Lightrec execution and the absence of both interpreter and generated guest code. `longjmp` is not an acceptable translation of the exception.
+
+### CTR-JIT-02 — reproduce the current live frontier through Lightrec
+- status: todo
+- deps: CTR-JIT-01
+- evidence: Issue 0023 records the current boundary: the alternate-link GTE chain executes, its input pair at `0x8010B2D4` is already corrupt, and `lw v1,0x74(a2)` at `0x8006AB00` faults without invalidating earlier verified paths.
+- where: native/Lightrec CTR product with current CD, DMA, frame, projection, and presentation owners
+- gap: Reach the same boundary with nonzero Lightrec blocks, prove one native override plus scoped original call, and demonstrate overlay replacement invalidates the affected translated blocks with positive and controlled-negative cases.
+- notes: This is the first wiring discriminator. It does not authorize static-corpus deletion and must not patch the GTE consumer or substitute a pointer.
+
+### CTR-JIT-03 — prove representative interactive gameplay
+- status: todo
+- deps: CTR-JIT-02
+- evidence:
+- where: CTR gameplay product plus separately built independent-oracle harness
+- gap: Continue beyond the preserved frontier to a representative playable race with correct input, audio, presentation, timing, interrupts, memory and relevant device state; compare deterministic boundaries and qualify released host architectures.
+- notes: Only this gate authorizes deletion of the static generator, corpus, dispatcher/registry, seeds, generated-body adapters, generated-symbol tests, and stale methodology. No compatibility mode remains.

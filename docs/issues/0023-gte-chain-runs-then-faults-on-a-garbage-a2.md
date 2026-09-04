@@ -3,7 +3,7 @@ id: 23
 title: GTE chain runs; garbage a2 (0x0CC22321) faults the chain on an unmapped read
 status: open
 symptom: "FATAL: UNMAPPED RAM read32 @ 0x0CC22395 (= a2+0x74) from gen_func_8006ACE0, with garbage a2=0x0CC22321 and garbage ra=0xF24BCDEE"
-state_items: S003,S005
+state_items: S003,S005,S009
 tags: gte,frontier,data-fault
 created: 2026-08-28
 updated: 2026-08-31
@@ -68,7 +68,13 @@ node `+8`, but does not write the first `(return, descriptor*)` pair. The debug-
 `RenderListBoundaryDiagnostic`, enabled with `PSXPORT_DEBUG=ctr-render-list`, now preserves that
 generated publisher as a super-call, reports the three bounded source chains, and arms Core's
 existing write observer on the returned pair for the rest of the field. Its hermetic fixture proves
-the post-publication zero-store state and records a later bounded pair write; a real-disc run still must establish the
-actual store denominator and first writer before any GTE, CD, or consumer change. Do not patch the
+the post-publication zero-store state and records a later bounded pair write. A native/Lightrec
+real-disc run must establish the actual store denominator and first writer before any GTE, CD, or
+consumer change. Do not patch the
 GTE macro, CdRead range, or substitute an address, because each would conceal this render-list
 integration boundary.
+
+The execution plan now requires psxport-Lightrec. Preserve this exact fault and pre-fault data as the
+first dynamic-product discriminator; do not rerun the static product to extend the issue. Reaching
+the same boundary through Lightrec does not resolve the corrupt producer and does not authorize
+static-path deletion.

@@ -3,7 +3,7 @@ id: 15
 title: CTR native frame loop leaves residual guest VSync routes
 status: investigating
 symptom: Product passed native stock CdRead/CdReadSync, then reached libgpu timeout-arm VSync(-1) from 0x800750B8
-state_items: S003,S005
+state_items: S003,S005,S009,S010
 tags: frame-loop,vsync,platform-hle,ctr-runtime
 created: 2026-08-27
 updated: 2026-08-28
@@ -155,8 +155,8 @@ this integration gate. The later serialized run above advances the resolution bo
 
 Independent differential execution evidence still stops at `0x800772E0`. The source driver transcribes the
 exact fifth-argument-`-1` prefix, yields two native fields, and resumes through freshly emitted
-entries `0x80032074`, `0x8003C8D4`, and `0x8003C984`; that route remains unverified until the
-next serialized live run reaches or falsifies it.
+entries `0x80032074`, `0x8003C8D4`, and `0x8003C984`; that recorded route remains unverified. The
+native/Lightrec product must reach or falsify it without another static-product run.
 
 ## Resolution boundary
 
@@ -176,4 +176,8 @@ Isolated PID 3531982 then crossed 0x80077254, registered retail VSyncCallback 0x
 
 The direct diagnostic also reported all four RmlUI assets absent because the executable was intentionally invoked without the shipping launcher. The launcher already selected the framework root only when ambient `PSXPORT_ASSET_DIR` was absent; that allowed a poisoned inherited path to pair the product with the wrong checkout. `tools/run.py` now assigns the resolved framework checkout unconditionally at final exec, with missing and poisoned-environment regressions.
 
-Resolution boundary: keep the fatal VSync trap intact and capture/inspect the first presented image through the shipping launcher environment. Then continue only to the first later residual VSync or sustained field boundary; native, widescreen, and interpolation remain refused until real producers exist.
+Resolution boundary: preserve the measured native owners and fatal VSync trap while issue 0024 moves
+the product to Lightrec and replaces `FrameCompleted` unwinding with typed executor exits. Do not run
+the static product again. Resolve the remaining reachable VSync set from the dynamic product's first
+representative gameplay path; native, widescreen, and interpolation remain unavailable until their
+real producers exist.

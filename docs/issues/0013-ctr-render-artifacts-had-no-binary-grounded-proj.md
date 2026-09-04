@@ -6,7 +6,7 @@ symptom: The port had GTE/OT output terminology but no verified function that pr
 state_items: S004, S005, S006, S007
 tags: ctr05,projection,native-renderer,widescreen,interpolation
 created: 2026-08-26
-updated: 2026-08-26
+updated: 2026-09-04
 ---
 
 ## Root cause
@@ -19,9 +19,10 @@ Output-side GTE registers and ordering-table packets erase producer ownership. T
 
 ## Remaining resolution boundary
 
-Static evidence cannot establish execution order or frame ownership. Resolve only after the boot
-spine restores reproducible device/zero-fill evidence, crosses A0:13, and implements the later
-hardware frontier; then a serialized live trace must prove which registrar/indirect callback and
-projection producer execute in the first visible frame. Native render ownership must begin from
-that observed producer; widescreen must change its native camera/projection inputs, and
-interpolation must retain previous/current native transforms rather than quantized GTE outputs.
+Static evidence cannot establish execution order or frame ownership. First reproduce issue 0023's
+current frontier through the native/Lightrec product; then a serialized dynamic trace must prove
+which registrar/indirect callback and projection producer execute in representative gameplay. Native
+render ownership begins from that observed producer and compares its override against a Lightrec
+original call. Widescreen changes native camera/projection inputs, and interpolation retains
+previous/current native transforms rather than quantized GTE output. Do not extend or rerun the
+static route.

@@ -1,44 +1,24 @@
 # Crash Team Racing port
 
-Read `external/psxport/CLAUDE.md` and `external/psxport/docs/workspace/PROTOCOL.md` before work.
-Generated code is sacrosanct. Never commit discs, extracted executables, `generated/`, `.env`, or
-machine-specific paths. Run artifacts go under `scratch/`, never `/tmp`.
+`AGENTS.md` is the repository-local instruction authority. Read it completely before work. The
+product architecture and ordered migration are in `docs/migration.md`; factual coverage is in
+`docs/project-state.md`; binary evidence is in `docs/re-frontier.md`.
 
-**`external/psxport` is NOT a git submodule** (2026-08-16): it is a symlink to the workspace's shared
-framework clone when one exists, or a private clone at this repo's `psxport.pin` on a fresh machine.
-`tools/psxport_sync.py --auto` establishes whichever applies; `psxport_sync.py --bump` records the
-framework commit this game is built and VERIFIED against, and `--check` fails when the built framework
-is not the recorded pin. Framework edits happen in the shared clone (`$PSX/psxport`), never here.
+CTR's product is the native host plus psxport's pinned Lightrec executor over authenticated
+`SCUS_944.26` and runtime-loaded `BIGFILE.BIG` images. It must not link an interpreter, static guest
+corpus, or engine fallback. Do not regenerate, build, or run the retired static product.
 
-All picture work is RE-driven. Widescreen and interpolation require PC-native graphics producers
-reading game state; do not reconstruct pictures from GTE/OT/GP0 output. Establish a faithful,
-measurable base before enhancements.
+Preserve all existing title owners and measured addresses during migration. In particular, replace
+the local `FrameCompleted` C++ throw/catch with a typed executor exit that returns normally through
+Lightrec at a safe boundary. The title callback records the exact continuation; the frame driver
+handles the exit, restores its diagnostic-depth invariant, commits one field fence, and advances its
+counter. Never unwind or `longjmp` through JIT frames.
 
-CTR-04 owns one narrow diagnostic module: `game/core/crt0_port_trace.cpp` executes the gitignored shipping
-substrate through the oracle-observed first call, an explicit consumer-owned A(39h) InitHeap return,
-the first subsequent call, and the exact checked replay through runtime initializer `0x800779E4`,
-startup service `0x80032DC0`, background service `0x8001D06C`, and the state-zero initialization
-call to executable thunk `0x800718BC`.
-`tools/emit_substrate.py` is the identity-gated emitter entry point; `tools/compare_crt0_trace.py` owns
-the repeat-oracle cross-process diff; `tools/resident_replay.py` owns the bounded exact-state replay.
-None is a game loop or permission to guess later addresses or RAM; the modeled external leaf is
-separate from generated game code.
+The current frontier is issue 0023's corrupt render-list pair, reached after the alternate-link GTE
+chain. The first Lightrec implementation must reproduce that boundary with current CD, DMA, frame,
+projection, and presentation owners active. This wiring proof is not the representative-gameplay
+gate and does not authorize static-path deletion.
 
-`game/core/ctr_runtime.{h,cpp}` follows Dusklight's process-owner/composition boundary through
-psxport's `GameRuntime`: one process-lifetime `CtrRuntime` owns the validated generated-code dispatch,
-while the trace harness owns only command parsing, capture state, and invocation-scoped boundary
-overrides. CTR has no legacy `GameConfig` or `GameHooks`; do not introduce the compatibility adapter
-unless a future measured framework fact genuinely requires it.
-
-The shipping path is `run.sh` -> locked `bootstrap.py`/`tools/run.py` -> CMake `ctr_port`.
-`game/app/main.cpp` composes the runtime and psxport machine owners;
-`game/core/runtime_composition.cpp` installs PlatformHLE and the mandatory fatal VSync contract;
-`game/core/recomp_register.cpp` owns generated registry installation; and CTR's title
-`FrameDriver` owns one finite retail state-3 transition per host iteration. It preserves generated
-supers around exact post-VSync re-entry points, returns at `0x8003CEB4`, and never treats guest
-VSync as timing. `game/video/` separately owns the A/B-checked projection publication and explicit
-unpresented presentation fence. The runtime exposes only the implemented GTE player path; Native and
-temporal interpolation remain unavailable until game-state producers exist. The player executable
-takes no asset override and must only consume the executable verified by `tools/provision.py`.
-The launcher capability-probes the selected C and C++ compilers; never add a compiler identity
-whitelist or blacklist. This repeating unpresented boundary is not evidence of native rendering.
+All picture work remains RE-driven. Native producers consume pre-GTE state; widescreen and temporal
+presentation belong beside the owned camera/simulation/render boundaries, never in GTE/OT/GP0 or
+framebuffer reconstruction.
