@@ -37,6 +37,9 @@ Hosted CI is asset-free and must not download a disc, executable, BIOS, extracte
 trace. The Linux x86_64 job builds the actual CTR native/Lightrec product with the recorded framework
 revision, runs its focused tests, and inspects the linked executable for forbidden static or
 standalone-interpreter ownership. It proves compilation and composition only, not game execution.
+Evidence: the Linux x86_64 asset-free composition gate passed on main commit
+`3499978413daf00fd2eed95d5630c30bdb491551` in
+[run 33960150550](https://github.com/SomeoneIsWorking/ctr/actions/runs/33960150550).
 
 | Host | Hosted boundary | Current gap |
 |---|---|---|
