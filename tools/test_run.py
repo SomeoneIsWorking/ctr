@@ -5,10 +5,12 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 import unittest
 from pathlib import Path
 from unittest import mock
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tools import run
 
 
@@ -86,10 +88,28 @@ class LauncherContractTest(unittest.TestCase):
             prepare_only=True,
             preflight_step=lambda: ("/mock/cc", "/mock/cxx"),
             sync_step=lambda: framework,
-            prepare_step=lambda *args: calls.append(args),
+            prepare_step=lambda *args: calls.append(args) or Path("/mock/ctr_port"),
             launch_step=fail_launch,
         )
         self.assertEqual(calls, [(None, framework, "/mock/cc", "/mock/cxx")])
+
+    def test_configure_preserves_locked_python_and_shipping_build_mode(self) -> None:
+        with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(run, "command") as command:
+            run.configure(run.BUILD_ROOT, run.ROOT / "external/psxport", "/mock/cc", "/mock/cxx")
+        arguments = command.call_args.args[0]
+        self.assertIn(f"-DPython3_EXECUTABLE={sys.executable}", arguments)
+        self.assertIn("-DBUILD_TESTING=OFF", arguments)
+        self.assertIn("-DPSXPORT_BUILD_TESTS=OFF", arguments)
+        self.assertIn("Ninja", arguments)
+
+    def test_configure_refuses_invalid_runtime_dependency_before_building(self) -> None:
+        with (
+            mock.patch.dict(os.environ, {"PSXPORT_LIGHTREC_DIR": "/missing/lightrec"}, clear=True),
+            mock.patch.object(run, "command") as command,
+            self.assertRaisesRegex(run.Refusal, "PSXPORT_LIGHTREC_DIR is incomplete"),
+        ):
+            run.configure(run.BUILD_ROOT, run.ROOT / "external/psxport", "/mock/cc", "/mock/cxx")
+        command.assert_not_called()
 
     def test_default_path_prepares_then_launches_product(self) -> None:
         calls: list[object] = []
@@ -98,14 +118,14 @@ class LauncherContractTest(unittest.TestCase):
             "disc.chd",
             preflight_step=lambda: ("/mock/cc", "/mock/cxx"),
             sync_step=lambda: framework,
-            prepare_step=lambda *args: calls.append(("prepare", args)),
+            prepare_step=lambda *args: calls.append(("prepare", args)) or Path("/mock/ctr_port"),
             launch_step=lambda *args, **kwargs: calls.append(("launch", args, kwargs)),
         )
         self.assertEqual(
             calls,
             [
                 ("prepare", ("disc.chd", framework, "/mock/cc", "/mock/cxx")),
-                ("launch", (framework,), {"headless": False}),
+                ("launch", (framework, Path("/mock/ctr_port")), {"headless": False}),
             ],
         )
 
@@ -123,9 +143,9 @@ class LauncherContractTest(unittest.TestCase):
             mock.patch.dict(os.environ, poisoned, clear=True),
             mock.patch.object(run.os, "execve") as execute,
         ):
-            run.launch(framework, headless=False)
+            run.launch(framework, Path("/mock/ctr_port"), headless=False)
             player = execute.call_args.args[2]
-            run.launch(framework, headless=True)
+            run.launch(framework, Path("/mock/ctr_port"), headless=True)
             agent = execute.call_args.args[2]
 
         self.assertEqual(player["PSXPORT_VK_WINDOW"], "1")
@@ -143,7 +163,7 @@ class LauncherContractTest(unittest.TestCase):
             mock.patch.dict(os.environ, {"KEEP": "yes"}, clear=True),
             mock.patch.object(run.os, "execve") as execute,
         ):
-            run.launch(framework, headless=False)
+            run.launch(framework, Path("/mock/ctr_port"), headless=False)
 
         environment = execute.call_args.args[2]
         self.assertEqual(environment["PSXPORT_ASSET_DIR"], str(framework))

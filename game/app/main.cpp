@@ -5,8 +5,8 @@
 #include "frame_loop_shell.h"
 #include "game.h"
 #include "hw_bind.h"
+#include "lightrec_executor.h"
 #include "native_ownership.h"
-#include "recomp_register.h"
 #include "runtime_composition.h"
 
 #include <filesystem>
@@ -22,8 +22,6 @@ void watchdog_init();
 
 void gte_init();
 void load_exe(const char *path, Core *core);
-void rec_dispatch(Core *core, uint32_t address);
-
 namespace {
 
 constexpr const char *kDefaultExecutable = "scratch/raw/ctr/SCUS_944.26";
@@ -37,7 +35,7 @@ int main(int argc, char **argv) {
   }
   if (action == ctr::CommandLineAction::invalid) {
     lucent::error("boot", "ctr_port takes no executable override; run ./run.sh with the verified CTR USA disc");
-    ctr::printUsage(std::cerr, argv[0]);
+    ctr::printUsage(std::cout, argv[0]);
     return 2;
   }
   const char *executable = kDefaultExecutable;
@@ -46,15 +44,17 @@ int main(int argc, char **argv) {
     return 2;
   }
 
-  ctr::installRecompiledProgram();
-  static ctr::CtrRuntime runtime(
-      rec_dispatch, ctr::native::kExecutableEntry, ctr::setRecompiledOverride, ctr::runRecompiledSuper);
+  static ctr::CtrRuntime runtime(ctr::native::kExecutableEntry);
   psxport_install_game(runtime);
 
   auto game = std::make_unique<Game>();
   Core *core = &game->core;
   watchdog_init();
   load_exe(executable, core);
+  if (!core->lightrecExecutor().available()) {
+    lucent::error("boot", "psxport was built without its Lightrec dynarec backend");
+    return 2;
+  }
 
   gte_init();
   mdec_init();

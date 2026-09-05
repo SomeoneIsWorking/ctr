@@ -37,7 +37,7 @@ private:
 
 void FrameCallbackOwner::observeVblankRegistration(Core &core, const CtrRuntime &runtime) {
   const uint32_t callback = core.r[4];
-  runtime.runRecompiledSuper(core, native::kVblankCallbackInstall);
+  runtime.callOriginalToReturn(core, native::kVblankCallbackInstall, "CTR VSyncCallback registration");
   vblankCallback_ = callback;
   lucent::debug("ctr-field", "VSyncCallback(0x{:08X}) registered for native field delivery", callback);
 }
@@ -81,7 +81,7 @@ void FrameCallbackOwner::dispatchPreservingContext(Core &core,
   const R3000 saved = static_cast<R3000 &>(core);
   {
     IrqDeliveryGuard delivering(core);
-    runtime.dispatch(core, callback);
+    runtime.dispatchToReturn(core, callback, kind);
   }
   static_cast<R3000 &>(core) = saved;
 }

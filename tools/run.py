@@ -17,8 +17,7 @@ from pathlib import Path
 from tools.provision import CTR_USA, OUTPUT_DIR
 
 ROOT = Path(__file__).resolve().parents[1]
-BUILD_ROOT = ROOT / "scratch" / "build" / "player"
-PORT = ROOT / "scratch" / "bin" / "ctr_port"
+BUILD_ROOT = ROOT / "build" / "player"
 EXECUTABLE = OUTPUT_DIR / CTR_USA.name
 
 PACKAGE_NAMES = {
@@ -35,6 +34,7 @@ PACKAGE_NAMES = {
         "windows": "LLVM.LLVM",
     },
     "git": {"fedora": "git", "debian": "git", "macos": "git", "windows": "Git.Git"},
+    "ninja": {"fedora": "ninja-build", "debian": "ninja-build", "macos": "ninja", "windows": "Ninja-build.Ninja"},
     "pkg-config": {
         "fedora": "pkgconf-pkg-config",
         "debian": "pkg-config",
@@ -221,7 +221,7 @@ def preflight(
 ) -> tuple[str, str]:
     machine = host or Host()
     env = os.environ if environment is None else environment
-    for tool in ("cmake", "git", "pkg-config", "glslc"):
+    for tool in ("cmake", "git", "ninja", "pkg-config", "glslc"):
         require_tool(machine, tool)
     cc = require_compiler(machine, env.get("CC", "cc"), "c")
     cxx = require_compiler(machine, env.get("CXX", "c++"), "c++")
@@ -285,6 +285,14 @@ def sync_framework() -> Path:
 
 
 def configure(build: Path, psxport: Path, cc: str, cxx: str) -> None:
+    sys.path.insert(0, str(psxport / "tools"))
+    from automation.process import ToolError
+    from project import lightrec_cmake_definitions, lightning_cmake_definitions
+
+    try:
+        runtime_definitions = [*lightrec_cmake_definitions(os.environ), *lightning_cmake_definitions(os.environ)]
+    except ToolError as error:
+        raise Refusal(str(error)) from error
     command(
         [
             "cmake",
@@ -292,6 +300,8 @@ def configure(build: Path, psxport: Path, cc: str, cxx: str) -> None:
             ROOT,
             "-B",
             build,
+            "-G",
+            "Ninja",
             "-DCMAKE_BUILD_TYPE=Release",
             "-DBUILD_TESTING=OFF",
             "-DPSXPORT_BUILD_TESTS=OFF",
@@ -299,12 +309,13 @@ def configure(build: Path, psxport: Path, cc: str, cxx: str) -> None:
             f"-DCMAKE_C_COMPILER={cc}",
             f"-DCMAKE_CXX_COMPILER={cxx}",
             f"-DPython3_EXECUTABLE={sys.executable}",
+            *runtime_definitions,
         ],
         quiet=True,
     )
 
 
-def prepare(disc: str | None, psxport: Path, cc: str, cxx: str) -> None:
+def prepare(disc: str | None, psxport: Path, cc: str, cxx: str) -> Path:
     build = toolchain_build(cc, cxx)
     configure(build, psxport, cc, cxx)
     command(
@@ -335,10 +346,6 @@ def prepare(disc: str | None, psxport: Path, cc: str, cxx: str) -> None:
         raise Refusal(
             f"provisioning produced no verified executable at {EXECUTABLE.relative_to(ROOT)}"
         )
-    command([sys.executable, ROOT / "tools" / "emit_substrate.py"])
-
-    # generated/rec_sources.cmake is a configure-time input, so configure again after emission.
-    configure(build, psxport, cc, cxx)
     say("building ctr_port (incremental)…")
     command(
         [
@@ -351,11 +358,13 @@ def prepare(disc: str | None, psxport: Path, cc: str, cxx: str) -> None:
             str(os.cpu_count() or 4),
         ]
     )
-    if not os.access(PORT, os.X_OK):
-        raise Refusal(f"build produced no executable at {PORT.relative_to(ROOT)}")
+    product = build / "ctr_port"
+    if not os.access(product, os.X_OK):
+        raise Refusal(f"build produced no executable at {product.relative_to(ROOT)}")
+    return product
 
 
-def launch(psxport: Path, *, headless: bool) -> None:
+def launch(psxport: Path, product: Path, *, headless: bool) -> None:
     policy = runpy.run_path(str(psxport / "tools/port/launch_environment.py"))
     policy_name = "agent_environment" if headless else "player_environment"
     environment = policy[policy_name](os.environ)
@@ -367,7 +376,7 @@ def launch(psxport: Path, *, headless: bool) -> None:
         say("launching ctr_port headlessly…")
     else:
         say("launching Crash Team Racing…")
-    os.execve(PORT, [str(PORT)], environment)
+    os.execve(product, [str(product)], environment)
 
 
 def execute(
@@ -383,11 +392,11 @@ def execute(
     """Run the shipping path; injectable steps keep the launcher tests hermetic."""
     cc, cxx = preflight_step()
     psxport = sync_step()
-    prepare_step(disc, psxport, cc, cxx)
+    product = prepare_step(disc, psxport, cc, cxx)
     if prepare_only:
         say("Crash Team Racing is built and ready.")
         return
-    launch_step(psxport, headless=headless)
+    launch_step(psxport, product, headless=headless)
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:

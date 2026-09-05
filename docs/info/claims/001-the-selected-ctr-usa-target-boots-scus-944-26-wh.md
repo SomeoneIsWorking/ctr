@@ -40,7 +40,3 @@ Fresh real-disc provisioning during the 7f5d3f13 runtime migration selected SCUS
 ## Re-confirmed 2026-08-22
 
 Current identity gate accepted exact 516096-byte SCUS_944.26 with SHA-256 7b4aac0bf2f6310984e599295df17b457da5a23b270c20200cefef6079efb838; the title documentation change only advances the verified execution frontier.
-
-## Re-confirmed 2026-08-22
-
-Post-commit Clang verification passed 87/87 CTest with exact ad5cf802 pin; real SCUS_944.26 oracle/generated windows remained deterministic, comparator controls passed 18/18, the new 0x800718BC boundary agreed 34/34, and forced resident.gp produced the named 33/34 difference.

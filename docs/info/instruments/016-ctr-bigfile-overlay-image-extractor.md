@@ -20,7 +20,6 @@ silent.
 
 ## Known failure modes
 
-The classifier is a jr-ra/jal presence test, not a proof of pure code; the emitter applies its own
-`looks_like_code` and emits an empty module for data. The extractor covers only the entries the seed
-file names, so a module the game loads but nobody declared is not reported here — a recomp-MISS is
-what surfaces that.
+The classifier is a jr-ra/jal presence test, not a proof of pure code. The extractor covers only the
+entries the title manifest names, so a module the game loads but nobody declared is not reported
+here; runtime image activation must independently report an unmapped executable address.

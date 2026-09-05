@@ -23,6 +23,6 @@ Render-source evidence grounds `SetGeomScreen [0x8007781C,0x80077828)`, `SetGeom
 [0x8007782C,0x80077844)`, projection publication `[0x80042910,0x80042974)`, and lens-flare producer
 `[0x80024C4C,0x80025138)`. These are source boundaries, not a native renderer.
 
-The next product maps this authenticated executable and verified `BIGFILE.BIG` overlay images into
-psxport's Lightrec executor. Do not emit, build, or run generated guest code. The interpreter is a
-separately built diagnostic only. See `../../docs/migration.md`.
+The product maps this authenticated executable into psxport's Lightrec executor. Runtime activation
+of the measured `BIGFILE.BIG` images remains incomplete. Do not emit, build, or run generated guest
+code, and do not expose an interpreter mode. See `../../docs/migration.md`.

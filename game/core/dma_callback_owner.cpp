@@ -92,7 +92,7 @@ bool DmaCallbackOwner::serviceSpu(Core &core, const CtrRuntime &runtime) const {
 
   CpuContextRestore restore(core);
   IrqDeliveryGuard delivering(core);
-  runtime.dispatch(core, callback);
+  runtime.dispatchToReturn(core, callback, "CTR SPU DMA completion callback");
   return true;
 }
 

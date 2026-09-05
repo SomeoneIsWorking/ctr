@@ -1,0 +1,14 @@
+{
+  "BF0225": {
+    "archive_entry": 225,
+    "load_address": "0x8009F6FC"
+  },
+  "BF0226": {
+    "archive_entry": 226,
+    "load_address": "0x800A0CB8"
+  },
+  "BF0233": {
+    "archive_entry": 233,
+    "load_address": "0x800AB9F0"
+  }
+}

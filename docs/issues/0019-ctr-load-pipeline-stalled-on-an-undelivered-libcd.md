@@ -55,7 +55,7 @@ as the interrupted caller left them. `verify` and CTest 8/8 pass on Clang.
 
 ## Exact remaining frontier
 
-Execution now fails fast one stage later, in the honest place: `[recomp-MISS 0] no recompiled fn for
-0x800B0B38 (caller ra=0x800368BC)`. That address is above the 0x8008D800 text extent, so the game has
-loaded and called overlay code the emitter reports as `0 overlay module(s)`. Overlay discovery and
-recompilation is the next dependency for a visible frame — see issue 0020.
+Execution then failed fast one stage later at unmapped executable address `0x800B0B38` from caller
+`0x800368BC`. That address is above the resident `0x8008D800` text extent, establishing that the
+game had loaded and called a runtime module. The module identity facts are retained in C020/I016;
+activation and invalidation through Lightrec remain part of issue 0024.

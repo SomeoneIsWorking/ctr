@@ -18,4 +18,4 @@ The shipping path accepted the real CTR USA CHD and reproduced the measured SYST
 The resolver proves path precedence but does not identify media until extraction. The executable hash
 identifies `SCUS_944.26`, not every other file on the disc. `discdump` must support the supplied image
 and ISO9660 shape. This instrument establishes provisioning and executable identity only; it does not
-prove a generated substrate, deterministic execution, or a booting port.
+prove deterministic execution or a booting port.

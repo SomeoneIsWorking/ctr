@@ -139,7 +139,7 @@ def report(args):
             ahead, _ = git(["rev-list", "--count", f"{pin}..{sha}"], target)
             print(f"[psxport] DRIFT — the checkout is {ahead or '?'} commit(s) off the recorded pin. "
                   f"That is normal WHILE doing framework work; record it before you land game code "
-                  f"that needs it:  python3 tools/psxport_sync.py --bump")
+                  f"that needs it:  uv run --frozen python tools/psxport_sync.py --bump")
     return 0
 
 
@@ -195,7 +195,7 @@ def do_clone(args):
         if rc != 0:
             print("[psxport] REFUSED: clone failed.")
             return 2
-    git(["fetch", "origin"], LINK)
+    git(["fetch", "origin"], LINK, check=True)
     _, rc = git(["checkout", pin], LINK)
     if rc != 0:
         print(f"[psxport] REFUSED: pin {pin} is not reachable in {url}. A fresh clone of this repo "
@@ -203,8 +203,8 @@ def do_clone(args):
         return 1
     # Nested vendor submodules are psxport's own; init them non-recursively, because beetle carries a
     # URL-less nested gitlink that makes --recursive fail outright.
-    git(["submodule", "update", "--init", "vendor/beetle-psx", "vendor/lucent"], LINK)
-    git(["submodule", "update", "--init", "deps/libchdr"], os.path.join(LINK, "vendor", "beetle-psx"))
+    git(["submodule", "update", "--init", "external/psycross", "vendor/beetle-psx", "vendor/lucent"], LINK, check=True)
+    git(["submodule", "update", "--init", "deps/libchdr"], os.path.join(LINK, "vendor", "beetle-psx"), check=True)
     print(f"[psxport] external/psxport cloned at pin {pin}")
     return 0
 
@@ -253,10 +253,12 @@ def do_check(args):
     resolved = args.resolved or RESOLVED
     built = read_resolved(resolved)
     if not built:
-        print(f"[psxport] check: no {resolved} — this tree has not been configured, so "
-              f"there is nothing to compare the pin against. Asserting nothing (pin {pin[:8]}).")
-        return 0
+        print(f"[psxport] REFUSED: missing build provenance {resolved}; configure the selected build first.")
+        return 2
     bdir, bsha = built
+    if head_of(bdir) != bsha or dirty(bdir):
+        print(f"[psxport] REFUSED: {bdir} changed since configure or has uncommitted framework changes.")
+        return 1
     if bsha == pin:
         print(f"[psxport] check OK — built against {bsha[:8]}, which is the recorded pin.")
         return 0
@@ -264,7 +266,7 @@ def do_check(args):
           f"{pin[:8]}.")
     print(f"[psxport]   A fresh clone would build a DIFFERENT framework than you just tested. That is "
           f"how this tree once recorded a pin whose GameHooks lacked a field the game used.")
-    print(f"[psxport]   Fix:  python3 tools/psxport_sync.py --bump")
+    print(f"[psxport]   Fix:  uv run --frozen python tools/psxport_sync.py --bump")
     return 1
 
 

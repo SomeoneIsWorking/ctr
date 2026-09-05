@@ -1,62 +1,67 @@
 # Native/Lightrec migration
 
-This is CTR's local execution migration plan. The portfolio authority is
-`../../../shared/jit-common/docs/migration.md`; this document applies that contract without changing
-the binary facts and live boundary recorded in `docs/re-frontier.md`.
+This is CTR's local execution migration plan. Binary facts and the live boundary remain in
+`docs/re-frontier.md`; psxport owns the shared runtime contract.
 
 ## Product boundary
 
 The gameplay executable contains CTR's native owners plus psxport's pinned Lightrec executor. It
 maps the authenticated `SCUS_944.26` resident image and verified `BIGFILE.BIG` overlay images at
-runtime. It contains no generated guest source, static dispatcher, interpreter, or engine fallback.
-An interpreter may be built only as a separate diagnostic target.
+runtime. It contains no offline source corpus, static dispatcher, standalone interpreter mode, or
+engine selector. Lightrec may use only its typed, measured, bounded refusal fallback and must return
+to dynarec dispatch; an interpreter-only mode may be built only as a separate diagnostic target.
 
 psxport owns the per-`Core` Lightrec instance, architectural-state synchronization, device/HLE
 callbacks, image-aware override table, original calls, bounded exits, and invalidation. CTR owns its
 identity, overlay policy, native CD/DMA/frame/projection/presentation owners, title continuations,
 and product composition. Lightrec owns its code cache and executable memory.
 
-## Replace `FrameCompleted` with an executor exit
+## Typed executor exit
 
-The current driver throws local `FrameCompleted` from native callbacks and catches it around static
-dispatch. Throwing, `longjmp`, or any equivalent host-stack escape through JIT frames is forbidden.
-Replace it at the execution boundary:
+The driver no longer throws `FrameCompleted`. Throwing, `longjmp`, or any equivalent host-stack
+escape through JIT frames is forbidden. The execution boundary is:
 
 1. Each wait, service, or frame-completion callback records its exact continuation and phase in the
    existing title owner, then requests a typed exit from the psxport executor.
 2. Lightrec observes the request and returns normally at a safe dispatcher boundary after
    synchronizing architectural state. The result carries a typed reason; no C++ exception crosses
    emitted host code.
-3. `CtrFrameDriver::stepFrame` validates the result, restores the diagnostic attribution depth it
-   captured on entry, finishes exactly one field/render-list/presentation fence, and increments its
+3. `CtrFrameDriver::stepFrame` validates the result, lets scoped driver/override ownership unwind
+   normally, finishes exactly one field/render-list/presentation fence, and increments its
    field counter. An unexpected normal return, stale continuation, or unknown reason aborts.
-4. Focused positive/negative tests cover every current throw site, nested/repeated service cases,
+4. Required focused positive/negative coverage includes every former throw site, nested/repeated service cases,
    exact resumption, and the opposite answer. They exercise the shipping executor path, not a
    duplicate test implementation.
 
+Whole-field dispatch uses PSXPort's `dispatchGuestUntilExit`, which continues after supported HLE,
+pending work, and syscalls while preserving typed exit/fault/budget results. A function's incoming
+`ra` cannot delimit a field. Interior suffixes that restore another caller instead pass their
+measured continuation explicitly to `executeFunction`; resource waits obtain it from their owned
+saved frame. Native helper calls that must return normally continue to use `dispatchToReturn`.
+
 ## Ordered migration
 
-1. Consume the shared psxport executor and prove one resident native override plus original call.
-   Prove overlay-image identity reuse and controlled invalidation. Product link/selector inspection
-   must show nonzero Lightrec execution and no interpreter/generated corpus.
-2. Replace generated dispatch and `super` calls in CTR composition with executor dispatch and scoped
-   original calls. Convert `FrameCompleted` as specified above while preserving all measured
-   CD/DMA/frame/projection/presentation behavior.
-3. Reproduce the current live frontier from issue 0023: execute the alternate-link GTE chain and
+1. Completed break-first: remove the translator, generated corpus, registry, seed inputs, static-only
+   tools/tests, and obsolete methodology without building or running the old product.
+2. In progress: consume the shared psxport executor and prove one resident native override plus
+   original call. Prove overlay-image identity reuse and controlled invalidation. Product
+   link/selector inspection must show nonzero Lightrec execution, no standalone interpreter mode,
+   and no generated corpus.
+3. Completed structurally: CTR composition uses executor dispatch and scoped original calls, and the
+   former `FrameCompleted` sites use typed exits while preserving measured
+   CD/DMA/frame/projection/presentation ownership. Real-game nested and repeated exit evidence is
+   still part of step 2.
+4. Reproduce the current live frontier from issue 0023: execute the alternate-link GTE chain and
    reach the already-corrupt pair at `0x8010B2D4` before the `0x8006AB00` read. Do not patch the GTE
    consumer or substitute a pointer. This is the first wiring discriminator only.
-4. Continue through a representative interactive gameplay scenario. Compare timing, interrupts,
+5. Continue through a representative interactive gameplay scenario. Compare timing, interrupts,
    CPU/memory and relevant device state against the independent oracle; exercise override/original
    calls and invalidation in positive and controlled-negative cases; qualify released hosts.
-5. Only after step 4 passes, remove the static generator, corpus, dispatcher/registry, seed inputs,
-   generated-body adapters, generated-symbol tests, and obsolete methodology. No compatibility mode
-   or selector remains.
+## Preserved evidence
 
-## Frozen static path
-
-Do not regenerate, build, or run the static product during migration. Existing measurements remain
-evidence for the dynamic product's required boundary. Reaching that boundary through Lightrec is not
-representative gameplay and cannot authorize deletion.
+Measurements from the removed route remain evidence for the dynamic product's required boundary.
+They are not executable inputs, compatibility machinery, or permission to restore static translation.
+Reaching that boundary through Lightrec is not representative gameplay.
 
 ## Enhancement ordering
 

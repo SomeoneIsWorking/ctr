@@ -15,7 +15,7 @@ updated: 2026-08-27
 
 ## Resolution
 
-The runtime now declares GTE as its sole player path with Native and temporal interpolation unsupported, and production composition installs that policy through `render_path_install`. The measured dynamic projection function `0x80042910` is now a frame-scoped override with its raw generated super preserved. `ProjectionOwner` captures the pre-GTE view width, height, centre, and screen distance, then refuses if the retail libgte publication disagrees. `PresentationOwner` rotates exactly one framework `commitUnpresented` fence at the measured frame-owner return `0x8003CEB4`. The production-path test proves capability refusal, A/B projection publication, prior/current projection history, and one unpresented fence per finite host step.
+The runtime now declares GTE as its sole player path with Native and temporal interpolation unsupported, and production composition installs that policy through `render_path_install`. The measured dynamic projection function `0x80042910` is now a frame-scoped override with its original retail body preserved through executor dispatch. `ProjectionOwner` captures the pre-GTE view width, height, centre, and screen distance, then refuses if the retail libgte publication disagrees. `PresentationOwner` rotates exactly one framework `commitUnpresented` fence at the measured frame-owner return `0x8003CEB4`. The production-path test proves capability refusal, A/B projection publication, prior/current projection history, and one unpresented fence per finite host step.
 
 ## Exact remaining visible frontier
 

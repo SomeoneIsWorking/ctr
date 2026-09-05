@@ -13,8 +13,8 @@ namespace ctr {
 
 class CtrRuntime;
 
-// Owns one finite CTR state-3 frame at a time. Generated code remains the behavior oracle on both
-// sides of each extracted VSync callsite; title-local bridges resume at identity-gated re-entry
+// Owns one finite CTR state-3 frame at a time. Lightrec executes retail code on both sides of each
+// extracted VSync callsite; title-local bridges resume at identity-gated re-entry
 // points without ever invoking guest libetc VSync.
 class CtrFrameDriver final : public FrameDriver {
 public:
@@ -63,6 +63,9 @@ private:
   [[nodiscard]] bool frameSuffixIsWaiting(Core &core) const;
   void publishMeasuredProjection(Core &core);
   void observePublishedRenderList(Core &core);
+  void requestFrameBoundary(Core &core);
+  [[nodiscard]] bool frameBoundaryPending(Core &core) const;
+  void finishField(Core &core, uint32_t frame);
 
   CtrRuntime &runtime_;
   DmaCallbackOwner dmaCallbacks_;
@@ -77,6 +80,7 @@ private:
   bool frameSuffixPending_ = false;
   BootResourcePumpPhase bootResourcePumpPhase_ = BootResourcePumpPhase::Inactive;
   bool bootEntered_ = false;
+  bool frameBoundaryRequested_ = false;
 };
 
 } // namespace ctr

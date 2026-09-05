@@ -1,6 +1,6 @@
 # Codemap
 
-CTR follows Dusklight's ownership shape: app composition wires process owners; title core modules own
+CTR's app composition wires process owners; title core modules own
 retail/native boundaries; simulation owns authoritative transforms; video owns producer commands,
 rendering, and temporal presentation. Capability state belongs in `docs/project-state.md`, migration
 order in `docs/migration.md`, binary evidence in `docs/re-frontier.md`, and atomic work in
@@ -12,8 +12,8 @@ order in `docs/migration.md`, binary evidence in `docs/re-frontier.md`, and atom
 |---|---|---|---|---|
 | Player composition | Parse asset-independent help, construct title/framework services, map the authenticated image, and step the only gameplay executor | `game/app/command_line.*`, `game/app/main.cpp`, `game/core/runtime_composition.*` | `main`, `ctr::installRuntimeOwners` | Product composition wires owners; it does not implement them or expose an engine selector |
 | Framework-facing runtime | Own CTR identity, title policy, native-owner registration, and executor composition | `game/core/ctr_runtime.*` | `ctr::CtrRuntime` | CPU translation, Core synchronization, original-call dispatch, typed exits, and invalidation stay in psxport |
-| Lightrec executor | Translate all non-native retail code from authenticated resident/overlay images and return typed bounded exits | target under `external/psxport/` | target per-`Core` executor | Lightrec owns cache/executable memory; psxport owns state and device integration; CTR supplies title policy |
-| Frame/service exit owner | Record exact CTR wait/service/frame continuations, request typed executor exits, and finish one field after normal executor return | `game/core/frame_driver.*`, `game/core/native_ownership.h` | `CtrFrameDriver::stepFrame` | Replace local `FrameCompleted`; never throw or `longjmp` through JIT frames |
+| Lightrec executor | Translate non-native retail code from authenticated runtime images and return typed bounded exits | `external/psxport/runtime/cpu/lightrec_executor.*` | `Core::lightrecExecutor`, `psx::cpu::dispatchGuest` | Lightrec owns cache/executable memory and its bounded refusal fallback; psxport owns state and device integration; CTR supplies title policy and never selects an interpreter |
+| Frame/service exit owner | Record exact CTR wait/service/frame continuations, request typed executor exits, and finish one field after normal executor return | `game/core/frame_driver.*`, `game/core/native_ownership.h` | `CtrFrameDriver::stepFrame` | Never throw or `longjmp` through JIT frames |
 | Disc completion | Run shared native transfer and deliver the measured retail completion at CTR's per-field seam | `game/core/async_disc_owner.*` | `DiscReadOwner::deliverPending` | Retail callback owns effects; timing remains title-owned |
 | SPU DMA completion | Deliver owed channel-4 completion with measured DICR/BIOS/CPU ordering | `game/core/dma_callback_owner.*` | `DmaCallbackOwner::serviceSpu` | Safe seam remains after B0:17 unwind at `0x8003C94C` |
 | Platform HLE facts | Supply authenticated libgte, libcd, libgpu, and fatal VSync addresses/windows | `game/core/platform_hle_plan.*` | `ctr::platformHlePlan` | Shared hardware semantics stay in psxport; title facts stay here |
@@ -21,14 +21,13 @@ order in `docs/migration.md`, binary evidence in `docs/re-frontier.md`, and atom
 | Presentation fence | Rotate one field fence and commit only captured retail/native work | `game/video/presentation_owner.*` | `PresentationOwner::finishField` | Called after a validated executor exit, never from guest VSync |
 | Input/media provisioning | Resolve user media, verify `SCUS_944.26` and `BIGFILE.BIG`, and publish runtime images | `tools/provision.py`, `tools/extract_overlays.py` | provisioning CLIs | Runtime mapping consumes outputs; provisioning never emits guest code |
 | Title identity facts | Record the selected retail revision and its measured executable/load facts | `titles/` | `titles/ctr/README.md` | Game bytes remain untracked; title policy consumes verified facts |
-| Differential evidence | Compare deterministic executor state/device/memory with an independent emulator | target dynamic harness; recorded evidence in `docs/info/` and `docs/re-frontier.md` | separate diagnostic target | Interpreter/oracle code is separately built and absent from gameplay |
-| Product verification | Exercise shipping runtime owners, exit results, link composition, and negative controls | `tests/` | focused test targets | Tests call production seams and do not duplicate instruction or exit semantics |
-| Frozen static migration evidence | Preserve existing corpus/registry/seed/tool evidence until representative gameplay | current `generated/`, `game/core/recomp_register.*`, emitter/replay tools and tests | none for new work | Do not regenerate, build, run, extend, or select; delete after the gameplay gate |
+| Differential evidence | Compare deterministic executor state/device/memory with an independent emulator | target dynamic harness; recorded evidence in `docs/info/` and `docs/re-frontier.md` | separate diagnostic target | An interpreter-only oracle is separately built and absent from gameplay; backend refusal fallback remains executor-owned |
+| Product verification | Exercise shipping runtime owners, exit results, link composition, and negative controls | `tests/`, `tools/verify.py` | `tools/verify.py` over PSXPort's shared `port.consumer_verify` | Tests call production seams and do not duplicate instruction or exit semantics |
 | Native simulation | Own authoritative ticks and current camera/object transforms | future cohesive modules under `game/` | target `Simulation` | Simulation state is independent of presentation interpolation |
 | Native producers | Convert pre-GTE camera/object/material state into typed primitive commands | future producer modules under `game/video/` | target producer interfaces | Never consume GTE/OT/GP0/framebuffer output as product source |
 | Native renderer | Own primitive lifetime, ordering/depth, materials, viewport/projection, and presentation | future renderer modules under `game/video/` | target queue/renderer interfaces | Widescreen is applied at owned projection/viewport/culling boundaries |
 | Temporal presentation | Interpolate previous/current native transforms without mutating simulation | future presentation decorator | target temporal interface | Alpha endpoints reproduce exact simulation snapshots |
-| Build and launcher policy | Frozen Python setup, native/Lightrec product build, checks, and final player environment | `run.sh`, `bootstrap.py`, `tools/run.py`, `CMakeLists.txt`, `pyproject.toml`, `uv.lock` | `run.sh` | No offline translator, generated corpus, or product interpreter |
+| Build and launcher policy | Frozen Python setup, native/Lightrec product build, checks, and final player environment | `run.sh`, `bootstrap.py`, `tools/run.py`, `CMakeLists.txt`, `pyproject.toml`, `uv.lock` | `run.sh` | No offline translator, generated corpus, interpreter selector, or alternate engine mode |
 
 ## Where does it go?
 

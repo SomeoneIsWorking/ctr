@@ -4,7 +4,7 @@ kind: claim
 status: holds
 created: 2026-08-26
 tags: ctr05,projection,native-renderer
-depends: tools/measure_render_frontier.py#measure, game/core/projection_hle_plan.cpp#projectionHlePlan
+depends: game/core/native_ownership.h, game/core/platform_hle_plan.cpp#platformHlePlan
 ---
 
 ## Claim
@@ -13,7 +13,11 @@ CTR USA contains exact libgte projection leaves at 0x8007781C/0x8007782C, dynami
 
 ## Evidence
 
-tools/measure_render_frontier.py accepts identity-verified SCUS_944.26, checks the exact leaf/producer/registrar signatures and direct-call sets, and reports the complete CR24/25/26 and RTPS/RTPT word census; Ghidra DecompDump independently decompiled 0x80042910, 0x80024C4C, and registrar 0x80025138
+The retained identity-verified measurement checked the exact leaf, producer and registrar
+signatures, direct-call sets, and complete CR24/25/26 and RTPS/RTPT word census. Ghidra independently
+decompiled 0x80042910, 0x80024C4C, and registrar 0x80025138. The measured addresses are consumed by
+the title's native ownership and platform-HLE plans; the removed one-off measurement tool is not a
+product dependency.
 
 ## What would falsify it
 

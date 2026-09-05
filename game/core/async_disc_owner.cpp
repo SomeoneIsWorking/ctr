@@ -22,11 +22,10 @@ void DiscReadOwner::noteTransferComplete(Core &core) {
     // A caller which registered nothing waits through CdReadSync, which the shared native owner
     // already reports complete. Report the first one so "no callback delivered" is never
     // indistinguishable from a delivery that silently failed.
-    if (++polledReads_ == 1u || lucent::channel_on("ctr-disc")) {
-      lucent::info("ctr-disc",
-                   "native CdRead {} completed with no registered libcd callback; its caller polls CdReadSync",
-                   polledReads_);
-    }
+    ++polledReads_;
+    lucent::info("ctr-disc",
+                 "native CdRead {} completed with no registered libcd callback; its caller polls CdReadSync",
+                 polledReads_);
     return;
   }
   pending_ = true;
@@ -50,11 +49,10 @@ void DiscReadOwner::deliverPending(Core &core, const CtrRuntime &runtime) {
   const R3000 interrupted = static_cast<const R3000 &>(core);
   core.r[4] = native::kCdlComplete;
   core.r[5] = 0u; // libcd passes its result bytes; neither measured CTR callback reads them
-  runtime.dispatch(core, callback);
+  runtime.dispatchToReturn(core, callback, "CTR libcd completion callback");
   static_cast<R3000 &>(core) = interrupted;
-  if (++deliveredCallbacks_ == 1u || lucent::channel_on("ctr-disc")) {
-    lucent::info("ctr-disc", "delivered libcd read-completion callback {} -> 0x{:08X}", deliveredCallbacks_, callback);
-  }
+  ++deliveredCallbacks_;
+  lucent::info("ctr-disc", "delivered libcd read-completion callback {} -> 0x{:08X}", deliveredCallbacks_, callback);
 }
 
 DiscReadOwner &discReadOwner() {

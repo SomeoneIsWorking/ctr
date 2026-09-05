@@ -4,7 +4,7 @@ kind: claim
 status: holds
 created: 2026-08-21
 tags: ctr-03,oracle,boot
-depends: CMakeLists.txt, tools/provision.py
+depends: tools/provision.py, titles/ctr/README.md
 reconfirmed: 2026-08-24
 verified_at: 2026-08-24 20:09:43
 ---
@@ -19,49 +19,11 @@ CMake oracle_boot_check first re-provisioned the SHA-256-bound SCUS_944.26, then
 
 ## What would falsify it
 
-The target accepts an executable other than the measured identity, the independent execution or symbolic decoder changes any compared field, the oracle ceases to expose its positive and hardware-stop answers, or a generated port trace disagrees at this window.
-
-## Re-confirmed 2026-08-21 02:40:01
-
-Re-verified through the integrated Clang-built CMake target: oracle_spike ran 22/22 positive/negative/stepping/mirroring checks, then the real identity-bound SCUS_944.26 left mapped text at InitHeap after 92378 steps and crossvalidate_crt0 reported 7 agree, 0 disagree, 0 unseen.
-
-## Re-confirmed 2026-08-21
-
-Post-landing recheck retains oracle_spike 22/22 and the real CTR crt0 cross-check at 7 agree, 0 disagree, 0 unseen.
-
-## Re-confirmed 2026-08-21 — CTR-04
-
-The real-disc oracle gate again reported 7/7, and the new independently captured generated boundary
-agreed with the oracle on 34/34 register/PC fields.
-
-## Re-confirmed 2026-08-21
-
-Post-landing oracle_boot_check passed the 22/22 oracle fixture and real CTR crt0 symbolic-versus-executed comparison 7/7 at the InitHeap boundary.
-
-## Re-confirmed 2026-08-21
-
-Post-landing oracle boot gate preserved the deterministic pre-BIOS 34/34 boundary and explicit InitHeap continuation.
-
-## Re-confirmed 2026-08-21
-
-Post-landing ce2c83ad oracle gate retained pre-BIOS 34/34, forced 33/34, and deterministic repeated execution.
-
-## Re-confirmed 2026-08-22
-
-Fresh oracle_boot_check on Clang 22.1.8 and psxport 7f5d3f13 ran the 39/39 both-answer oracle fixture and reproduced the real CTR symbolic-versus-executed 7/7 boundary agreement.
-
-## Re-confirmed 2026-08-22
-
-Against exact landed and recorded psxport ad5cf802, oracle_spike passed 39/39 and crossvalidate_crt0 on exact 7b4aac0b... SCUS_944.26 reproduced symbolic-versus-executed 7/7 at the InitHeap boundary.
-
-## Re-confirmed 2026-08-22
-
-Current Clang oracle fixture passed 39/39 and crossvalidate_crt0 on exact SCUS_944.26 reproduced symbolic-versus-executed 7/7 at the first crt0 call against recorded psxport ad5cf802.
-
-## Re-confirmed 2026-08-22
-
-Post-commit Clang verification passed 87/87 CTest with exact ad5cf802 pin; real SCUS_944.26 oracle/generated windows remained deterministic, comparator controls passed 18/18, the new 0x800718BC boundary agreed 34/34, and forced resident.gp produced the named 33/34 difference.
+The target accepts an executable other than the measured identity, the independent execution or
+symbolic decoder changes any compared field, or the oracle ceases to expose its positive and
+hardware-stop answers.
 
 ## Re-confirmed 2026-08-24
 
-Post-landing canonical Clang/CTest 87/87 and isolated serialized real-data gate chain on SCUS_944.26 reconfirmed the independent pre-BIOS boundary
+Repeated identity-bound independent runs retained the 92,378-instruction InitHeap stop, the 7/7
+symbolic comparison, and both positive and named hardware-stop fixture answers.

@@ -15,7 +15,12 @@ Output-side GTE registers and ordering-table packets erase producer ownership. T
 
 ## Current finding
 
-`tools/measure_render_frontier.py` now identifies exact libgte leaves `0x8007781C`/`0x8007782C`, projection producer `0x80042910`, and the address-registered `lensflare` primitive producer `[0x80024C4C,0x80025138)`. The primitive producer runs MVMVA/three RTPT commands, stores SXY into four tagged packets, and inserts them into the ordering table. CTR binds only the generic projection leaves through the framework-owned typed HLE seam.
+Identity-verified binary analysis identified exact libgte leaves `0x8007781C`/`0x8007782C`,
+projection producer `0x80042910`, and the address-registered `lensflare` primitive producer
+`[0x80024C4C,0x80025138)`. The primitive producer runs MVMVA/three RTPT commands, stores SXY
+into four tagged packets, and inserts them into the ordering table. CTR binds only the generic
+projection leaves through the framework-owned typed HLE seam. C016 retains the addresses and
+falsifier after the one-off measurement tool was removed.
 
 ## Remaining resolution boundary
 
@@ -25,4 +30,4 @@ which registrar/indirect callback and projection producer execute in representat
 render ownership begins from that observed producer and compares its override against a Lightrec
 original call. Widescreen changes native camera/projection inputs, and interpolation retains
 previous/current native transforms rather than quantized GTE output. Do not extend or rerun the
-static route.
+removed execution pipeline.

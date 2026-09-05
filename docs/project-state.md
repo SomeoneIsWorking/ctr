@@ -21,15 +21,29 @@ missing one.
 | S006 | The native camera and projection support true widescreen | missing | S005 | G002 |
 | S007 | Native camera and object transforms are interpolated for presentation | missing | S005 | G003 |
 | S008 | The default CTR product reaches sustained playable gameplay with input and audio | missing | S005, S009, S010 | G001 |
-| S009 | The native/Lightrec product reaches the preserved CTR frontier without interpreter or generated code | missing | S001, S002, S003, S010 | G001, G004 |
-| S010 | CTR frame/service suspension uses explicit typed executor exits | missing | S003 | G001 |
+| S009 | The native/Lightrec product reaches the preserved CTR frontier without a standalone interpreter mode or generated code | partial | S001, S002, S003, S010 | G001, G004 |
+| S010 | CTR frame/service suspension uses explicit typed executor exits | partial | S003 | G001 |
 
 ## Current focus
 
-S009 is the current focus. Integrate psxport's per-`Core` Lightrec executor, convert local
-`FrameCompleted` unwinding into the explicit executor-exit contract, and reproduce issue 0023's
-live boundary with the existing native owners active. This first discriminator does not authorize
-deletion of the static route; representative interactive gameplay does.
+S009 is the current focus. The static route and exception unwinding are already absent. Reproduce
+issue 0023's live boundary through psxport's per-`Core` Lightrec executor with the existing native
+owners active, then prove overlay activation, scoped original calls, invalidation, and bounded
+fallback accounting on the shipping boundary.
+
+## Hosted verification and host gaps
+
+Hosted CI is asset-free and must not download a disc, executable, BIOS, extracted module, or runtime
+trace. The Linux x86_64 job builds the actual CTR native/Lightrec product with the recorded framework
+revision, runs its focused tests, and inspects the linked executable for forbidden static or
+standalone-interpreter ownership. It proves compilation and composition only, not game execution.
+
+| Host | Hosted boundary | Current gap |
+|---|---|---|
+| Linux x86_64 | Native/Lightrec product build, focused tests, and linked-boundary inspection | Real CTR gameplay and oracle comparison require user media and remain local evidence |
+| Windows x86_64 | No truthful title job yet | The shared PSXPort/Lightrec Windows product build and dependency contract are not complete |
+| macOS arm64 | No truthful title job yet | Apple Silicon executable-memory, ABI, cache-coherency, and product build qualification are missing |
+| Android arm64-v8a | No truthful title job yet | Shared Android packaging plus PSXPort/Lightrec arm64 execution and CTR touch/setup ownership are missing |
 
 ## Capability details
 
@@ -37,8 +51,9 @@ deletion of the static route; representative interactive gameplay does.
 
 Evidence: claims C001/C002 and instruments I001/I002 record `SYSTEM.CNF` selecting
 `SCUS_944.26`, the 516,096-byte executable and complete SHA-256 identity, PS-X EXE fields,
-transactional extraction, and positive/negative provisioner controls. `BIGFILE.BIG` identity and its
-608-entry monotonic index are separately recorded in C020/I016. No game bytes are tracked.
+transactional extraction, and positive/negative provisioner controls. `BIGFILE.BIG` identity, its
+608-entry monotonic index, and the measured runtime-module entries are recorded in C020/I016. No
+game bytes are tracked.
 
 ### S002 — independent boot execution
 
@@ -49,8 +64,8 @@ oracle fixture also demonstrates a named hardware-stop result.
 ### S003 — preserved resident and live execution frontiers
 
 Partial evidence: the independent comparison reaches pre-instruction `0x800772E0` with 34/34 CPU
-fields and a forced 33/34 negative. Further recorded static-path runs crossed the title-owned frame,
-CD, DMA, presentation, runtime-overlay, and alternate-link GTE paths. Issue 0023 is the current live
+fields and a forced 33/34 negative. Preserved observations later crossed the title-owned frame, CD,
+DMA, presentation, runtime-module, and alternate-link GTE paths. Issue 0023 is the current live
 boundary: the input pair at `0x8010B2D4` is already corrupt before `lw v1,0x74(a2)` at
 `0x8006AB00` faults. Everything beyond the repaired alternate-link dispatch was new territory; no
 earlier verified path moved.
@@ -62,9 +77,10 @@ landed evidence. Exact addresses and controls remain in `docs/re-frontier.md`.
 
 ### S004 — projection and primitive source evidence
 
-Partial evidence: C016/I015 identify `SetGeomScreen [0x8007781C,0x80077828)`, `SetGeomOffset
+Partial evidence: C016 records `SetGeomScreen [0x8007781C,0x80077828)`, `SetGeomOffset
 [0x8007782C,0x80077844)`, projection publication `[0x80042910,0x80042974)`, and lens-flare producer
-`[0x80024C4C,0x80025138)`. C018 records the title's pre-GTE view publication boundary.
+`[0x80024C4C,0x80025138)`. The retained binary observation in `docs/re-frontier.md` records the
+title's pre-GTE view publication boundary.
 
 Gap: static identity does not establish the active camera, dynamic producer order, native primitive
 ownership, or a representative visible frame. The remaining raw GTE-control writes are not
@@ -97,24 +113,39 @@ or attract/FMV sequence cannot verify this item.
 
 ### S009 — native/Lightrec product
 
-Missing capability: CTR still routes ordinary retail execution and native-owner original calls
-through generated host functions. It has not mapped authenticated resident and overlay images into a
-per-`Core` Lightrec executor, registered overrides by image generation plus address, or proven
-runtime invalidation when overlays replace executable bytes. Product link/selector proof excluding
-the interpreter and generated corpus is also absent. Issue 0024 owns this migration.
+Partial capability: the static translator, generated corpus, registry, seed inputs, and static-only
+tools/tests are absent. CTR builds against psxport's per-`Core` Lightrec executor, and composition
+targets its image-aware dispatch, original-call, invalidation, and typed-exit boundaries. The linked
+boundary is covered asset-free; runtime overlay activation, nonzero real-game block execution,
+bounded-fallback denominators, and frontier reproduction remain incomplete. Issue 0024 owns this
+migration.
 
-First discriminator: preserve all current CD, DMA, frame, projection, and presentation owners and
-reach issue 0023's corrupt render-list boundary with nonzero Lightrec execution. This wiring proof
-does not authorize deletion. Representative gameplay, deterministic oracle/device comparison,
+A bounded twelve-second silent Linux observation with identity-verified media reached twelve
+libcd read-completion callbacks and NTSC display setup. It then repeatedly reported unclaimed
+interrupt masks `0x200`/`0x204` until the observation timeout. No fatal exit was observed; no
+representative gameplay, image fidelity, or complete runtime counter report was established.
+
+Gap: preserve all current CD, DMA, frame, projection, and presentation owners and
+reach issue 0023's corrupt render-list boundary with nonzero Lightrec execution. Representative gameplay, deterministic oracle/device comparison,
 override and original-call coverage, invalidation controls, and released-host qualification remain
 required.
 
 ### S010 — explicit executor exits
 
-Missing capability: `game/core/frame_driver.cpp` uses local `FrameCompleted` exceptions to escape
-generated host frames at waits, service points, and field completion. A JIT-safe design records the
-exact continuation in title state, requests a typed psxport executor exit, and lets Lightrec return
-normally at a safe dispatcher boundary. `CtrFrameDriver::stepFrame` then validates the reason,
-restores its captured diagnostic-depth invariant, finishes exactly one field/presentation fence, and
-advances counters. Unexpected normal return, stale state, and unknown reasons remain fatal; `longjmp`
-or other host-stack unwinding is not an alternative.
+Partial capability: `game/core/frame_driver.cpp` no longer uses `FrameCompleted` exceptions. Native
+wait and completion owners record title state, request `ExecutionExitReason::FrameBoundary`, and
+return normally. `CtrFrameDriver::stepFrame` validates the typed result and finishes one field. The
+production propagation seam has focused coverage preserving its reason, guest PC, cycle count, and
+detail. A synthetic five-field program executes through Lightrec and the production frame driver:
+the timing override calls its original body, the suffix restores a different return address, each
+field advances one presentation fence, and the next field starts at the exact continuation without
+leaking an override or pending exit. It requires nonzero translated blocks/instructions and zero
+fallback. The negative exposed the old function-dispatch assumption: field 1 stopped immediately
+because its entry equaled the incoming return register. Whole-field dispatch now uses the shared
+until-exit API; suffix calls name their independently known continuation. The final two fields
+rewrite previously translated code through the shared native-store owner, suspend/resume the audio
+wait, and cross a nested original-call/native-return boundary. They require exactly two services
+and five presentation fences, exposing stale translated code and repeated native continuation
+before their shared fixes.
+
+Gap: real-game nested/repeated exit proof through Lightrec is still missing.

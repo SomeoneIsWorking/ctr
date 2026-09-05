@@ -66,7 +66,7 @@ void RenderListBoundaryDiagnostic::observePublication(Core &core, const RetailBo
     return;
   }
   if (!retailBody) {
-    lucent::error("ctr-render-list", "publisher observation requires the preserved generated body");
+    lucent::error("ctr-render-list", "publisher observation requires the retail body");
     std::abort();
   }
   if (publishedThisField_) {

@@ -1,7 +1,11 @@
 #include "ctr_runtime.h"
 
 #include "core.h"
+#include "execution_control.h"
 #include "frame_driver.h"
+#include "image_identity.h"
+#include "lightrec_executor.h"
+#include "native_dispatch.h"
 #include "platform_hle_plan.h"
 
 #include <lucent/log.h>
@@ -16,14 +20,9 @@ const GuestProgramImage CtrRuntime::programImage_{
     .residentText = {0x00010000u, 0x0008D800u},
 };
 
-CtrRuntime::CtrRuntime(Dispatch dispatch,
-                       uint32_t bootTarget,
-                       OverrideSetter overrideSetter,
-                       SuperDispatch superDispatch)
-    : dispatch_(dispatch), overrideSetter_(overrideSetter), superDispatch_(superDispatch), bootTarget_(bootTarget) {
-  if (!dispatch_ || bootTarget_ == 0) {
-    lucent::error("ctr-runtime",
-                  "runtime requires a generated-code dispatch and a nonzero independently validated boot target");
+CtrRuntime::CtrRuntime(uint32_t bootTarget) : bootTarget_(bootTarget) {
+  if (bootTarget_ == 0) {
+    lucent::error("ctr-runtime", "runtime requires a nonzero independently validated boot target");
     std::abort();
   }
 }
@@ -49,12 +48,13 @@ void *CtrRuntime::createContext(Core &) {
 void CtrRuntime::destroyContext(void *) {}
 
 void CtrRuntime::registerOverrides(Game &) {
-  // CTR's generated overrides are frame-scoped by CtrFrameDriver so no title hook can outlive the
-  // finite host-owned iteration which installed it.
+  // Frame-scoped title overrides are installed by CtrFrameDriver after the executable image is active.
 }
 
-void CtrRuntime::bootInit(Core &core) {
-  dispatch_(&core, bootTarget_);
+void CtrRuntime::bootInit(Core &) {
+  // CTR boot contains host-owned waits that can span multiple fields. CtrFrameDriver is the single
+  // cooperative boot owner; this framework compatibility hook must not enter the executable a
+  // second time before the first finite field step.
 }
 
 std::unique_ptr<FrameDriver> CtrRuntime::createFrameDriver(Game &) {
@@ -70,29 +70,60 @@ const PlatformHlePlan *CtrRuntime::platformHlePlan() const {
 }
 
 bool CtrRuntime::guestVramIsPicture(const Game &) const {
-  // The title driver preserves the generated frame order but does not present guest VRAM or own a
+  // The title driver preserves the retail frame order but does not present guest VRAM or own a
   // native primitive renderer. Claiming picture content would invent a presentation path.
   return false;
 }
 
-void CtrRuntime::setRecompiledOverride(uint32_t address, RecompiledOverride overrideFunction) const {
-  if (!overrideSetter_) {
-    lucent::error("ctr-runtime", "frame driver has no generated override setter");
-    std::abort();
+bool CtrRuntime::installOverride(Core &core,
+                                 uint32_t address,
+                                 std::string_view name,
+                                 psx::cpu::NativeFunction function) const {
+  const auto image = core.currentImageIdentity(address);
+  if (!image) {
+    lucent::error("ctr-runtime", "override '{}' has no unambiguous active image at 0x{:08X}", name, address);
+    return false;
   }
-  overrideSetter_(address, overrideFunction);
+  return core.nativeDispatcher().install({{*image, address}, name, function});
 }
 
-void CtrRuntime::dispatch(Core &core, uint32_t address) const {
-  dispatch_(&core, address);
+bool CtrRuntime::removeOverride(Core &core, uint32_t address) const {
+  const auto image = core.currentImageIdentity(address);
+  return image && core.nativeDispatcher().remove({*image, address});
 }
 
-void CtrRuntime::runRecompiledSuper(Core &core, uint32_t address) const {
-  if (!superDispatch_) {
-    lucent::error("ctr-runtime", "frame driver has no generated super dispatcher");
+psx::cpu::ExecutionResult CtrRuntime::dispatch(Core &core, uint32_t address) const {
+  return psx::cpu::dispatchGuestUntilExit(core, address, psx::cpu::ExecutionBudget::currentTurn(core));
+}
+
+void CtrRuntime::dispatchToReturn(Core &core, uint32_t address, std::string_view owner) const {
+  psx::cpu::dispatchGuestToReturn(core, address, psx::cpu::ExecutionBudget::currentTurn(core), owner);
+}
+
+psx::cpu::ExecutionResult
+CtrRuntime::dispatchToContinuation(Core &core, uint32_t address, uint32_t continuation) const {
+  return core.lightrecExecutor().executeFunction(address, continuation, psx::cpu::ExecutionBudget::currentTurn(core));
+}
+
+void CtrRuntime::callOriginalToReturn(Core &core, uint32_t address, std::string_view owner) const {
+  if (!psx::cpu::requireGuestReturn(psx::cpu::callOriginal(core, address, psx::cpu::ExecutionBudget::currentTurn(core)),
+                                    owner)) {
     std::abort();
   }
-  superDispatch_(&core, address);
+}
+
+void CtrRuntime::propagateFrameBoundary(Core &core,
+                                        const psx::cpu::ExecutionResult &result,
+                                        std::string_view owner) const {
+  if (result.reason != psx::cpu::ExecutionExitReason::FrameBoundary) {
+    lucent::error("ctr-runtime",
+                  "{} left guest execution at 0x{:08X} with {} instead of a frame boundary",
+                  owner,
+                  result.guestPc,
+                  psx::cpu::executionExitName(result.reason));
+    std::abort();
+  }
+  psx::cpu::requestExecutionExit(core, result);
 }
 
 } // namespace ctr

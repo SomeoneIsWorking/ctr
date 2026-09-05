@@ -1,9 +1,12 @@
 #pragma once
 
+#include "execution_exit.h"
 #include "game_runtime.h"
+#include "native_dispatch.h"
 
 #include <cstdint>
 #include <memory>
+#include <string_view>
 
 namespace ctr {
 
@@ -12,15 +15,7 @@ namespace ctr {
 // configured once before Core construction; the title frame driver owns all later dispatches.
 class CtrRuntime final : public GameRuntime {
 public:
-  using Dispatch = void (*)(Core *core, uint32_t address);
-  using RecompiledOverride = void (*)(Core *core);
-  using OverrideSetter = void (*)(uint32_t address, RecompiledOverride overrideFunction);
-  using SuperDispatch = void (*)(Core *core, uint32_t address);
-
-  CtrRuntime(Dispatch dispatch,
-             uint32_t bootTarget,
-             OverrideSetter overrideSetter = nullptr,
-             SuperDispatch superDispatch = nullptr);
+  explicit CtrRuntime(uint32_t bootTarget);
 
   uint32_t bootTarget() const;
 
@@ -34,15 +29,16 @@ public:
   const PlatformHlePlan *platformHlePlan() const override;
   bool guestVramIsPicture(const Game &game) const override;
 
-  void setRecompiledOverride(uint32_t address, RecompiledOverride overrideFunction) const;
-  void dispatch(Core &core, uint32_t address) const;
-  void runRecompiledSuper(Core &core, uint32_t address) const;
+  bool installOverride(Core &core, uint32_t address, std::string_view name, psx::cpu::NativeFunction function) const;
+  bool removeOverride(Core &core, uint32_t address) const;
+  psx::cpu::ExecutionResult dispatch(Core &core, uint32_t address) const;
+  void dispatchToReturn(Core &core, uint32_t address, std::string_view owner) const;
+  psx::cpu::ExecutionResult dispatchToContinuation(Core &core, uint32_t address, uint32_t continuation) const;
+  void callOriginalToReturn(Core &core, uint32_t address, std::string_view owner) const;
+  void propagateFrameBoundary(Core &core, const psx::cpu::ExecutionResult &result, std::string_view owner) const;
 
 private:
   static const GuestProgramImage programImage_;
-  Dispatch dispatch_;
-  OverrideSetter overrideSetter_;
-  SuperDispatch superDispatch_;
   const uint32_t bootTarget_;
 };
 

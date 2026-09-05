@@ -44,7 +44,7 @@ struct RenderListObservation {
 };
 
 // Debug-only observation of CTR's 0x8003B43C list-publication boundary. It never supplies list
-// contents or changes control flow: the generated publisher remains the behavior body, and this
+// contents or changes control flow: the JIT-executed retail publisher remains the behavior body, and this
 // component only reads its post-body memory and arms Core's existing narrow write observer on the
 // two-word consumer pair for the rest of the current field.
 class RenderListBoundaryDiagnostic final {

@@ -1,87 +1,32 @@
 cmake_minimum_required(VERSION 3.24)
 project(ctr_port LANGUAGES C CXX)
 
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+include(CTest)
 
-# PSXPORT_DIR — the framework. external/psxport is NOT a git submodule (2026-08-16): it is a symlink
-# to the workspace's shared framework clone, or a private clone at this repo's psxport.pin on a fresh
-# machine; tools/psxport_sync.py --auto establishes whichever applies. Defaults to external/psxport so
-# a bare clone of this repo builds standalone.
 set(PSXPORT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/psxport" CACHE PATH
-    "psxport framework source directory (default: external/psxport)")
+    "psxport framework source directory")
 if(NOT EXISTS "${PSXPORT_DIR}/cmake/psxport.cmake")
-  message(FATAL_ERROR "PSXPORT_DIR=${PSXPORT_DIR} has no cmake/psxport.cmake — run "
-                      "`python3 tools/psxport_sync.py --auto`, or point PSXPORT_DIR at a psxport checkout.")
+  message(FATAL_ERROR
+          "PSXPORT_DIR=${PSXPORT_DIR} has no cmake/psxport.cmake; run the Python framework resolver")
 endif()
-# RECORD WHAT THIS CONFIGURE RESOLVED, so `tools/psxport_sync.py --check` can compare the built
-# framework against the one psxport.pin RECORDS.
-execute_process(COMMAND git -C "${PSXPORT_DIR}" rev-parse HEAD
-                OUTPUT_VARIABLE PSXPORT_RESOLVED_SHA OUTPUT_STRIP_TRAILING_WHITESPACE
-                ERROR_QUIET RESULT_VARIABLE _psxport_rev_rc)
+execute_process(
+  COMMAND git -C "${PSXPORT_DIR}" rev-parse HEAD
+  OUTPUT_VARIABLE PSXPORT_RESOLVED_SHA
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  ERROR_QUIET
+  RESULT_VARIABLE _psxport_rev_rc
+)
 if(NOT _psxport_rev_rc EQUAL 0)
   set(PSXPORT_RESOLVED_SHA "unknown")
 endif()
 file(WRITE "${CMAKE_BINARY_DIR}/psxport_resolved.txt"
      "dir = ${PSXPORT_DIR}\ncommit = ${PSXPORT_RESOLVED_SHA}\n")
+
 set(PSXPORT_BUILD_SMOKE ON CACHE BOOL "Build the framework agnosticism smoke" FORCE)
 add_subdirectory("${PSXPORT_DIR}" psxport_build)
-add_custom_target(ctr_scaffold DEPENDS psxport_smoke)
-include(CTest)
 
-add_library(ctr_command_line STATIC game/app/command_line.cpp)
-set_target_properties(ctr_command_line PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
-target_include_directories(ctr_command_line PUBLIC game/app)
-
-add_executable(ctr_command_line_test tests/test_command_line.cpp)
-set_target_properties(ctr_command_line_test PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
-target_link_libraries(ctr_command_line_test PRIVATE ctr_command_line)
-add_test(NAME ctr_command_line_contract COMMAND ctr_command_line_test)
-
-add_test(
-  NAME ctr_provision_selftest
-  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/provision.py" --selftest)
-add_test(
-  NAME ctr_overlay_extract_selftest
-  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/extract_overlays.py" --selftest)
-add_test(
-  NAME ctr_crt0_compare_selftest
-  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py" --selftest)
-add_test(
-  NAME ctr_render_frontier_selftest
-  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/measure_render_frontier.py" --selftest)
-add_test(
-  NAME ctr_psxport_sync_contract
-  COMMAND "${Python3_EXECUTABLE}" -m unittest tools.test_psxport_sync)
-set_tests_properties(
-  ctr_psxport_sync_contract PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
-
-add_custom_target(
-  ctr04_compare_selftest
-  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py" --selftest
-  USES_TERMINAL
-  VERBATIM)
-add_custom_target(
-  overlay_extract_selftest
-  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/extract_overlays.py" --selftest
-  USES_TERMINAL
-  VERBATIM)
-add_custom_target(
-  ctr05_render_frontier_selftest
-  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/measure_render_frontier.py" --selftest
-  USES_TERMINAL
-  VERBATIM)
-add_custom_target(
-  ctr05_render_frontier_check
-  COMMAND
-    "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/measure_render_frontier.py"
-    "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
-  DEPENDS ctr05_render_frontier_selftest
-  USES_TERMINAL
-  VERBATIM)
-
-# CTR's process-lifetime derived runtime is asset-free and exposes no legacy GameConfig/GameHooks
-# view. The harness gives it the already-validated trace target before constructing Core.
 add_library(
   ctr_runtime STATIC
   game/core/async_disc_owner.cpp
@@ -93,398 +38,111 @@ add_library(
   game/core/render_list_boundary_diagnostic.cpp
   game/core/runtime_composition.cpp
   game/video/presentation_owner.cpp
-  game/video/projection_owner.cpp)
-set_target_properties(ctr_runtime PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
-target_include_directories(ctr_runtime PUBLIC game/core game/video)
+  game/video/projection_owner.cpp
+)
+target_include_directories(
+  ctr_runtime
+  PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/game/core"
+    "${CMAKE_CURRENT_SOURCE_DIR}/game/video"
+)
+target_compile_features(ctr_runtime PUBLIC cxx_std_20)
 target_link_libraries(ctr_runtime PUBLIC psxport)
 
-add_executable(ctr_runtime_test tests/test_ctr_runtime.cpp)
-set_target_properties(ctr_runtime_test PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
-target_link_libraries(ctr_runtime_test PRIVATE ctr_runtime)
-add_test(NAME ctr_runtime_inheritance COMMAND ctr_runtime_test)
+add_library(ctr_command_line STATIC game/app/command_line.cpp)
+target_include_directories(ctr_command_line PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/game/app")
+target_compile_features(ctr_command_line PUBLIC cxx_std_20)
 
-# Compile the harness in an asset-free clone as well. Linking it requires the gitignored generated
-# registry, but format/tidy must retain a real compile command before that substrate exists.
-add_library(ctr_crt0_trace_compile OBJECT game/core/crt0_port_trace.cpp)
-set_target_properties(
-  ctr_crt0_trace_compile
-  PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
-target_include_directories(ctr_crt0_trace_compile PRIVATE game/core)
-target_link_libraries(ctr_crt0_trace_compile PRIVATE ctr_runtime)
+add_executable(ctr_port game/app/main.cpp)
+target_compile_features(ctr_port PRIVATE cxx_std_20)
+target_link_libraries(ctr_port PRIVATE ctr_command_line ctr_runtime)
+set_target_properties(ctr_port PROPERTIES ENABLE_EXPORTS ON)
+add_dependencies(ctr_port gen_gpu_shaders)
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generated/rec_sources.cmake")
-  include("${CMAKE_CURRENT_SOURCE_DIR}/generated/rec_sources.cmake")
-  list(TRANSFORM GEN_REC_SRCS PREPEND "generated/")
-  set_source_files_properties(
-    ${GEN_REC_SRCS}
-    PROPERTIES
-      LANGUAGE CXX
-      COMPILE_OPTIONS "-O1;-foptimize-sibling-calls;-fno-strict-aliasing;-fwrapv")
+if(BUILD_TESTING)
+  add_executable(ctr_command_line_test tests/test_command_line.cpp)
+  target_compile_features(ctr_command_line_test PRIVATE cxx_std_20)
+  target_link_libraries(ctr_command_line_test PRIVATE ctr_command_line)
+  add_test(NAME ctr_command_line COMMAND ctr_command_line_test)
 
-  add_executable(
-    ctr_crt0_port_trace
-    $<TARGET_OBJECTS:ctr_crt0_trace_compile>
-    game/core/recomp_register.cpp
-    ${GEN_REC_SRCS})
-  set_target_properties(
-    ctr_crt0_port_trace
-    PROPERTIES
-      CXX_STANDARD 20
-      CXX_STANDARD_REQUIRED ON
-      RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/scratch/bin")
-  target_include_directories(ctr_crt0_port_trace PRIVATE game/core generated)
-  target_link_libraries(ctr_crt0_port_trace PRIVATE ctr_runtime)
+  add_executable(ctr_execution_exit_test tests/ctr_execution_exit.cpp)
+  target_compile_features(ctr_execution_exit_test PRIVATE cxx_std_20)
+  target_link_libraries(ctr_execution_exit_test PRIVATE ctr_runtime)
+  add_test(NAME ctr_execution_exit COMMAND ctr_execution_exit_test)
 
-  add_executable(
-    ctr_port
-    game/app/main.cpp
-    game/core/recomp_register.cpp
-    ${GEN_REC_SRCS})
-  set_target_properties(
-    ctr_port
-    PROPERTIES
-      CXX_STANDARD 20
-      CXX_STANDARD_REQUIRED ON
-      ENABLE_EXPORTS ON
-      RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/scratch/bin")
-  target_include_directories(ctr_port PRIVATE game/core generated)
-  target_link_libraries(ctr_port PRIVATE ctr_command_line ctr_runtime)
-  add_dependencies(ctr_port gen_gpu_shaders)
+  add_executable(ctr_frame_execution_test tests/ctr_frame_execution.cpp)
+  target_compile_features(ctr_frame_execution_test PRIVATE cxx_std_20)
+  target_link_libraries(ctr_frame_execution_test PRIVATE ctr_runtime)
+  add_test(NAME ctr_frame_execution COMMAND ctr_frame_execution_test)
+  set_tests_properties(ctr_frame_execution PROPERTIES TIMEOUT 20)
+
+  add_executable(ctr_render_list_diagnostic_test tests/ctr_render_list_diagnostic.cpp)
+  target_compile_features(ctr_render_list_diagnostic_test PRIVATE cxx_std_20)
+  target_link_libraries(ctr_render_list_diagnostic_test PRIVATE ctr_runtime)
+  add_test(NAME ctr_render_list_diagnostic COMMAND ctr_render_list_diagnostic_test)
+
+  add_test(NAME ctr_launcher COMMAND "${Python3_EXECUTABLE}" -B
+           "${CMAKE_CURRENT_SOURCE_DIR}/tools/test_run.py")
+  set_tests_properties(ctr_launcher PROPERTIES ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
+  add_test(NAME ctr_framework_resolver COMMAND "${Python3_EXECUTABLE}" -B
+           "${CMAKE_CURRENT_SOURCE_DIR}/tools/test_psxport_sync.py")
+  set_tests_properties(ctr_framework_resolver PROPERTIES ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
+  add_test(NAME ctr_framework_pin COMMAND "${Python3_EXECUTABLE}"
+           "${CMAKE_CURRENT_SOURCE_DIR}/tools/psxport_sync.py" --check
+           --resolved "${CMAKE_BINARY_DIR}/psxport_resolved.txt")
 
   add_test(NAME ctr_help_without_assets COMMAND ctr_port --help)
   add_test(NAME ctr_short_help_without_assets COMMAND ctr_port -h)
   set_tests_properties(
     ctr_help_without_assets ctr_short_help_without_assets
-    PROPERTIES
-      PASS_REGULAR_EXPRESSION "Usage: .*ctr_port \[--help\]"
-      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-
-  add_custom_target(
-    ctr04_check
+    PROPERTIES PASS_REGULAR_EXPRESSION "Usage: .*ctr_port \\[--help\\]"
+  )
+  add_test(
+    NAME ctr_execution_boundary
     COMMAND
-      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/provision.py"
-      --discdump "$<TARGET_FILE:discdump>"
-    COMMAND
-      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
-      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
-      --oracle-trace "$<TARGET_FILE:oracle_trace>"
-      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
-      --steps 400000
-    COMMAND
-      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
-      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
-      --oracle-trace "$<TARGET_FILE:oracle_trace>"
-      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
-      --steps 400000
-      --force-port-field gp=0
-      --expect-difference
-    DEPENDS ctr_crt0_port_trace discdump oracle_trace
-    USES_TERMINAL
-    VERBATIM)
-
-  # This gate deliberately depends on ctr04_check: the pre-BIOS 34-field proof remains a separate
-  # prerequisite, then this continuation models only the external A(39h) leaf and advances both CPUs
-  # to the first subsequent call. The comparator runs the true oracle twice before trusting it.
-  add_custom_target(
-    ctr04_post_init_heap_check
-    COMMAND
-      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
-      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
-      --oracle-trace "$<TARGET_FILE:oracle_trace>"
-      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
-      --steps 400000
-      --post-init-heap
-    COMMAND
-      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
-      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
-      --oracle-trace "$<TARGET_FILE:oracle_trace>"
-      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
-      --steps 400000
-      --post-init-heap
-      --force-port-field post:gp=0
-      --expect-difference
-    DEPENDS ctr04_check ctr_crt0_port_trace oracle_trace
-    USES_TERMINAL
-    VERBATIM)
-
-  # This is deliberately bounded to the exact store-only prefix of resident function 0x8003C58C.
-  # The true oracle discovers the next call through its canonical call-capture API; the consumer
-  # refuses changed prefix bytes instead of assuming that replayed registers make RAM equivalent.
-  add_custom_target(
-    ctr04_resident_next_call_check
-    COMMAND
-      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
-      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
-      --oracle-trace "$<TARGET_FILE:oracle_trace>"
-      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
-      --steps 400000
-      --resident-next-call
-    COMMAND
-      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
-      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
-      --oracle-trace "$<TARGET_FILE:oracle_trace>"
-      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
-      --steps 400000
-      --resident-next-call
-      --force-port-field resident:gp=0
-      --expect-difference
-    DEPENDS ctr04_post_init_heap_check ctr_crt0_port_trace oracle_trace
-    USES_TERMINAL
-    VERBATIM)
-
-  # Execute the first resident call as well as its caller prefix. Ghidra established that the
-  # runtime initializer reads only two unchanged initialized-data words, has a zero constructor
-  # count, and returns to a second exact prefix before the next call. The comparator byte-checks all
-  # three non-contiguous code ranges and excludes every stack byte written by both frames.
-  add_custom_target(
-    ctr04_runtime_init_next_call_check
-    COMMAND
-      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
-      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
-      --oracle-trace "$<TARGET_FILE:oracle_trace>"
-      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
-      --steps 400000
-      --runtime-init-next-call
-    COMMAND
-      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
-      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
-      --oracle-trace "$<TARGET_FILE:oracle_trace>"
-      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
-      --steps 400000
-      --runtime-init-next-call
-      --force-port-field resident:gp=0
-      --expect-difference
-    DEPENDS ctr04_resident_next_call_check ctr_crt0_port_trace oracle_trace
-    USES_TERMINAL
-    VERBATIM)
-
-  # Continue through the first startup service call on its measured idle path. The consumer checks
-  # every executed code island and all four memory inputs (packed into three exact source words)
-  # before the independent oracle and generated substrate may agree at the next call.
-  add_custom_target(
-    ctr04_startup_service_next_call_check
-    COMMAND
-      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
-      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
-      --oracle-trace "$<TARGET_FILE:oracle_trace>"
-      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
-      --steps 400000
-      --startup-service-next-call
-    COMMAND
-      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
-      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
-      --oracle-trace "$<TARGET_FILE:oracle_trace>"
-      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
-      --steps 400000
-      --startup-service-next-call
-      --force-port-field resident:gp=0
-      --expect-difference
-    DEPENDS ctr04_runtime_init_next_call_check ctr_crt0_port_trace oracle_trace
-    USES_TERMINAL
-    VERBATIM)
-
-  # The state-zero path returns from 0x8001D06C, selects the measured jump-table entry, and calls
-  # the executable A(2Bh) memset thunk. Stop at the thunk: the external BIOS leaf mutates RAM and
-  # requires an explicit side-effect model before any later startup call can be evidence.
-  add_custom_target(
-    ctr04_startup_memset_thunk_check
-    COMMAND
-      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
-      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
-      --oracle-trace "$<TARGET_FILE:oracle_trace>"
-      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
-      --steps 400000
-      --startup-memset-thunk
-    COMMAND
-      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
-      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
-      --oracle-trace "$<TARGET_FILE:oracle_trace>"
-      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
-      --steps 400000
-      --startup-memset-thunk
-      --force-port-field resident:gp=0
-      --expect-difference
-    DEPENDS ctr04_startup_service_next_call_check ctr_crt0_port_trace oracle_trace
-    USES_TERMINAL
-    VERBATIM)
-
-  # The A(2Bh) leaf is modeled explicitly on both CPUs, not skipped: the replay poisons the complete
-  # BSS destination, byte-checks the thunk before redirecting it to a register-preserving byte loop,
-  # and the generated tracer requires the poison before applying the same leaf contract. Continue
-  # only to the immediately following call, whose callsite bytes are also checked.
-  add_custom_target(
-    ctr04_startup_post_memset_next_call_check
-    COMMAND
-      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
-      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
-      --oracle-trace "$<TARGET_FILE:oracle_trace>"
-      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
-      --steps 400000
-      --startup-post-memset-next-call
-    COMMAND
-      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
-      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
-      --oracle-trace "$<TARGET_FILE:oracle_trace>"
-      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
-      --steps 400000
-      --startup-post-memset-next-call
-      --force-port-field resident:gp=0
-      --expect-difference
-    DEPENDS ctr04_startup_memset_thunk_check ctr_crt0_port_trace oracle_trace
-    USES_TERMINAL
-    VERBATIM)
-
-  # Past the modeled A(2Bh) leaf, the state-zero case stores zero through executable swap
-  # 0x80077CD8 (delay-slot store into initialized word 0x8008C0B4, previous value returned) before
-  # calling 0x800771C4. This gate stops at 0x800771C4's entry; the next gate validates its indirect
-  # jalr separately.
-  add_custom_target(
-    ctr04_startup_init_swap_next_call_check
-    COMMAND
-      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
-      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
-      --oracle-trace "$<TARGET_FILE:oracle_trace>"
-      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
-      --steps 400000
-      --startup-init-swap-next-call
-    COMMAND
-      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
-      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
-      --oracle-trace "$<TARGET_FILE:oracle_trace>"
-      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
-      --steps 400000
-      --startup-init-swap-next-call
-      --force-port-field resident:gp=0
-      --expect-difference
-    DEPENDS ctr04_startup_post_memset_next_call_check ctr_crt0_port_trace oracle_trace
-    USES_TERMINAL
-    VERBATIM)
-
-  # The executable dispatcher reads its table pointer and slot from identity-checked initialized
-  # data, then reaches 0x800772E0 through jalr. The independent oracle captures that exact
-  # pre-instruction PC; generated execution reaches it through the shipping rec_dispatch router and
-  # CtrRuntime's measured GuestProgramImage.
-  add_custom_target(
-    ctr04_startup_init_dispatch_next_call_check
-    COMMAND
-      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
-      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
-      --oracle-trace "$<TARGET_FILE:oracle_trace>"
-      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
-      --steps 400000
-      --startup-init-dispatch-next-call
-    COMMAND
-      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
-      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
-      --oracle-trace "$<TARGET_FILE:oracle_trace>"
-      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
-      --steps 400000
-      --startup-init-dispatch-next-call
-      --force-port-field resident:gp=0
-      --expect-difference
-    DEPENDS ctr04_startup_init_swap_next_call_check ctr_crt0_port_trace oracle_trace
-    USES_TERMINAL
-    VERBATIM)
-
-  # Execute the one-time initializer only through its measured IRQ/DPCR prefix. The independent
-  # oracle requires actual I_MASK/I_STAT/DPCR writes and emits a separate fixed-schema snapshot at
-  # 0x800777E8 before its first instruction; generated execution reads the shipping Core devices at
-  # the same pre-entry boundary. A forced DPCR opposite must disagree while all CPU fields stay equal.
-  add_custom_target(
-    ctr04_startup_init_device_next_call_check
-    COMMAND
-      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
-      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
-      --oracle-trace "$<TARGET_FILE:oracle_trace>"
-      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
-      --steps 400000
-      --startup-init-device-next-call
-    COMMAND
-      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
-      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
-      --oracle-trace "$<TARGET_FILE:oracle_trace>"
-      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
-      --steps 400000
-      --startup-init-device-next-call
-      --force-port-field device:DPCR=0x33333332
-      --expect-difference
-    DEPENDS ctr04_startup_init_dispatch_next_call_check ctr_crt0_port_trace oracle_trace
-    USES_TERMINAL
-    VERBATIM)
-
-  # Execute the retail 1,050-word zero-fill body and prove its RAM side effect rather than relying
-  # on the executable's already-zero bytes. The oracle replay poisons the exact destination at the
-  # checked callsite and counts residual non-zero words before reproducing the next call; generated
-  # execution independently poisons, executes the shipping body, and scans the same range.
-  add_custom_target(
-    ctr04_startup_zero_fill_next_call_check
-    COMMAND
-      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
-      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
-      --oracle-trace "$<TARGET_FILE:oracle_trace>"
-      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
-      --steps 400000
-      --startup-zero-fill-next-call
-    COMMAND
-      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_crt0_trace.py"
-      "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
-      --oracle-trace "$<TARGET_FILE:oracle_trace>"
-      --port-trace "$<TARGET_FILE:ctr_crt0_port_trace>"
-      --steps 400000
-      --startup-zero-fill-next-call
-      --force-port-field memory:nonzero_words=1
-      --expect-difference
-    DEPENDS ctr04_startup_init_device_next_call_check ctr_crt0_port_trace oracle_trace
-    USES_TERMINAL
-    VERBATIM)
-else()
-  message(STATUS
-    "CTR-04 generated trace target is unavailable: emit generated/ from the verified USA executable "
-    "with the documented shipping-emitter command, then reconfigure.")
+      "${Python3_EXECUTABLE}" "${PSXPORT_DIR}/tools/check_execution_boundary.py"
+      --root "${CMAKE_CURRENT_SOURCE_DIR}"
+      --cmake "${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt"
+      --binary "$<TARGET_FILE:ctr_port>"
+  )
 endif()
+
 add_custom_target(
   cpp_policy
   COMMAND
     "${Python3_EXECUTABLE}" "${PSXPORT_DIR}/tools/check_cpp_style.py"
     --root "${CMAKE_CURRENT_SOURCE_DIR}"
     --compile-commands "${CMAKE_BINARY_DIR}"
-  DEPENDS ctr_crt0_trace_compile
+  DEPENDS ctr_runtime ctr_port
   USES_TERMINAL
-  VERBATIM)
+  VERBATIM
+)
 add_custom_target(
   provision_selftest
   COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/provision.py" --selftest
   DEPENDS discdump
   USES_TERMINAL
-  VERBATIM)
+  VERBATIM
+)
 add_custom_target(
-  oracle_boot_check
-  COMMAND
-    "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/provision.py"
-    --discdump "$<TARGET_FILE:discdump>"
-  COMMAND "$<TARGET_FILE:oracle_spike>"
-  COMMAND
-    "${Python3_EXECUTABLE}" "${PSXPORT_DIR}/tools/oracle/crossvalidate_crt0.py"
-    "${CMAKE_CURRENT_SOURCE_DIR}/scratch/raw/ctr/SCUS_944.26"
-    --build "${CMAKE_BINARY_DIR}/psxport_build"
-    --steps 400000
-  DEPENDS crt0_extract discdump oracle_spike oracle_trace
+  overlay_extract_selftest
+  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/extract_overlays.py" --selftest
   USES_TERMINAL
-  VERBATIM)
+  VERBATIM
+)
 add_custom_target(
   verify
-  COMMAND
-    "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/psxport_sync.py"
-    --check --resolved "${CMAKE_BINARY_DIR}/psxport_resolved.txt"
-  COMMAND "$<TARGET_FILE:psxport_smoke>"
-  COMMAND "$<TARGET_FILE:ctr_runtime_test>"
+  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/psxport_sync.py"
+          --check --resolved "${CMAKE_BINARY_DIR}/psxport_resolved.txt"
+  COMMAND "${CMAKE_CTEST_COMMAND}" --test-dir "${CMAKE_BINARY_DIR}" --output-on-failure
   DEPENDS
     cpp_policy
     provision_selftest
     overlay_extract_selftest
-    ctr04_compare_selftest
-    ctr05_render_frontier_selftest
-    psxport_smoke
-    ctr_runtime_test
+    ctr_command_line_test
+    ctr_execution_exit_test
+    ctr_frame_execution_test
+    ctr_render_list_diagnostic_test
   USES_TERMINAL
-  VERBATIM)
+  VERBATIM
+)

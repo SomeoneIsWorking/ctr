@@ -4,36 +4,45 @@
 #include "cfg.h"
 #include "core.h"
 #include "ctr_runtime.h"
+#include "execution_control.h"
+#include "execution_exit.h"
+#include "execution_services.h"
 #include "game.h"
 #include "native_ownership.h"
 
 #include <array>
 #include <cstdlib>
 #include <lucent/log.h>
+#include <optional>
 #include <span>
 
 namespace ctr {
 namespace {
 
-struct FrameCompleted final {};
-
 struct OverrideBinding {
   uint32_t address;
-  CtrRuntime::RecompiledOverride function;
+  const char *name;
+  psx::cpu::NativeFunction function;
 };
 
 class ScopedFrameOverrides final {
 public:
-  ScopedFrameOverrides(CtrRuntime &runtime, std::span<const OverrideBinding> bindings)
-      : runtime_(runtime), bindings_(bindings) {
+  ScopedFrameOverrides(CtrRuntime &runtime, Core &core, std::span<const OverrideBinding> bindings)
+      : runtime_(runtime), core_(core), bindings_(bindings) {
     for (const OverrideBinding &binding : bindings_) {
-      runtime_.setRecompiledOverride(binding.address, binding.function);
+      if (!runtime_.installOverride(core_, binding.address, binding.name, binding.function)) {
+        lucent::error("ctr-frame", "could not install '{}' at 0x{:08X}", binding.name, binding.address);
+        std::abort();
+      }
     }
   }
 
   ~ScopedFrameOverrides() {
     for (const OverrideBinding &binding : bindings_) {
-      runtime_.setRecompiledOverride(binding.address, nullptr);
+      if (!runtime_.removeOverride(core_, binding.address)) {
+        lucent::error("ctr-frame", "could not remove '{}' at 0x{:08X}", binding.name, binding.address);
+        std::abort();
+      }
     }
   }
 
@@ -42,6 +51,7 @@ public:
 
 private:
   CtrRuntime &runtime_;
+  Core &core_;
   std::span<const OverrideBinding> bindings_;
 };
 
@@ -91,73 +101,105 @@ void CtrFrameDriver::stepFrame(Core &core, uint32_t frame) {
   }
 
   const std::array<OverrideBinding, 11> bindings{{
-      {native::kStartupGpuInit, skipFirstStartupVSync},
-      {native::kStartupDisplayInit, skipSecondStartupVSync},
-      {native::kBootResourceWait, waitForBootResourceWithoutVSync},
-      {native::kBootResourcePump, pumpBootResourceWithoutBusyWait},
-      {native::kStartupAudioService, serviceStartupAudioWithoutBusyWait},
-      {native::kStartupAudioLoop, continueStartupAudioLoop},
-      {native::kShutdownDisplay, skipShutdownVSync},
-      {native::kVblankCallbackInstall, observeVblankCallback},
-      {native::kFrameTiming, finishFrameWithoutDebugVSync},
-      {native::kProjectionProducer, publishProjection},
-      {native::kRenderListPublisher, renderListDiagnostic_.enabled() ? observeRenderListPublication : nullptr},
+      {native::kStartupGpuInit, "startup GPU VSync owner", skipFirstStartupVSync},
+      {native::kStartupDisplayInit, "startup display VSync owner", skipSecondStartupVSync},
+      {native::kBootResourceWait, "boot resource wait owner", waitForBootResourceWithoutVSync},
+      {native::kBootResourcePump, "boot resource pump owner", pumpBootResourceWithoutBusyWait},
+      {native::kStartupAudioService, "startup audio wait owner", serviceStartupAudioWithoutBusyWait},
+      {native::kStartupAudioLoop, "startup audio loop owner", continueStartupAudioLoop},
+      {native::kShutdownDisplay, "shutdown VSync owner", skipShutdownVSync},
+      {native::kVblankCallbackInstall, "vblank callback owner", observeVblankCallback},
+      {native::kFrameTiming, "frame timing owner", finishFrameWithoutDebugVSync},
+      {native::kProjectionProducer, "projection owner", publishProjection},
+      {native::kRenderListPublisher, "render-list observer", observeRenderListPublication},
   }};
   const std::span activeBindings =
       std::span{bindings}.first(renderListDiagnostic_.enabled() ? bindings.size() : bindings.size() - 1u);
-  ScopedFrameOverrides overrides(runtime_, activeBindings);
+  ScopedFrameOverrides overrides(runtime_, core, activeBindings);
   ScopedActiveDriver active(active_, *this);
-  const int attributionDepth = core.idiag.otattr_depth;
+  frameBoundaryRequested_ = false;
+  std::optional<psx::cpu::ExecutionResult> execution;
 
-  try {
-    core.game->timing.logicFrame = frame;
-    core.rsub.otAttr.beginLogicFrame(frame);
-    core.game->timing.frameTick();
-    frameCallbacks_.deliverField(core, runtime_);
-    core.game->pad.serviceFrame();
-    // XA playback is pull-driven by the SPU mixer. State-zero waits for the startup clip task at
-    // 0x8008D708 to finish, so every host-owned field must advance audio even before the first
-    // visible presentation; otherwise the decoded ring fills and retail execution cannot leave.
-    core.game->spu_audio.frame();
-    // A libcd read completion is an interrupt in retail, so it is delivered at this per-field seam
-    // rather than inside the CdRead leaf: the loader stores its allocated buffer into the queue
-    // entry only after the read call returns, and the completion chain reads that same field.
-    discReadOwner().deliverPending(core, runtime_);
-    dmaCallbacks_.serviceSpu(core, runtime_);
-    if (dmaCallbacks_.hasPendingSpu()) {
-      throw FrameCompleted{};
-    }
+  core.game->timing.logicFrame = frame;
+  core.rsub.otAttr.beginLogicFrame(frame);
+  core.game->timing.frameTick();
+  frameCallbacks_.deliverField(core, runtime_);
+  core.game->pad.serviceFrame();
+  // XA playback is pull-driven by the SPU mixer. State-zero waits for the startup clip task at
+  // 0x8008D708 to finish, so every host-owned field must advance audio even before the first
+  // visible presentation; otherwise the decoded ring fills and retail execution cannot leave.
+  core.game->spu_audio.frame();
+  // A libcd read completion is an interrupt in retail, so it is delivered at this per-field seam
+  // rather than inside the CdRead leaf: the loader stores its allocated buffer into the queue
+  // entry only after the read call returns, and the completion chain reads that same field.
+  discReadOwner().deliverPending(core, runtime_);
+  dmaCallbacks_.serviceSpu(core, runtime_);
+  if (dmaCallbacks_.hasPendingSpu()) {
+    frameBoundaryRequested_ = true;
+  }
 
-    if (frameSuffixPending_) {
-      resumeFrameSuffix(core);
-    } else if (startupAudioWaitResume_ != 0) {
-      resumeStartupAudioWait(core);
-    } else if (bootResourcePumpPhase_ != BootResourcePumpPhase::Inactive) {
-      resumeBootResourcePump(core);
-    } else if (bootResourceWaitFields_ != 0) {
-      --bootResourceWaitFields_;
-      throw FrameCompleted{};
-    }
-    if (bootResourceWaitResume_ != 0) {
-      resumeBootResourceWait(core);
-    } else if (!bootEntered_) {
-      bootEntered_ = true;
-      runtime_.bootInit(core);
-    } else {
-      runtime_.dispatch(core, native::kFrameLoopResume);
-    }
-  } catch (const FrameCompleted &) {
-    // The finite owner intentionally unwinds through generated func_* wrappers before their manual
-    // otattrPop executes. Restore the entry depth at the same ownership transfer.
-    core.idiag.otattr_depth = attributionDepth;
-    renderListDiagnostic_.finishField(core, frame);
-    presentation_.finishField(core);
-    ++completedFrames_;
+  if (frameBoundaryPending(core)) {
+    finishField(core, frame);
+    return;
+  } else if (frameSuffixPending_) {
+    resumeFrameSuffix(core);
+  } else if (startupAudioWaitResume_ != 0) {
+    resumeStartupAudioWait(core);
+  } else if (bootResourcePumpPhase_ != BootResourcePumpPhase::Inactive) {
+    resumeBootResourcePump(core);
+  } else if (bootResourceWaitFields_ != 0) {
+    --bootResourceWaitFields_;
+    frameBoundaryRequested_ = true;
+  }
+  if (frameBoundaryPending(core)) {
+    finishField(core, frame);
+    return;
+  } else if (bootResourceWaitResume_ != 0) {
+    resumeBootResourceWait(core);
+  } else if (!bootEntered_) {
+    bootEntered_ = true;
+    execution = runtime_.dispatch(core, runtime_.bootTarget());
+  } else {
+    execution = runtime_.dispatch(core, native::kFrameLoopResume);
+  }
+  if ((!execution && frameBoundaryPending(core)) ||
+      (execution && execution->reason == psx::cpu::ExecutionExitReason::FrameBoundary)) {
+    finishField(core, frame);
     return;
   }
 
-  lucent::error("ctr-frame", "retail execution returned without completing CTR frame {}", frame);
+  if (execution) {
+    lucent::error("ctr-frame",
+                  "retail execution left frame {} at 0x{:08X} with {}",
+                  frame,
+                  execution->guestPc,
+                  psx::cpu::executionExitName(execution->reason));
+  } else {
+    lucent::error("ctr-frame", "retail execution returned without completing CTR frame {}", frame);
+  }
   std::abort();
+}
+
+void CtrFrameDriver::requestFrameBoundary(Core &core) {
+  frameBoundaryRequested_ = true;
+  psx::cpu::requestExecutionExit(core, psx::cpu::ExecutionExitReason::FrameBoundary);
+}
+
+bool CtrFrameDriver::frameBoundaryPending(Core &core) const {
+  const auto &pending = core.executionControl().pending();
+  if (pending && pending->reason != psx::cpu::ExecutionExitReason::FrameBoundary) {
+    lucent::error(
+        "ctr-frame", "unexpected pending {} at field completion", psx::cpu::executionExitName(pending->reason));
+    std::abort();
+  }
+  return frameBoundaryRequested_ || pending.has_value();
+}
+
+void CtrFrameDriver::finishField(Core &core, uint32_t frame) {
+  (void)core.executionControl().consume();
+  renderListDiagnostic_.finishField(core, frame);
+  presentation_.finishField(core);
+  ++completedFrames_;
 }
 
 uint32_t CtrFrameDriver::completedFrames() const {
@@ -213,7 +255,7 @@ void CtrFrameDriver::finishFrameWithoutDebugVSync(Core *core) {
     return;
   }
   if (core->r[31] == native::kFrameTimingQueryReturn) {
-    active_->runtime_.runRecompiledSuper(*core, native::kFrameTiming);
+    active_->runtime_.callOriginalToReturn(*core, native::kFrameTiming, "CTR frame-timing query");
     return;
   }
   wrongReturn("frame timing owner", native::kFrameTimingReturn, core->r[31]);
@@ -232,14 +274,12 @@ void CtrFrameDriver::continueAfterVSync(
   if (core.r[31] != expectedReturn) {
     wrongReturn("VSync predecessor", expectedReturn, core.r[31]);
   }
-  runtime_.runRecompiledSuper(core, superAddress);
+  runtime_.callOriginalToReturn(core, superAddress, "CTR VSync predecessor");
   // Preserve the exact jal/delay-slot effects while omitting only the forbidden guest call.
   core.r[31] = continuation;
   core.r[4] = mode;
-  rec_guest_instruction_ticks(&core, 2u);
-  runtime_.dispatch(core, continuation);
-  lucent::error("ctr-frame", "post-VSync continuation 0x{:08X} returned before a frame boundary", continuation);
-  std::abort();
+  psx::cpu::accountGuestInstructions(core, 2u);
+  runtime_.propagateFrameBoundary(core, runtime_.dispatch(core, continuation), "CTR post-VSync continuation");
 }
 
 void CtrFrameDriver::beginBootResourceWait(Core &core) {
@@ -250,7 +290,7 @@ void CtrFrameDriver::beginBootResourceWait(Core &core) {
   const uint32_t originalStack = core.r[29];
   const uint32_t waitMode = core.mem_r32(originalStack + 16u);
   if (waitMode != 0xFFFFFFFFu) {
-    runtime_.runRecompiledSuper(core, native::kBootResourceWait);
+    runtime_.callOriginalToReturn(core, native::kBootResourceWait, "CTR boot-resource wait");
     return;
   }
   if (bootResourceWaitResume_ != 0 || bootResourceWaitFields_ != 0) {
@@ -258,8 +298,8 @@ void CtrFrameDriver::beginBootResourceWait(Core &core) {
     std::abort();
   }
 
-  // Exact 0x80031FDC..0x80032074 path for fifth argument -1 in SCUS_944.26. The generated helper
-  // calls remain authoritative; this transcription owns only the caller frame and omits VSync(2).
+  // Exact 0x80031FDC..0x80032074 path for fifth argument -1 in SCUS_944.26. Retail helper calls
+  // execute through Lightrec; this transcription owns only the caller frame and omits VSync(2).
   core.r[29] -= 72u;
   core.mem_w32(core.r[29] + 52u, core.r[17]);
   core.r[17] = core.mem_r32(core.r[29] + 88u);
@@ -272,16 +312,16 @@ void CtrFrameDriver::beginBootResourceWait(Core &core) {
   core.mem_w32(core.r[29] + 60u, core.r[19]);
   core.r[19] = core.r[7];
   core.mem_w32(core.r[29] + 68u, core.r[31]);
-  rec_guest_instruction_ticks(&core, 13u);
+  psx::cpu::accountGuestInstructions(core, 13u);
   if (core.r[20] == 0) {
     core.r[31] = 0x80032018u;
-    rec_guest_instruction_ticks(&core, 2u);
-    runtime_.dispatch(core, kBeforeResourceWait);
+    psx::cpu::accountGuestInstructions(core, 2u);
+    runtime_.dispatchToReturn(core, kBeforeResourceWait, "CTR pre-resource-wait helper");
   }
 
   core.r[2] = 0xFFFFFFFFu;
   core.r[2] = 0xFFFFFFFEu;
-  rec_guest_instruction_ticks(&core, 3u);
+  psx::cpu::accountGuestInstructions(core, 3u);
   core.r[4] = core.r[16];
   core.r[5] = 3u;
   core.r[6] = core.r[18];
@@ -294,47 +334,53 @@ void CtrFrameDriver::beginBootResourceWait(Core &core) {
   core.mem_w32(core.r[29] + 16u, core.r[19]);
   core.r[31] = 0x80032054u;
   core.mem_w32(core.r[29] + 20u, 0u);
-  rec_guest_instruction_ticks(&core, 12u);
-  runtime_.dispatch(core, kResourceSetup);
+  psx::cpu::accountGuestInstructions(core, 12u);
+  runtime_.dispatchToReturn(core, kResourceSetup, "CTR resource setup");
   core.mem_w32(core.r[29] + 36u, core.r[2]);
   core.r[2] = core.mem_r32(core.r[19]);
   core.r[4] = core.r[29] + 24u;
   core.mem_w32(core.r[29] + 44u, 0u);
   core.r[31] = 0x8003206Cu;
   core.mem_w32(core.r[29] + 40u, core.r[2]);
-  rec_guest_instruction_ticks(&core, 6u);
-  runtime_.dispatch(core, kResourceCommit);
+  psx::cpu::accountGuestInstructions(core, 6u);
+  runtime_.dispatchToReturn(core, kResourceCommit, "CTR resource commit");
 
   core.r[31] = native::kBootResourceWaitReturn;
   core.r[4] = 2u;
-  rec_guest_instruction_ticks(&core, 2u);
+  psx::cpu::accountGuestInstructions(core, 2u);
   bootResourceWaitResume_ = native::kBootResourceWaitReturn;
   bootResourceWaitFields_ = 1u;
-  throw FrameCompleted{};
+  requestFrameBoundary(core);
 }
 
 void CtrFrameDriver::resumeBootResourceWait(Core &core) {
   const uint32_t resume = bootResourceWaitResume_;
   bootResourceWaitResume_ = 0;
-  runtime_.dispatch(core, resume);
-  const uint32_t caller = core.r[31];
+  // The suffix restores its caller from the frame created by beginBootResourceWait. Incoming ra
+  // still names the interior VSync continuation and is not the suffix's return boundary.
+  const uint32_t caller = core.mem_r32(core.r[29] + 68u);
   if (caller != native::kBootResourceWaitFirstCaller && caller != native::kBootResourceWaitSecondCaller &&
       caller != native::kBootResourceWaitRaceCaller) {
     wrongReturn("state-zero resource wait", native::kBootResourceWaitFirstCaller, caller);
   }
-  runtime_.dispatch(core, caller);
+  if (!psx::cpu::requireGuestReturn(runtime_.dispatchToContinuation(core, resume, caller),
+                                    "CTR resource-wait suffix")) {
+    std::abort();
+  }
   if (caller == native::kBootResourceWaitRaceCaller) {
+    const auto callerResult = runtime_.dispatchToContinuation(core, caller, native::kBootResourceWaitRaceResume);
+    if (!callerResult.returned()) {
+      runtime_.propagateFrameBoundary(core, callerResult, "CTR race resource caller");
+      return;
+    }
     if (core.r[31] != native::kBootResourceWaitRaceResume) {
       wrongReturn("state-zero race resource suffix", native::kBootResourceWaitRaceResume, core.r[31]);
     }
-    runtime_.dispatch(core, native::kBootResourceWaitRaceResume);
-    lucent::error("ctr-frame",
-                  "state-zero race resource continuation 0x{:08X} returned before a frame boundary",
-                  native::kBootResourceWaitRaceResume);
-    std::abort();
+    runtime_.propagateFrameBoundary(
+        core, runtime_.dispatch(core, native::kBootResourceWaitRaceResume), "CTR race resource continuation");
+    return;
   }
-  lucent::error("ctr-frame", "state-zero resource continuation 0x{:08X} returned before a frame boundary", caller);
-  std::abort();
+  runtime_.propagateFrameBoundary(core, runtime_.dispatch(core, caller), "CTR resource continuation");
 }
 
 void CtrFrameDriver::beginBootResourcePump(Core &core) {
@@ -346,7 +392,7 @@ void CtrFrameDriver::beginBootResourcePump(Core &core) {
     std::abort();
   }
 
-  // Exact 0x8002DD24..0x8002DD3C setup. The generated resource state machine remains authoritative;
+  // Exact 0x8002DD24..0x8002DD3C setup. The retail resource state machine remains authoritative;
   // only its host-starving do/while ownership moves into the finite driver.
   core.r[29] -= 32u;
   core.r[4] = 33u;
@@ -354,8 +400,8 @@ void CtrFrameDriver::beginBootResourcePump(Core &core) {
   core.mem_w8(core.r[28] + 2248u, 0u);
   core.r[31] = 0x8002DD3Cu;
   core.r[5] = core.r[29] + 16u;
-  rec_guest_instruction_ticks(&core, 6u);
-  runtime_.dispatch(core, native::kBootResourcePumpBegin);
+  psx::cpu::accountGuestInstructions(core, 6u);
+  runtime_.dispatchToReturn(core, native::kBootResourcePumpBegin, "CTR resource-pump begin");
   bootResourcePumpPhase_ = BootResourcePumpPhase::ResourcePoll;
   resumeBootResourcePump(core);
 }
@@ -364,19 +410,23 @@ void CtrFrameDriver::resumeBootResourcePump(Core &core) {
   if (bootResourcePumpPhase_ == BootResourcePumpPhase::ResourcePoll) {
     if (core.pending_work) {
       servicePendingInterrupts(core);
+      if (frameBoundaryPending(core)) {
+        return;
+      }
     }
     core.r[31] = 0x8002DD44u;
-    rec_guest_instruction_ticks(&core, 2u);
-    runtime_.dispatch(core, native::kBootResourcePumpPoll);
-    rec_guest_instruction_ticks(&core, 2u);
+    psx::cpu::accountGuestInstructions(core, 2u);
+    runtime_.dispatchToReturn(core, native::kBootResourcePumpPoll, "CTR resource-pump poll");
+    psx::cpu::accountGuestInstructions(core, 2u);
     if (core.r[2] == 0u) {
-      throw FrameCompleted{};
+      requestFrameBoundary(core);
+      return;
     }
 
     core.r[31] = 0x8002DD54u;
     core.r[4] = 28u;
-    rec_guest_instruction_ticks(&core, 2u);
-    runtime_.dispatch(core, native::kBootResourcePumpCommit);
+    psx::cpu::accountGuestInstructions(core, 2u);
+    runtime_.dispatchToReturn(core, native::kBootResourcePumpCommit, "CTR resource-pump commit");
     bootResourcePumpPhase_ = BootResourcePumpPhase::CommitPoll;
   }
 
@@ -386,13 +436,17 @@ void CtrFrameDriver::resumeBootResourcePump(Core &core) {
   }
   if (core.pending_work) {
     servicePendingInterrupts(core);
+    if (frameBoundaryPending(core)) {
+      return;
+    }
   }
   core.r[31] = 0x8002DD5Cu;
-  rec_guest_instruction_ticks(&core, 2u);
-  runtime_.dispatch(core, native::kBootResourcePumpCommitPoll);
-  rec_guest_instruction_ticks(&core, 2u);
+  psx::cpu::accountGuestInstructions(core, 2u);
+  runtime_.dispatchToReturn(core, native::kBootResourcePumpCommitPoll, "CTR resource-pump commit poll");
+  psx::cpu::accountGuestInstructions(core, 2u);
   if (core.r[2] == 0u) {
-    throw FrameCompleted{};
+    requestFrameBoundary(core);
+    return;
   }
   finishBootResourcePump(core);
 }
@@ -401,45 +455,48 @@ void CtrFrameDriver::finishBootResourcePump(Core &core) {
   const uint32_t continuation = core.mem_r32(core.r[29] + 24u);
   core.r[31] = continuation;
   core.r[29] += 32u;
-  rec_guest_instruction_ticks(&core, 4u);
+  psx::cpu::accountGuestInstructions(core, 4u);
   bootResourcePumpPhase_ = BootResourcePumpPhase::Inactive;
   if (continuation != native::kBootResourcePumpReturn) {
     wrongReturn("state-zero resource-pump suffix", native::kBootResourcePumpReturn, continuation);
   }
-  runtime_.dispatch(core, continuation);
-  lucent::error("ctr-frame", "resource-pump continuation 0x{:08X} returned before a frame boundary", continuation);
-  std::abort();
+  runtime_.propagateFrameBoundary(core, runtime_.dispatch(core, continuation), "CTR resource-pump continuation");
 }
 
 void CtrFrameDriver::servicePendingInterrupts(Core &core) {
-  // A synchronous native transfer can become owed during the immediately preceding generated
+  // A synchronous native transfer can become owed during the immediately preceding translated
   // resource poll. Deliver CTR's measured channel-4 callback before the generic direct-runtime path
   // consumes a completion for which it has no legacy callback-table view, then service all remaining
   // IRQ sources normally.
   dmaCallbacks_.serviceSpu(core, runtime_);
   if (dmaCallbacks_.hasPendingSpu()) {
-    throw FrameCompleted{};
+    requestFrameBoundary(core);
+    return;
   }
-  rec_irq_poll(&core);
+  psx::cpu::servicePendingWork(core);
 }
 
 void CtrFrameDriver::resumeStartupAudioLoop(Core &core) {
   // The wrapper for this exact loop first lets Hle::irqPoll finish CTR's custom-exception unwind.
   // A channel-4 completion created inside that unwind is now deliverable, but the direct runtime's
   // generic DMA table is intentionally absent. Deliver one measured callback here. If it starts the
-  // next synchronous transfer, yield the native field before generated code can consume it without
+  // next synchronous transfer, yield the native field before translated code can consume it without
   // a callback; hardware would not complete both transfers in the same interrupt either.
   dmaCallbacks_.serviceSpu(core, runtime_);
   if (dmaCallbacks_.hasPendingSpu()) {
     startupAudioWaitResume_ = native::kStartupAudioLoop;
-    throw FrameCompleted{};
+    requestFrameBoundary(core);
+    return;
   }
-  runtime_.runRecompiledSuper(core, native::kStartupAudioLoop);
+  runtime_.propagateFrameBoundary(
+      core,
+      psx::cpu::callOriginalUntilExit(core, native::kStartupAudioLoop, psx::cpu::ExecutionBudget::currentTurn(core)),
+      "CTR startup-audio loop");
 }
 
 void CtrFrameDriver::serviceStartupAudio(Core &core) {
   const uint32_t caller = core.r[31];
-  runtime_.runRecompiledSuper(core, native::kStartupAudioService);
+  runtime_.callOriginalToReturn(core, native::kStartupAudioService, "CTR startup-audio service");
   if (caller != native::kStartupAudioServiceReturn) {
     return;
   }
@@ -451,15 +508,13 @@ void CtrFrameDriver::serviceStartupAudio(Core &core) {
     std::abort();
   }
   startupAudioWaitResume_ = native::kStartupAudioServiceReturn;
-  throw FrameCompleted{};
+  requestFrameBoundary(core);
 }
 
 void CtrFrameDriver::resumeStartupAudioWait(Core &core) {
   const uint32_t resume = startupAudioWaitResume_;
   startupAudioWaitResume_ = 0u;
-  runtime_.dispatch(core, resume);
-  lucent::error("ctr-frame", "state-zero audio continuation 0x{:08X} returned before a frame boundary", resume);
-  std::abort();
+  runtime_.propagateFrameBoundary(core, runtime_.dispatch(core, resume), "CTR startup-audio continuation");
 }
 
 void CtrFrameDriver::completeFrame(Core &core) {
@@ -467,7 +522,7 @@ void CtrFrameDriver::completeFrame(Core &core) {
     wrongReturn("frame timing super", native::kFrameTimingReturn, core.r[31]);
   }
 
-  runtime_.runRecompiledSuper(core, native::kFrameTiming);
+  runtime_.callOriginalToReturn(core, native::kFrameTiming, "CTR frame timing");
 
   // Exact 0x8003785C..0x80037880 bridge from SCUS_944.26. It retains the result store, debug-flag
   // read, and guest instruction accounting, but deliberately omits the conditional VSync(0) call.
@@ -476,7 +531,7 @@ void CtrFrameDriver::completeFrame(Core &core) {
   core.r[2] = core.mem_r32(core.r[3] + 9580u);
   core.r[2] &= 4096u;
   const bool debugVSync = core.r[2] != 0;
-  rec_guest_instruction_ticks(&core, debugVSync ? 9u : 7u);
+  psx::cpu::accountGuestInstructions(core, debugVSync ? 9u : 7u);
   if (debugVSync) {
     // These are the jal/delay-slot register effects at 0x80037878/0x8003787C. The host still owns
     // timing, so the call itself is deliberately absent.
@@ -505,15 +560,19 @@ void CtrFrameDriver::resumeFrameSuffix(Core &core) {
     std::abort();
   }
   if (frameSuffixIsWaiting(core)) {
-    throw FrameCompleted{};
+    requestFrameBoundary(core);
+    return;
   }
 
-  runtime_.dispatch(core, native::kFrameSuffix);
+  if (!psx::cpu::requireGuestReturn(
+          runtime_.dispatchToContinuation(core, native::kFrameSuffix, native::kFrameLoopResume), "CTR frame suffix")) {
+    std::abort();
+  }
   if (core.r[31] != native::kFrameLoopResume) {
     wrongReturn("frame suffix", native::kFrameLoopResume, core.r[31]);
   }
   frameSuffixPending_ = false;
-  throw FrameCompleted{};
+  requestFrameBoundary(core);
 }
 
 void CtrFrameDriver::publishMeasuredProjection(Core &core) {
@@ -530,13 +589,13 @@ void CtrFrameDriver::publishMeasuredProjection(Core &core) {
     std::abort();
   }
   projection_.publish(core, [this](Core &projectionCore) {
-    runtime_.runRecompiledSuper(projectionCore, native::kProjectionProducer);
+    runtime_.callOriginalToReturn(projectionCore, native::kProjectionProducer, "CTR projection producer");
   });
 }
 
 void CtrFrameDriver::observePublishedRenderList(Core &core) {
   renderListDiagnostic_.observePublication(core, [this](Core &publisherCore) {
-    runtime_.runRecompiledSuper(publisherCore, native::kRenderListPublisher);
+    runtime_.callOriginalToReturn(publisherCore, native::kRenderListPublisher, "CTR render-list publisher");
   });
 }
 

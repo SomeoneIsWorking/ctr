@@ -16,16 +16,19 @@ Success conditions:
 - The product reaches and sustains visible gameplay with working input and audio.
 - Faithful behavior is compared against independent retail execution at deterministic boundaries,
   with every known divergence recorded rather than hidden by a fallback.
-- Product link/selector checks prove that no interpreter, generated guest corpus, or engine fallback
-  is present; native overrides, original calls, bounded exits, and invalidation use the shipping
-  executor contract.
+- Product link/selector checks prove that no standalone interpreter mode, generated guest corpus, or
+  engine selector is present; any backend refusal fallback is typed, measured, bounded, and returns
+  to dynarec dispatch. Native overrides, original calls, bounded exits, and invalidation use the
+  shipping executor contract.
 
 Constraints and non-goals:
 
 - No build, install, provisioning, or launch step emits or compiles guest code ahead of time.
-- An interpreter may be built only as a separate test/diagnostic oracle and is absent from gameplay.
-- The static route is frozen migration evidence until representative gameplay authorizes complete
-  removal; it is never retained as a compatibility mode.
+- An interpreter-only mode may be built only as a separate test/diagnostic oracle. Gameplay may use
+  only the shared backend's bounded refusal fallback, never an interpreter selector or missing-host
+  substitute.
+- Measurements from the removed static route remain evidence only; its translator, corpus,
+  registry, seeds, compatibility selector, and static-only tests never return.
 - Disc images, extracted executable bytes, traces, and decompiler output remain outside git.
 - A framework smoke target, static producer census, or pre-frame boot boundary is not the product.
 

@@ -12,7 +12,7 @@ inline constexpr uint32_t kLoopTop = 0x8003C5D0u;
 inline constexpr uint32_t kInitializerEvidenceFrontier = 0x800772E0u;
 
 // Exact retail calls which precede guest VSync and their post-VSync continuations. The title driver
-// preserves each generated callee as a super, then resumes after the forbidden timing primitive.
+// preserves each JIT-executed retail callee through callOriginal, then resumes after the forbidden timing primitive.
 inline constexpr uint32_t kStartupGpuInit = 0x8003D7D8u;
 inline constexpr uint32_t kStartupGpuInitReturn = 0x8003C7D8u;
 inline constexpr uint32_t kAfterFirstStartupVSync = 0x8003C7E0u;
@@ -33,8 +33,8 @@ inline constexpr uint32_t kBootResourceWaitRaceCaller = 0x800336F8u;
 // continuations above, it restores that function's saved frame and returns to its sole direct caller.
 inline constexpr uint32_t kBootResourceWaitRaceResume = 0x8003CC98u;
 // State-zero's first resource continuation enters 0x8002DD24, whose two retail do/while loops poll
-// asynchronous CD/GPU stages without returning to the host. The title driver retains the generated
-// stage functions but yields a host field after each false poll, then resumes the exact caller suffix.
+// asynchronous CD/GPU stages without returning to the host. The title driver retains the retail
+// stage functions through Lightrec but yields a host field after each false poll, then resumes the exact caller suffix.
 inline constexpr uint32_t kBootResourcePump = 0x8002DD24u;
 inline constexpr uint32_t kBootResourcePumpReturn = 0x8003C8FCu;
 inline constexpr uint32_t kBootResourcePumpBegin = 0x800297A0u;
@@ -57,20 +57,20 @@ inline constexpr uint32_t kShutdownDisplay = 0x80025208u;
 inline constexpr uint32_t kShutdownDisplayReturn = 0x8003CF30u;
 inline constexpr uint32_t kAfterShutdownVSync = 0x8003CF38u;
 
-// State 3 calls the frame/presentation owner once per iteration. Its generated prefix reaches the
+// State 3 calls the frame/presentation owner once per iteration. Its translated retail prefix reaches the
 // unconditional timing calculation below; the native bridge skips only conditional debug VSync(0)
-// and enters the generated suffix, which restores the frame and returns to kFrameLoopResume.
+// and enters the JIT-executed suffix, which restores the frame and returns to kFrameLoopResume.
 inline constexpr uint32_t kFrameOwner = 0x80035E70u;
 inline constexpr uint32_t kFrameTiming = 0x8004B3A4u;
 inline constexpr uint32_t kFrameTimingReturn = 0x8003785Cu;
 // The timing leaf's only other direct caller is a plain elapsed-time query. It returns through the
-// generated wrapper and has no adjacent VSync to omit.
+// JIT-executed retail wrapper and has no adjacent VSync to omit.
 inline constexpr uint32_t kFrameTimingQueryReturn = 0x8004B438u;
 inline constexpr uint32_t kFrameSuffix = 0x80037880u;
 inline constexpr uint32_t kFrameLoopResume = 0x8003CEB4u;
 // The suffix waits for the DrawSync callback's byte and for the VSync callback's two-field
 // countdown. Both callbacks are registered by the retained retail APIs and delivered by the native
-// field owner; the generated suffix remains the authority once this exact predicate becomes false.
+// field owner; the retail suffix remains the authority once this exact predicate becomes false.
 inline constexpr uint32_t kVblankCallbackInstall = 0x80077254u;
 inline constexpr uint32_t kDrawSyncCallbackSlot = 0x8008AD8Cu;
 inline constexpr uint32_t kGameStateGpOffset = 832u;
@@ -86,7 +86,7 @@ inline constexpr uint32_t kProjectionReturnState = 0x8003BD34u;
 inline constexpr uint32_t kProjectionReturnOverlay = 0x8003F5C8u;
 
 // This publisher allocates the transient descriptor-pair list in gameState+0x1C94 and splices the
-// three source lists through node+8. It remains generated; the debug-only boundary observer calls
+// three source lists through node+8. It remains retail code; the debug-only boundary observer calls
 // it as a super and watches only the published pair after it returns.
 inline constexpr uint32_t kRenderListPublisher = 0x8003B43Cu;
 
@@ -110,9 +110,9 @@ inline constexpr uint32_t kSetGeomScreen = 0x8007781Cu;
 inline constexpr uint32_t kSetGeomOffset = 0x8007782Cu;
 inline constexpr uint32_t kProjectionWindowEnd = 0x80077844u;
 
-// Stock libcd leaves reached by CdInit. CTR's generated CdSync polls VSync(-1) while waiting for a
+// Stock libcd leaves reached by CdInit. CTR's retail CdSync polls VSync(-1) while waiting for a
 // controller interrupt. The PC CD model completes commands synchronously, so these two library
-// leaves report that native result and the generated polling loop is never entered.
+// leaves report that native result and the polling loop is never entered.
 inline constexpr uint32_t kCdSync = 0x8007B6F0u;
 inline constexpr uint32_t kCdControl = 0x8007BC38u;
 inline constexpr uint32_t kCdControlWindowEnd = 0x8007C044u;
