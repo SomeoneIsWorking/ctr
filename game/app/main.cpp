@@ -7,6 +7,7 @@
 #include "hw_bind.h"
 #include "lightrec_executor.h"
 #include "native_ownership.h"
+#include "psx_exe_image.h"
 #include "runtime_composition.h"
 
 #include <filesystem>
@@ -20,8 +21,6 @@ void spu_init();
 void watchdog_init();
 }
 
-void gte_init();
-void load_exe(const char *path, Core *core);
 namespace {
 
 constexpr const char *kDefaultExecutable = "scratch/raw/ctr/SCUS_944.26";

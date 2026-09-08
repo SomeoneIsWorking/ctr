@@ -11,6 +11,10 @@ runtime. It contains no offline source corpus, static dispatcher, standalone int
 engine selector. Lightrec may use only its typed, measured, bounded refusal fallback and must return
 to dynarec dispatch; an interpreter-only mode may be built only as a separate diagnostic target.
 
+WebAssembly is part of the migration release contract: the browser-capable build must use the
+same dynarec-first execution path and the same typed exit/fallback accounting as desktop. If web
+parity is not yet proven, this remains a blocked milestone with explicit criteria before release.
+
 psxport owns the per-`Core` Lightrec instance, architectural-state synchronization, device/HLE
 callbacks, image-aware override table, original calls, bounded exits, and invalidation. CTR owns its
 identity, overlay policy, native CD/DMA/frame/projection/presentation owners, title continuations,
