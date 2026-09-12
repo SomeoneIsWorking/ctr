@@ -123,10 +123,11 @@ boundary is covered asset-free; runtime overlay activation, nonzero real-game bl
 bounded-fallback denominators, and frontier reproduction remain incomplete. Issue 0024 owns this
 migration.
 
-A bounded twelve-second silent Linux observation with identity-verified media reached twelve
-libcd read-completion callbacks and NTSC display setup. It then repeatedly reported unclaimed
-interrupt masks `0x200`/`0x204` until the observation timeout. No fatal exit was observed; no
-representative gameplay, image fidelity, or complete runtime counter report was established.
+A bounded twelve-second silent Linux run of the current Clang/Lightrec product against verified
+media reached twelve libcd callback completions, a polled-read counter of eight, NTSC display setup,
+and the first `FramePresenter::commit` call. It continued through repeated unclaimed interrupt masks
+`0x200`/`0x204`; those warnings are not established as the cause of a stall. The bound interrupted
+Vulkan initialization before a completed picture, gameplay, or a complete runtime counter report.
 
 Gap: preserve all current CD, DMA, frame, projection, and presentation owners and
 reach issue 0023's corrupt render-list boundary with nonzero Lightrec execution. Representative gameplay, deterministic oracle/device comparison,

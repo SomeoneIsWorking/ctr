@@ -1,5 +1,6 @@
 #pragma once
 
+#include "async_disc_owner.h"
 #include "dma_callback_owner.h"
 #include "frame_callback_owner.h"
 #include "game_runtime.h"
@@ -25,6 +26,7 @@ public:
   [[nodiscard]] uint32_t completedFrames() const;
   [[nodiscard]] const ProjectionOwner &projection() const;
   [[nodiscard]] const PresentationOwner &presentation() const;
+  [[nodiscard]] DiscReadOwner &discReadOwner();
 
 private:
   enum class BootResourcePumpPhase : uint8_t {
@@ -68,6 +70,7 @@ private:
   void finishField(Core &core, uint32_t frame);
 
   CtrRuntime &runtime_;
+  DiscReadOwner discReadOwner_;
   DmaCallbackOwner dmaCallbacks_;
   FrameCallbackOwner frameCallbacks_;
   ProjectionOwner projection_;

@@ -52,9 +52,9 @@ private:
   uint32_t polledReads_ = 0;
 };
 
-// The process owns one guest CD drive, so it owns one pending-completion state. The PlatformHle
-// binding and the title frame driver reach the same owner through this.
-DiscReadOwner &discReadOwner();
+// Resolve the completion owner for this Core's game. The PlatformHle binding and the frame driver
+// must use the same per-game state without sharing an owed callback with another Core.
+DiscReadOwner &discReadOwner(Core &core);
 
 // PlatformHle binding for the measured stock libcd CdRead leaf: the shared synchronous transfer,
 // then an owed completion callback.

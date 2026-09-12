@@ -3,6 +3,7 @@
 #include "cd_control.h"
 #include "core.h"
 #include "ctr_runtime.h"
+#include "frame_driver.h"
 #include "game.h"
 #include "native_ownership.h"
 
@@ -55,9 +56,17 @@ void DiscReadOwner::deliverPending(Core &core, const CtrRuntime &runtime) {
   lucent::info("ctr-disc", "delivered libcd read-completion callback {} -> 0x{:08X}", deliveredCallbacks_, callback);
 }
 
-DiscReadOwner &discReadOwner() {
-  static DiscReadOwner owner;
-  return owner;
+DiscReadOwner &discReadOwner(Core &core) {
+  if (!core.game || !core.game->frameDriver) {
+    lucent::error("ctr-disc", "native CdRead has no bound CTR frame driver");
+    std::abort();
+  }
+  auto *driver = dynamic_cast<CtrFrameDriver *>(core.game->frameDriver.get());
+  if (!driver) {
+    lucent::error("ctr-disc", "native CdRead is bound to a non-CTR frame driver");
+    std::abort();
+  }
+  return driver->discReadOwner();
 }
 
 void cdReadWithCompletionCallback(Core *core) {
@@ -67,7 +76,8 @@ void cdReadWithCompletionCallback(Core *core) {
     std::abort();
   }
   const CtrRuntime &ctrRuntime = *static_cast<const CtrRuntime *>(runtime);
-  discReadOwner().deliverPending(*core, ctrRuntime);
+  auto &completion = discReadOwner(*core);
+  completion.deliverPending(*core, ctrRuntime);
   cd_read_stock_sync(core);
   if (core->r[2] == 0u) {
     // cd_read_stock_sync has already named the unreadable sector. Retail would deliver an error
@@ -76,7 +86,7 @@ void cdReadWithCompletionCallback(Core *core) {
     lucent::error("ctr-disc", "native CdRead failed; the retail completion callback cannot be delivered");
     std::abort();
   }
-  discReadOwner().noteTransferComplete(*core);
+  completion.noteTransferComplete(*core);
 }
 
 } // namespace ctr

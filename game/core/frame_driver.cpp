@@ -132,7 +132,7 @@ void CtrFrameDriver::stepFrame(Core &core, uint32_t frame) {
   // A libcd read completion is an interrupt in retail, so it is delivered at this per-field seam
   // rather than inside the CdRead leaf: the loader stores its allocated buffer into the queue
   // entry only after the read call returns, and the completion chain reads that same field.
-  discReadOwner().deliverPending(core, runtime_);
+  discReadOwner_.deliverPending(core, runtime_);
   dmaCallbacks_.serviceSpu(core, runtime_);
   if (dmaCallbacks_.hasPendingSpu()) {
     frameBoundaryRequested_ = true;
@@ -212,6 +212,10 @@ const ProjectionOwner &CtrFrameDriver::projection() const {
 
 const PresentationOwner &CtrFrameDriver::presentation() const {
   return presentation_;
+}
+
+DiscReadOwner &CtrFrameDriver::discReadOwner() {
+  return discReadOwner_;
 }
 
 void CtrFrameDriver::skipFirstStartupVSync(Core *core) {

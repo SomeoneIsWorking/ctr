@@ -70,6 +70,11 @@ if(BUILD_TESTING)
   target_link_libraries(ctr_execution_exit_test PRIVATE ctr_runtime)
   add_test(NAME ctr_execution_exit COMMAND ctr_execution_exit_test)
 
+  add_executable(ctr_disc_ownership_test tests/ctr_disc_ownership.cpp)
+  target_compile_features(ctr_disc_ownership_test PRIVATE cxx_std_20)
+  target_link_libraries(ctr_disc_ownership_test PRIVATE ctr_runtime)
+  add_test(NAME ctr_disc_ownership COMMAND ctr_disc_ownership_test)
+
   add_executable(ctr_frame_execution_test tests/ctr_frame_execution.cpp)
   target_compile_features(ctr_frame_execution_test PRIVATE cxx_std_20)
   target_link_libraries(ctr_frame_execution_test PRIVATE ctr_runtime)
@@ -141,6 +146,7 @@ add_custom_target(
     overlay_extract_selftest
     ctr_command_line_test
     ctr_execution_exit_test
+    ctr_disc_ownership_test
     ctr_frame_execution_test
     ctr_render_list_diagnostic_test
   USES_TERMINAL
