@@ -40,12 +40,21 @@ an all-ones descriptor reaches the exit at `0x8006AD20` via `0x8006A52C`. These 
 flow facts, not evidence that this live list is malformed or that its loop is infinite.
 
 At the recorded framework revision, `ExecutionBudget::currentTurn` allowed 564,480 guest cycles
-per dispatch and the CTR frame driver treated any budget exit as fatal. The smallest next runtime
-discriminator is the typed exit detail/cycle count plus `t3`, `t9`, `s6`, stack pointer, and return
-address at the stop, with bounded counts at `0x8006A610`, `0x8006A57C`, and `0x8006A6B0` across
-one continued budget slice. Advancing `t9` and a later frame exit would identify a finite quantum;
-a repeated descriptor/pointer without expected progress would redirect investigation to the render
-list or guest control flow. Neither explanation is established by the saved trace. Resolve this
+per dispatch and the CTR frame driver treated any budget exit as fatal. A single bounded GDB run on
+the Clang/Lightrec product hit the cycle-budget return once, after the same three published images
+and callbacks 13–18: `nextPc` and synchronized `Core::pc` were both `0x8006A57C`, and the executor
+had consumed 564,492 cycles against the 564,480-cycle allowance. It was not the separate host-
+dispatch-budget exit. Guest `t3=0x1C123824` is nonnegative with low nine bits `0x024`,
+`t9=0x80129C4C` lies 0x99EC bytes inside the latest 328-sector read at `0x80120260`,
+`s6=0x8006A8E0`, `sp=0x8012A2AC`, and `ra=0x8006A69C` is the return after `jalr s6` at
+`0x8006A694`. The run stopped at its first budget breakpoint and did not sample successive
+descriptors or continue another budget slice.
+
+The remaining smallest runtime discriminator is bounded counts at `0x8006A610`, `0x8006A57C`,
+and `0x8006A6B0`, plus `t9` and descriptor values across one continued budget slice. Advancing
+`t9` and a later frame exit would identify a finite quantum; a repeated descriptor/pointer without
+expected progress would redirect investigation to the render list or guest control flow. Neither
+explanation is established by one exit sample. Resolve this
 before reaching issue 0023's current boundary with the existing native owners and nonzero Lightrec
 execution. Representative interactive gameplay, independent state/device comparison,
 override/original-call coverage, invalidation controls, product link/selector proof, and released-
