@@ -56,8 +56,15 @@ translation workflow.
     `0x8003C94C`, preserving DICR, IRQ, CPU, and chained-transfer ordering.
   - The CdRead callback registered through slot `0x8008AD10` must be delivered after the caller has
     published the queue buffer; early delivery skips the module relocation pass.
-  - `BIGFILE.BIG` has a 608-entry monotonic index. Entries 225, 226, and 233 were observed loading at
-    `0x8009F6FC`, `0x800A0CB8`, and `0x800AB9F0`; `0x800B0B38` lies in entry 233.
+  - `BIGFILE.BIG` has a 608-entry monotonic index and begins at disc LBA 276. In a current
+    Clang/Lightrec run, native CdRead completed entry 225 (2 sectors from LBA 53690 to
+    `0x8009F6FC`), 226 (22 from 53692 to `0x800A0CB8`), and 233 (28 from 53842 to
+    `0x800AB9F0`); each was followed by retail callback `0x80032110`. The next call to
+    `0x800B0B38`, inside entry 233, failed because no active code image owned it. These LBAs
+    equal the verified archive's entry offsets plus its observed disc base; the unclaimed
+    `0x200`/`0x204` IRQ warnings did not stop progress to this boundary. Image extents must use the
+    archive's exact 2,828/44,216/56,844-byte entry sizes, not CdRead's padded 2/22/28 sectors;
+    padding entry 226 would overlap entry 233's base.
   - The hand-written GTE library uses `t2` as an alternate link register (`jalr t2,v1`). The reached
     chain repeatedly enters interior continuations before the current fault.
   - At the current boundary, the pair at `0x8010B2D4` is already corrupt before
@@ -126,9 +133,10 @@ translation workflow.
   complete typed result through the production propagation seam.
 - where: `external/psxport/runtime/cpu/`, `game/core/{ctr_runtime,frame_driver,native_ownership}.*`,
   `tests/ctr_execution_exit.cpp`
-- gap: Activate authenticated runtime modules as executable bytes change, and prove nested/repeated
-  typed exits through real Lightrec execution. Product evidence must report nonzero translated blocks
-  and fallback entries/instructions by typed reason and denominator.
+- gap: Publish each authenticated BIGFILE module image after its retail load-completion callback
+  has run, with exact live read/content validation and replacement invalidation. Then prove
+  nested/repeated typed exits through real Lightrec execution. Product evidence must report nonzero
+  translated blocks and fallback entries/instructions by typed reason and denominator.
 - notes: No product option selects an interpreter. A backend refusal fallback must be typed, measured,
   bounded, and return to dynarec dispatch; unavailable host code generation is fatal.
 
