@@ -14,6 +14,10 @@
 namespace {
 
 int failures = 0;
+constexpr std::uint32_t kBf0233RamBegin = 0x000AB9F0u;
+constexpr std::uint32_t kBf0233RamEnd = 0x000B97FCu;
+constexpr std::uint32_t kBf0233PrologueWordAddress = 0x800ABDE0u;
+constexpr std::uint32_t kBf0233PrologueWord = 0xAFB3002Cu; // sw s3, 0x2c(sp)
 
 void check(bool condition, const char *detail) {
   if (!condition) {
@@ -88,6 +92,10 @@ int main() {
   auto game = std::make_unique<Game>();
   Core &core = game->core;
   installFrameProgram(core, kEntry);
+  core.imageCatalog().activate("ctr-bf0233-field-contract", {kBf0233RamBegin, kBf0233RamEnd}, 2u);
+  core.mem_w32(kBf0233PrologueWordAddress, kBf0233PrologueWord);
+  check(core.mem_r32(kBf0233PrologueWordAddress) == kBf0233PrologueWord,
+        "BF0233 code fixture was not visible before the first field");
   core.r[28] = 0x00120000u;
   core.r[20] = 0x00130000u;
   core.r[31] = ctr::native::kFrameTimingReturn;
@@ -100,6 +108,8 @@ int main() {
     check(core.r[23] == field, "driver skipped or executed the next-field continuation early");
     check(core.r[31] == ctr::native::kFrameLoopResume, "suffix did not restore its actual caller");
     check(!core.executionControl().pending(), "field exit leaked into the next host step");
+    check(core.mem_r32(kBf0233PrologueWordAddress) == kBf0233PrologueWord,
+          "field tick overwrote BF0233's instruction with a title-foreign VBlank counter");
     const auto image = core.currentImageIdentity(ctr::native::kFrameTiming);
     check(image.has_value(), "synthetic image disappeared");
     if (image) {

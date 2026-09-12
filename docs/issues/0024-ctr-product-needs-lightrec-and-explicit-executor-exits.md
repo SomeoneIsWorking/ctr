@@ -64,16 +64,33 @@ BF0225/BF0226/BF0233, delivered callbacks 13–18, then stopped at frame 10,856 
 `Fault`/PC and 181,084 cycles. `0x800ABDE0` lies in the published BF0233 image. Neither run
 reached `0x8006A57C`, so the retail block-entry probe was not armed, the three target counts were
 **not measured**, and no extra budget slice was executed. The corrected probe did not continue after
-the distinct fault. The fault's exact Lightrec exit flag and
-cause remain unknown. These negative runs do not erase the earlier reached budget observation or
+the distinct fault. The fault's exact Lightrec exit flag remains unknown. These negative runs do not erase the earlier reached budget observation or
 establish why the path diverged; both used the existing Clang binary built before that observation.
+
+A subsequent source and authenticated-image discriminator identified a title-foreign guest write at
+this exact PC. The extracted BF0233 image has 56,844 bytes and FNV64
+`0xA4E9995DC4FD53F7`, both matching the committed descriptor. It begins at `0x800AB9F0`; byte offset `0x3F0`
+contains instruction word `0xAFB3002C` (`sw s3,0x2c(sp)`) between the preceding stack prologue
+and following saved-register stores. `CtrFrameDriver::stepFrame` calls shared
+`Timing::frameTick()` once per field. That shared method also stores its host VBlank count to
+`0x800ABDE0`, an address recovered for **Tomba! 2** rather than CTR. The BF0233 callback publishes
+the image after the field's tick; the next field overwrites its executable prologue word. This is a
+proven cross-title RAM collision and a direct mechanism for the later Lightrec fault at the same PC.
+The exact Lightrec flag and live overwritten word were not captured, so the fault subtype is still
+an inference. A new asset-free CTR translated-frame regression installs that BF0233 range and word,
+then runs the shipping field owner; against the old framework it fails on all 3/3 field ticks, with
+17 translated blocks, 71 translated instructions, and zero interpreter fallback. The same focused
+Clang test passes after the isolated shared Timing change keeps only the host count. Tomba! 2 now
+mirrors that count at its measured title frame boundary; its focused two-writer/per-Core regression
+passes 1/1 and its Clang product compiles. A corrected CTR retail run remains unperformed.
 
 The remaining smallest runtime discriminator is bounded counts at `0x8006A610`, `0x8006A57C`,
 and `0x8006A6B0`, plus `t9` and descriptor values across one continued budget slice. Advancing
 `t9` and a later frame exit would identify a finite quantum; a repeated descriptor/pointer without
 expected progress would redirect investigation to the render list or guest control flow. Neither
-explanation is established by one exit sample. First classify the newly reached BF0233 fault's
-Lightrec exit flag and inputs, then repeat the budget probe only if that path reaches its trigger.
+explanation is established by one exit sample. First prove the BF0233 word survives a corrected
+retail field tick and classify any remaining Lightrec fault by its flags and inputs. Then repeat the
+budget probe only if that path reaches its trigger.
 Resolve both exits before reaching issue 0023's current boundary with the existing native owners
 and nonzero Lightrec execution. Representative interactive gameplay, independent state/device comparison,
 override/original-call coverage, invalidation controls, product link/selector proof, and released-
