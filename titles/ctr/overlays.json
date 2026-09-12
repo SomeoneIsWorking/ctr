@@ -1,14 +1,23 @@
 {
   "BF0225": {
     "archive_entry": 225,
-    "load_address": "0x8009F6FC"
+    "sector_offset": 53414,
+    "byte_size": 2828,
+    "load_address": "0x8009F6FC",
+    "fnv64": "0xE802176A09C2C1B2"
   },
   "BF0226": {
     "archive_entry": 226,
-    "load_address": "0x800A0CB8"
+    "sector_offset": 53416,
+    "byte_size": 44216,
+    "load_address": "0x800A0CB8",
+    "fnv64": "0xE743473D19D04B24"
   },
   "BF0233": {
     "archive_entry": 233,
-    "load_address": "0x800AB9F0"
+    "sector_offset": 53566,
+    "byte_size": 56844,
+    "load_address": "0x800AB9F0",
+    "fnv64": "0xA4E9995DC4FD53F7"
   }
 }

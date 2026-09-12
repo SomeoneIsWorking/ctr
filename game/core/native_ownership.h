@@ -105,6 +105,7 @@ inline constexpr uint32_t kCdReadSync = 0x800770ACu;
 // the CD interrupt in retail. psxport's native CdRead completes the transfer before it returns, so
 // the title owner dispatches whatever callback this slot holds with libcd's CdlComplete status.
 inline constexpr uint32_t kCdReadCompletionCallback = 0x8008AD10u;
+inline constexpr uint32_t kBigfileCompletionCallback = 0x80032110u;
 inline constexpr uint32_t kCdlComplete = 2u;
 inline constexpr uint32_t kSetGeomScreen = 0x8007781Cu;
 inline constexpr uint32_t kSetGeomOffset = 0x8007782Cu;

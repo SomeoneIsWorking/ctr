@@ -119,9 +119,11 @@ or attract/FMV sequence cannot verify this item.
 Partial capability: the static translator, generated corpus, registry, seed inputs, and static-only
 tools/tests are absent. CTR builds against psxport's per-`Core` Lightrec executor, and composition
 targets its image-aware dispatch, original-call, invalidation, and typed-exit boundaries. The linked
-boundary is covered asset-free; runtime overlay activation, nonzero real-game block execution,
-bounded-fallback denominators, and frontier reproduction remain incomplete. Issue 0024 owns this
-migration.
+boundary is covered asset-free. The three observed BIGFILE code images now use exact read/content
+identity and post-callback publication, with asset-free negative controls for changed content,
+wrong destination/mode, premature publication, independent Core lifetime, and replacement. Full
+module coverage, nonzero real-game block denominators, and frontier reproduction remain incomplete.
+Issue 0024 owns this migration.
 
 A bounded silent Linux run of the current Clang/Lightrec product against verified media completed
 Vulkan device, 3D raster, headless renderer, and RmlUI initialization. The first 960x720 presentation
@@ -130,11 +132,18 @@ renderer. After fifteen libcd callback completions, retail execution failed fast
 `0x800B0B38` because no active code image owns that address. It lies within the measured BF0233
 BIGFILE entry loaded at `0x800AB9F0`, reproducing issue 0019's next-stage module boundary under
 Lightrec. Repeated unclaimed interrupt masks `0x200`/`0x204` did not prevent that progress and are
-not this failure's immediate cause. Runtime block/fallback denominators, module publication, visible
-gameplay, and issue 0023's later corrupt-list boundary remain unverified.
+not this failure's immediate cause. At that earlier run, runtime block/fallback denominators,
+module publication, visible gameplay, and issue 0023's later corrupt-list boundary were unverified.
 
-Gap: preserve all current CD, DMA, frame, projection, and presentation owners and
-reach issue 0023's corrupt render-list boundary with nonzero Lightrec execution. Representative gameplay, deterministic oracle/device comparison,
+After the image-owner change, a bounded silent run authenticated and published BF0225, BF0226, and
+BF0233 at their exact non-overlapping extents following callbacks 13-15. Retail execution crossed
+the former `0x800B0B38` strict-dispatch fault, delivered three more callbacks, and performed further
+37-, 225-, and 328-sector reads. Its next stop was `budget-exhausted` at resident `0x8006A57C`
+in frame 12,771; the cause of that budget use is not yet established. This does not establish a
+visible CTR picture, sustained gameplay, or the later issue 0023 boundary.
+
+Gap: diagnose the reached budget exhaustion without changing the known-good image publication,
+then reach issue 0023's corrupt render-list boundary with nonzero Lightrec execution. Representative gameplay, deterministic oracle/device comparison,
 override and original-call coverage, invalidation controls, and released-host qualification remain
 required.
 

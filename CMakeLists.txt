@@ -27,13 +27,25 @@ file(WRITE "${CMAKE_BINARY_DIR}/psxport_resolved.txt"
 set(PSXPORT_BUILD_SMOKE ON CACHE BOOL "Build the framework agnosticism smoke" FORCE)
 add_subdirectory("${PSXPORT_DIR}" psxport_build)
 
+set(CTR_OVERLAY_CATALOG "${CMAKE_CURRENT_BINARY_DIR}/identity/ctr_overlay_catalog.h")
+add_custom_command(
+  OUTPUT "${CTR_OVERLAY_CATALOG}"
+  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/extract_overlays.py"
+          --emit-header "${CTR_OVERLAY_CATALOG}"
+  DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/titles/ctr/overlays.json"
+          "${CMAKE_CURRENT_SOURCE_DIR}/tools/extract_overlays.py"
+  VERBATIM
+)
+
 add_library(
   ctr_runtime STATIC
+  "${CTR_OVERLAY_CATALOG}"
   game/core/async_disc_owner.cpp
   game/core/ctr_runtime.cpp
   game/core/dma_callback_owner.cpp
   game/core/frame_callback_owner.cpp
   game/core/frame_driver.cpp
+  game/core/overlay_image_owner.cpp
   game/core/platform_hle_plan.cpp
   game/core/render_list_boundary_diagnostic.cpp
   game/core/runtime_composition.cpp
@@ -45,6 +57,7 @@ target_include_directories(
   PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/game/core"
     "${CMAKE_CURRENT_SOURCE_DIR}/game/video"
+    "${CMAKE_CURRENT_BINARY_DIR}/identity"
 )
 target_compile_features(ctr_runtime PUBLIC cxx_std_20)
 target_link_libraries(ctr_runtime PUBLIC psxport)
@@ -74,6 +87,11 @@ if(BUILD_TESTING)
   target_compile_features(ctr_disc_ownership_test PRIVATE cxx_std_20)
   target_link_libraries(ctr_disc_ownership_test PRIVATE ctr_runtime)
   add_test(NAME ctr_disc_ownership COMMAND ctr_disc_ownership_test)
+
+  add_executable(ctr_overlay_image_owner_test tests/ctr_overlay_image_owner.cpp)
+  target_compile_features(ctr_overlay_image_owner_test PRIVATE cxx_std_20)
+  target_link_libraries(ctr_overlay_image_owner_test PRIVATE ctr_runtime)
+  add_test(NAME ctr_overlay_image_owner COMMAND ctr_overlay_image_owner_test)
 
   add_executable(ctr_frame_execution_test tests/ctr_frame_execution.cpp)
   target_compile_features(ctr_frame_execution_test PRIVATE cxx_std_20)

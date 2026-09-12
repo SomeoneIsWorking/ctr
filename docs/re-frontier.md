@@ -130,13 +130,16 @@ translation workflow.
 - evidence: The static execution machinery is absent. CTR builds against psxport's per-`Core`
   Lightrec executor and uses image-aware dispatch/original-call APIs. Native callbacks request
   `ExecutionExitReason::FrameBoundary` and return normally; an asset-free focused test preserves a
-  complete typed result through the production propagation seam.
+  complete typed result through the production propagation seam. Exact BF0225/BF0226/BF0233 reads
+  were authenticated against the verified archive and published after their retail callbacks in a
+  current Lightrec run, which crossed the former `0x800B0B38` image-identity stop.
 - where: `external/psxport/runtime/cpu/`, `game/core/{ctr_runtime,frame_driver,native_ownership}.*`,
   `tests/ctr_execution_exit.cpp`
-- gap: Publish each authenticated BIGFILE module image after its retail load-completion callback
-  has run, with exact live read/content validation and replacement invalidation. Then prove
-  nested/repeated typed exits through real Lightrec execution. Product evidence must report nonzero
-  translated blocks and fallback entries/instructions by typed reason and denominator.
+- gap: Diagnose the next reached `budget-exhausted` exit at resident `0x8006A57C` and prove
+  nested/repeated typed exits through real Lightrec execution. Other BIGFILE code images and
+  real-game module replacement remain unqualified; the positive/negative replacement controls are
+  asset-free. Product evidence must report nonzero translated blocks and fallback
+  entries/instructions by typed reason and denominator.
 - notes: No product option selects an interpreter. A backend refusal fallback must be typed, measured,
   bounded, and return to dynarec dispatch; unavailable host code generation is fatal.
 

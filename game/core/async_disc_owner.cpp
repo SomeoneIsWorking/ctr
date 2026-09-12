@@ -12,11 +12,16 @@
 
 namespace ctr {
 
-void DiscReadOwner::noteTransferComplete(Core &core) {
+void DiscReadOwner::noteTransferComplete(Core &core, std::optional<CompletedDiscRead> read) {
   if (pending_) {
     // One guest drive cannot have two transfers in flight; the read leaf delivers the previous
     // completion before starting another, so reaching here means that ordering broke.
     lucent::error("ctr-disc", "a second native CdRead completed with the previous completion still owed");
+    std::abort();
+  }
+  if (read && !overlayImages_.observeCompletedRead(
+                  core, *read, core.mem_r32(native::kCdReadCompletionCallback) == native::kBigfileCompletionCallback)) {
+    lucent::error("ctr-disc", "completed CdRead did not satisfy the title image contract");
     std::abort();
   }
   if (core.mem_r32(native::kCdReadCompletionCallback) == 0u) {
@@ -37,6 +42,7 @@ void DiscReadOwner::deliverPending(Core &core, const CtrRuntime &runtime) {
     return;
   }
   pending_ = false;
+  const auto imageCandidate = overlayImages_.takePending();
   const uint32_t callback = core.mem_r32(native::kCdReadCompletionCallback);
   if (callback == 0u) {
     // The guest cancelled its own callback before the interrupt could arrive; retail would deliver
@@ -51,6 +57,7 @@ void DiscReadOwner::deliverPending(Core &core, const CtrRuntime &runtime) {
   core.r[4] = native::kCdlComplete;
   core.r[5] = 0u; // libcd passes its result bytes; neither measured CTR callback reads them
   runtime.dispatchToReturn(core, callback, "CTR libcd completion callback");
+  overlayImages_.publishAfterCallback(core, imageCandidate);
   static_cast<R3000 &>(core) = interrupted;
   ++deliveredCallbacks_;
   lucent::info("ctr-disc", "delivered libcd read-completion callback {} -> 0x{:08X}", deliveredCallbacks_, callback);
@@ -78,6 +85,7 @@ void cdReadWithCompletionCallback(Core *core) {
   const CtrRuntime &ctrRuntime = *static_cast<const CtrRuntime *>(runtime);
   auto &completion = discReadOwner(*core);
   completion.deliverPending(*core, ctrRuntime);
+  const CompletedDiscRead read{static_cast<uint32_t>(core->game->cd.setloc_lba), core->r[4], core->r[5], core->r[6]};
   cd_read_stock_sync(core);
   if (core->r[2] == 0u) {
     // cd_read_stock_sync has already named the unreadable sector. Retail would deliver an error
@@ -86,7 +94,7 @@ void cdReadWithCompletionCallback(Core *core) {
     lucent::error("ctr-disc", "native CdRead failed; the retail completion callback cannot be delivered");
     std::abort();
   }
-  completion.noteTransferComplete(*core);
+  completion.noteTransferComplete(*core, read);
 }
 
 } // namespace ctr

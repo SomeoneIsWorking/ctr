@@ -1,6 +1,9 @@
 #pragma once
 
+#include "overlay_image_owner.h"
+
 #include <cstdint>
+#include <optional>
 
 struct Core;
 
@@ -29,7 +32,7 @@ public:
   // Records that a transfer finished with a callback registered, or counts a read whose caller polls
   // CdReadSync instead. The caller must have delivered any owed completion first: one guest drive
   // cannot have two transfers in flight, and this refuses rather than losing the earlier one.
-  void noteTransferComplete(Core &core);
+  void noteTransferComplete(Core &core, std::optional<CompletedDiscRead> read = std::nullopt);
 
   // Runs the registered libcd completion callback with the measured success code, restoring the
   // interrupted register context exactly as a real CD interrupt entry would. Does nothing when no
@@ -47,6 +50,7 @@ public:
   }
 
 private:
+  OverlayImageOwner overlayImages_;
   bool pending_ = false;
   uint32_t deliveredCallbacks_ = 0;
   uint32_t polledReads_ = 0;
