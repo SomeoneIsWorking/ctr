@@ -80,17 +80,26 @@ The exact Lightrec flag and live overwritten word were not captured, so the faul
 an inference. A new asset-free CTR translated-frame regression installs that BF0233 range and word,
 then runs the shipping field owner; against the old framework it fails on all 3/3 field ticks, with
 17 translated blocks, 71 translated instructions, and zero interpreter fallback. The same focused
-Clang test passes after the isolated shared Timing change keeps only the host count. Tomba! 2 now
-mirrors that count at its measured title frame boundary; its focused two-writer/per-Core regression
-passes 1/1 and its Clang product compiles. A corrected CTR retail run remains unperformed.
+Clang test passes after the shared Timing change keeps only the host count. Tomba! 2 now mirrors
+that count at its measured title frame boundary; its focused two-writer/per-Core regression passes.
+The framework and both title changes passed their combined Clang gates; CTR's framework pin records
+the corrected shared revision.
+
+A corrected, uninstrumented CTR retail run with the Clang product, framework assets, normal pacing,
+headless presentation, and silent audio published BF0233 generation 4, delivered callbacks 15–18,
+and left frame 12,051 at `0x8006A57C` with `budget-exhausted`. It did not reproduce the previous
+`0x800ABDE0` fault. A separate bounded GDB run stopped when the shipping BF0233 publisher ran and
+at the next field's `Timing::frameTick()` boundary: the authenticated three-word prologue
+`0xAFB40030 0xAFB3002C 0xAFB20028` was unchanged before and after that tick (field 13,644).
+These observations establish the corrected live word's survival and expose the prior render-list
+budget frontier again. They do not establish interactive gameplay or complete budget behavior.
 
 The remaining smallest runtime discriminator is bounded counts at `0x8006A610`, `0x8006A57C`,
 and `0x8006A6B0`, plus `t9` and descriptor values across one continued budget slice. Advancing
 `t9` and a later frame exit would identify a finite quantum; a repeated descriptor/pointer without
 expected progress would redirect investigation to the render list or guest control flow. Neither
-explanation is established by one exit sample. First prove the BF0233 word survives a corrected
-retail field tick and classify any remaining Lightrec fault by its flags and inputs. Then repeat the
-budget probe only if that path reaches its trigger.
+explanation is established by one exit sample. The corrected run reaches this budget path; its
+descriptor and pointer progression now need measurement before changing the budget or render path.
 Resolve both exits before reaching issue 0023's current boundary with the existing native owners
 and nonzero Lightrec execution. Representative interactive gameplay, independent state/device comparison,
 override/original-call coverage, invalidation controls, product link/selector proof, and released-
