@@ -175,9 +175,32 @@ to issue 0023's top-level `+0x1C94` list pair. Its first writer and validity
 invariant remain unproved. The live `t9=0x801B6074` is a later cursor; this
 probe did not capture the descriptor or its initial `+0xC8` value.
 
-The next discriminator is the first writer of the `0x8006B21C,0xFFFFFFFF` pair and
-the descriptor `+0xC8` stream invariant that should accept or reject it, before attributing the fault to
-issue 0023's later `0x8006AB00` input. Nested original-call continuations have separate
+An older, separate 2 MiB miss RAM dump provides a descriptor-shape control, not
+current-run attribution. The authenticated walker loads `sp` from descriptor
+`+0xCC` at `0x8006ACD4`. Scanning all 524,227 aligned candidate bases with
+room through `+0xF0` in that dump finds two raw `+0xCC=0x801B6074` matches;
+requiring an earlier main-RAM `+0xC8` stream pointer and known resident GTE
+entries at `+0xEC/+0xF0` yields exactly one match: descriptor `0x800FEBB0`,
+`+0xC8=0x801B5B30`, `+0xCC=0x801B6074`,
+`+0xD0=0x801B6904`, `+0xEC=0x8006A52C`, and `+0xF0=0x8006A8E0`. An adjacent
+negative cursor `0x801B6078` yields zero matches. Three similarly shaped
+descriptors in that older dump each have a sole `0xFFFFFFFF` word exactly at
+`+0xCC-4`; this candidate has `0x5C142800` at `+0xCC-8`. The current live
+fault instead captured `0x8006B21C` at the preceding word. That difference
+needs a same-run descriptor and writer observation; neither dump proves the
+current stream was overwritten or that the GTE cursor advanced incorrectly.
+
+The next live discriminator should use one typed-fault stop, capture synchronized
+`t9` and `sp`, and scan that run's Core RAM once for the descriptor shape above.
+A unique descriptor with `+0xCC=t9`, a valid earlier `+0xC8` stream start, and
+the terminator at `+0xCC-4` would establish the current cursor's relationship
+to the stream boundary; zero or multiple matches must report their denominator
+and leave it unknown. A separate four-byte write watch on the *preceding*
+word (`t9-8`, physical `0x1B606C` in the prior run) can test whether it changes
+to `0x8006B21C` before the fault; watching the expected `-1` at `t9-4` instead
+does not identify that writer. A different live cursor or zero watch hits must
+be reported explicitly, before attributing this fault to issue 0023's later
+`0x8006AB00` input. Nested original-call continuations have separate
 scoped-PC ownership and have not been qualified for budget continuation by this top-level field
 test. Representative interactive gameplay, independent state/device comparison,
 override/original-call coverage, invalidation controls, product link/selector proof, and released-
