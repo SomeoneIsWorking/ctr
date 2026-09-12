@@ -147,10 +147,14 @@ The title frame driver was refusing the first valid budget exit. Its shipping di
 resumes synchronized positive-cycle budget exits within the same field, with an asset-free finite
 field and zero-cycle host-loop negative passing. A corrected retail run crossed that budget stop
 and next faulted at `0x8006AA80` in frame 16,228 on invalid scratchpad load/store addresses
-`0x1F800938` and `0x1F80093C`. This does not establish a visible CTR picture, sustained gameplay,
+`0x1F800938` and `0x1F80093C`. A bounded retail trace confirmed both authentic load
+opcodes at those addresses with `t3=0xFFFFFFFF`, `at=0x1F800000`, and
+`a1=0x1F8007F8` while BF0233 was active; the sentinel's producer remains unknown.
+This does not establish a visible CTR picture, sustained gameplay,
 or the later issue 0023 boundary.
 
-Gap: classify the reached `0x8006AA80` fault and its first bad address, then reach issue 0023's
+Gap: identify why the live render list supplies `t3=0xFFFFFFFF` to these loads,
+then reach issue 0023's
 corrupt render-list boundary with nonzero Lightrec execution. Representative gameplay, deterministic oracle/device comparison,
 override and original-call coverage, invalidation controls, and released-host qualification remain
 required.

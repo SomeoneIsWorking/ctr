@@ -143,9 +143,22 @@ addresses `0x1F800938` and `0x1F80093C`. The run made no visible-gameplay claim 
 reach issue 0023's preserved `0x8006AB00` fault. Its raw log is gitignored at
 `scratch/logs/ctr-frame-continuation-retail.log`.
 
-The next discriminator is the first bad address and source registers at `0x8006AA80`, including
-the live descriptor/list pair and its writer, before attributing the fault to issue 0023's later
-`0x8006AB00` input. Nested original-call continuations have separate
+One bounded, authenticated GDB run then captured both invalid Lightrec map accesses once each.
+Their opcode words match resident `lw t0,0x140(a1)` at `0x8006A8F4` and its
+`lw v1,0x144(a1)` delay slot at `0x8006A8FC`. At both accesses, the live source
+registers were `t3=0xFFFFFFFF`, `at=0x1F800000`, and `a1=0x1F8007F8`, yielding
+`0x1F800938` and `0x1F80093C` beyond the 1 KiB scratchpad. The run had one active
+BF0233 entry at its authenticated range among four images scanned. The list pointer
+`t9=0x801B6074` was in main RAM; its preceding word was `0xFFFFFFFF`, but the
+producer and validity of that sentinel have not been established. This run stopped
+in frame 16,315 with typed `Fault` at `0x8006C0FC` after 40,480 guest cycles;
+the different typed PC from the earlier frame 16,228 run does not alter the two
+measured effective addresses. The fixed read-only trace is gitignored at
+`scratch/logs/ctr-bad-map-retail.log`.
+
+The next discriminator is the authenticated producer of `t3=0xFFFFFFFF` and the
+render-list invariant that should accept or reject it, before attributing the fault to
+issue 0023's later `0x8006AB00` input. Nested original-call continuations have separate
 scoped-PC ownership and have not been qualified for budget continuation by this top-level field
 test. Representative interactive gameplay, independent state/device comparison,
 override/original-call coverage, invalidation controls, product link/selector proof, and released-
