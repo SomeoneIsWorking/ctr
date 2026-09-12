@@ -147,13 +147,18 @@ The title frame driver was refusing the first valid budget exit. Its shipping di
 resumes synchronized positive-cycle budget exits within the same field, with an asset-free finite
 field and zero-cycle host-loop negative passing. A corrected retail run crossed that budget stop
 and next faulted at `0x8006AA80` in frame 16,228 on invalid scratchpad load/store addresses
-`0x1F800938` and `0x1F80093C`. A bounded retail trace confirmed both authentic load
-opcodes at those addresses with `t3=0xFFFFFFFF`, `at=0x1F800000`, and
-`a1=0x1F8007F8` while BF0233 was active; the sentinel's producer remains unknown.
+`0x1F800938` and `0x1F80093C`. A bounded retail trace reproduced both bad
+addresses in the duplicate `0x8006BF30` render path with `t3=0xFFFFFFFF`,
+`at=0x1F800000`, and `a1=0x1F8007F8` while BF0233 was active. Its distinct
+typed PC was `0x8006C0FC`; the second word came from live list memory at
+`0x801B6070`. Authenticated control flow selects that packed stream through
+the current descriptor's initial `+0xC8` pointer; the live cursor had advanced,
+and its writer remains unknown.
 This does not establish a visible CTR picture, sustained gameplay,
 or the later issue 0023 boundary.
 
-Gap: identify why the live render list supplies `t3=0xFFFFFFFF` to these loads,
+Gap: identify who wrote the live `0x8006B21C,0xFFFFFFFF` render-list pair and
+whether that pair is valid for the authenticated primitive path,
 then reach issue 0023's
 corrupt render-list boundary with nonzero Lightrec execution. Representative gameplay, deterministic oracle/device comparison,
 override and original-call coverage, invalidation controls, and released-host qualification remain

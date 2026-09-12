@@ -144,20 +144,39 @@ reach issue 0023's preserved `0x8006AB00` fault. Its raw log is gitignored at
 `scratch/logs/ctr-frame-continuation-retail.log`.
 
 One bounded, authenticated GDB run then captured both invalid Lightrec map accesses once each.
-Their opcode words match resident `lw t0,0x140(a1)` at `0x8006A8F4` and its
-`lw v1,0x144(a1)` delay slot at `0x8006A8FC`. At both accesses, the live source
+The reached Lightrec block began at `0x8006BF30`, and its typed target was
+`0x8006C0FC`. Authenticated image bytes place `lw t0,0x140(a1)` at
+`0x8006BF44` and its `lw v1,0x144(a1)` delay slot at `0x8006BF4C` on that path.
+The same load opcodes also occur at `0x8006A8F4/FC`; opcode equality alone cannot
+attribute the live instructions to that earlier path. At both accesses, the live source
 registers were `t3=0xFFFFFFFF`, `at=0x1F800000`, and `a1=0x1F8007F8`, yielding
 `0x1F800938` and `0x1F80093C` beyond the 1 KiB scratchpad. The run had one active
 BF0233 entry at its authenticated range among four images scanned. The list pointer
 `t9=0x801B6074` was in main RAM; its preceding word was `0xFFFFFFFF`, but the
-producer and validity of that sentinel have not been established. This run stopped
-in frame 16,315 with typed `Fault` at `0x8006C0FC` after 40,480 guest cycles;
-the different typed PC from the earlier frame 16,228 run does not alter the two
-measured effective addresses. The fixed read-only trace is gitignored at
+producer and validity of that sentinel have not been established. The authenticated
+`0x8006B040 lw t3,-4(t9)` reads that second word before the indirect call whose
+live return is `0x8006B064`. The first word at `t9-8` was `0x8006B21C`: negative
+but not the all-ones terminator, so the `0x8006B030` multiword path can pass the
+second word to `0x8006BF30`. This proves how `-1` reaches the invalid table index,
+not who wrote either word or whether the pair is valid title data. This run stopped
+in frame 16,315 with typed `Fault` at `0x8006C0FC` after 40,480 guest cycles.
+The earlier frame 16,228 run faulted at `0x8006AA80` with the same two invalid
+effective addresses; it may be the duplicate render path, but its source registers
+were not captured. The fixed read-only trace is gitignored at
 `scratch/logs/ctr-bad-map-retail.log`.
 
-The next discriminator is the authenticated producer of `t3=0xFFFFFFFF` and the
-render-list invariant that should accept or reject it, before attributing the fault to
+Authenticated resident control flow narrows the packed stream's owner: the
+top-level GTE walker at `0x8006AAA8` takes a descriptor in `a2`, and
+`0x8006AC98 lw t9,0xC8(a2)` selects its initial packed-stream pointer. The walker reads its
+leading count, copies descriptor `+0xD0` entries into scratchpad, then reads
+`4(t9)` and advances the cursor by eight before dispatch. The faulting second
+word therefore belongs to this descriptor-selected packed stream, not directly
+to issue 0023's top-level `+0x1C94` list pair. Its first writer and validity
+invariant remain unproved. The live `t9=0x801B6074` is a later cursor; this
+probe did not capture the descriptor or its initial `+0xC8` value.
+
+The next discriminator is the first writer of the `0x8006B21C,0xFFFFFFFF` pair and
+the descriptor `+0xC8` stream invariant that should accept or reject it, before attributing the fault to
 issue 0023's later `0x8006AB00` input. Nested original-call continuations have separate
 scoped-PC ownership and have not been qualified for budget continuation by this top-level field
 test. Representative interactive gameplay, independent state/device comparison,
