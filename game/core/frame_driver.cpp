@@ -99,6 +99,7 @@ void CtrFrameDriver::stepFrame(Core &core, uint32_t frame) {
         "ctr-frame", "non-sequential frame {} requested after {} completed frame(s)", frame, completedFrames_);
     std::abort();
   }
+  budgetExitsThisField_ = 0;
 
   const std::array<OverrideBinding, 11> bindings{{
       {native::kStartupGpuInit, "startup GPU VSync owner", skipFirstStartupVSync},
@@ -158,9 +159,9 @@ void CtrFrameDriver::stepFrame(Core &core, uint32_t frame) {
     resumeBootResourceWait(core);
   } else if (!bootEntered_) {
     bootEntered_ = true;
-    execution = runtime_.dispatch(core, runtime_.bootTarget());
+    execution = dispatchField(core, frame, runtime_.bootTarget());
   } else {
-    execution = runtime_.dispatch(core, native::kFrameLoopResume);
+    execution = dispatchField(core, frame, native::kFrameLoopResume);
   }
   if ((!execution && frameBoundaryPending(core)) ||
       (execution && execution->reason == psx::cpu::ExecutionExitReason::FrameBoundary)) {
@@ -178,6 +179,25 @@ void CtrFrameDriver::stepFrame(Core &core, uint32_t frame) {
     lucent::error("ctr-frame", "retail execution returned without completing CTR frame {}", frame);
   }
   std::abort();
+}
+
+psx::cpu::ExecutionResult CtrFrameDriver::dispatchField(Core &core, uint32_t frame, uint32_t entry) {
+  auto result = runtime_.dispatch(core, entry);
+  while (result.reason == psx::cpu::ExecutionExitReason::BudgetExhausted) {
+    if (result.guestPc != core.pc || result.cycles == 0) {
+      lucent::error("ctr-frame",
+                    "frame {} cannot resume budget exit {} at 0x{:08X}: Core PC=0x{:08X}, cycles={}",
+                    frame,
+                    budgetExitsThisField_ + 1u,
+                    result.guestPc,
+                    core.pc,
+                    result.cycles);
+      std::abort();
+    }
+    ++budgetExitsThisField_;
+    result = runtime_.dispatch(core, result.guestPc);
+  }
+  return result;
 }
 
 void CtrFrameDriver::requestFrameBoundary(Core &core) {
@@ -204,6 +224,10 @@ void CtrFrameDriver::finishField(Core &core, uint32_t frame) {
 
 uint32_t CtrFrameDriver::completedFrames() const {
   return completedFrames_;
+}
+
+uint64_t CtrFrameDriver::budgetExitsForLastField() const {
+  return budgetExitsThisField_;
 }
 
 const ProjectionOwner &CtrFrameDriver::projection() const {

@@ -99,10 +99,28 @@ if(BUILD_TESTING)
   add_test(NAME ctr_frame_execution COMMAND ctr_frame_execution_test)
   set_tests_properties(ctr_frame_execution PROPERTIES TIMEOUT 20)
 
+  add_executable(ctr_frame_budget_test tests/ctr_frame_budget.cpp)
+  target_compile_features(ctr_frame_budget_test PRIVATE cxx_std_20)
+  target_link_libraries(ctr_frame_budget_test PRIVATE ctr_runtime)
+  add_test(NAME ctr_frame_budget
+           COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/test_frame_budget.py"
+                   "$<TARGET_FILE:ctr_frame_budget_test>")
+  set_tests_properties(ctr_frame_budget PROPERTIES TIMEOUT 70)
+
   add_executable(ctr_render_list_diagnostic_test tests/ctr_render_list_diagnostic.cpp)
   target_compile_features(ctr_render_list_diagnostic_test PRIVATE cxx_std_20)
   target_link_libraries(ctr_render_list_diagnostic_test PRIVATE ctr_runtime)
   add_test(NAME ctr_render_list_diagnostic COMMAND ctr_render_list_diagnostic_test)
+
+  add_executable(ctr_budget_probe_fixture tests/ctr_budget_probe_fixture.cpp)
+  target_compile_features(ctr_budget_probe_fixture PRIVATE cxx_std_20)
+  target_link_libraries(ctr_budget_probe_fixture PRIVATE ctr_runtime)
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_test(NAME ctr_budget_probe_controls
+             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/ctr_budget_probe.py"
+                     --selftest --binary "$<TARGET_FILE:ctr_budget_probe_fixture>")
+    set_tests_properties(ctr_budget_probe_controls PROPERTIES TIMEOUT 60)
+  endif()
 
   add_test(NAME ctr_launcher COMMAND "${Python3_EXECUTABLE}" -B
            "${CMAKE_CURRENT_SOURCE_DIR}/tools/test_run.py")
@@ -166,7 +184,9 @@ add_custom_target(
     ctr_execution_exit_test
     ctr_disc_ownership_test
     ctr_frame_execution_test
+    ctr_frame_budget_test
     ctr_render_list_diagnostic_test
+    ctr_budget_probe_fixture
   USES_TERMINAL
   VERBATIM
 )

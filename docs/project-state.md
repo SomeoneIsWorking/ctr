@@ -122,7 +122,7 @@ targets its image-aware dispatch, original-call, invalidation, and typed-exit bo
 boundary is covered asset-free. The three observed BIGFILE code images now use exact read/content
 identity and post-callback publication, with asset-free negative controls for changed content,
 wrong destination/mode, premature publication, independent Core lifetime, and replacement. Full
-module coverage, nonzero real-game block denominators, and frontier reproduction remain incomplete.
+module coverage, sustained product execution accounting, and frontier reproduction remain incomplete.
 Issue 0024 owns this migration.
 
 A bounded silent Linux run of the current Clang/Lightrec product against verified media completed
@@ -139,11 +139,19 @@ After the image-owner change, a bounded silent run authenticated and published B
 BF0233 at their exact non-overlapping extents following callbacks 13-15. Retail execution crossed
 the former `0x800B0B38` strict-dispatch fault, delivered three more callbacks, and performed further
 37-, 225-, and 328-sector reads. Its next stop was `budget-exhausted` at resident `0x8006A57C`
-in frame 12,771; the cause of that budget use is not yet established. This does not establish a
-visible CTR picture, sustained gameplay, or the later issue 0023 boundary.
+in frame 12,771. A later authenticated BF0233 retail probe showed that this was a finite guest
+quantum: one unchanged runtime dispatch from the synchronized exit PC reached typed `FrameBoundary`
+at `0x8003CEB4` after 110,766 cycles, 5,215 executed blocks, and 56,904 executed instructions.
+The first 4,096 block entries observed advancing `t9`; 1,119 later entries were not inspected.
+The title frame driver was refusing the first valid budget exit. Its shipping dispatch owner now
+resumes synchronized positive-cycle budget exits within the same field, with an asset-free finite
+field and zero-cycle host-loop negative passing. A corrected retail run crossed that budget stop
+and next faulted at `0x8006AA80` in frame 16,228 on invalid scratchpad load/store addresses
+`0x1F800938` and `0x1F80093C`. This does not establish a visible CTR picture, sustained gameplay,
+or the later issue 0023 boundary.
 
-Gap: diagnose the reached budget exhaustion without changing the known-good image publication,
-then reach issue 0023's corrupt render-list boundary with nonzero Lightrec execution. Representative gameplay, deterministic oracle/device comparison,
+Gap: classify the reached `0x8006AA80` fault and its first bad address, then reach issue 0023's
+corrupt render-list boundary with nonzero Lightrec execution. Representative gameplay, deterministic oracle/device comparison,
 override and original-call coverage, invalidation controls, and released-host qualification remain
 required.
 
@@ -165,4 +173,11 @@ wait, and cross a nested original-call/native-return boundary. They require exac
 and five presentation fences, exposing stale translated code and repeated native continuation
 before their shared fixes.
 
-Gap: real-game nested/repeated exit proof through Lightrec is still missing.
+The production frame driver also completes a synthetic field after six ordinary budget exits with
+one timing tick and one presentation fence, nonzero translated execution, and zero fallback. A
+zero-cycle host-dispatch loop is refused before retry; there is no guessed turn ceiling that could
+reject a long finite render list. The corrected retail product crossed the earlier budget stop and
+reached the separate `0x8006AA80` fault in frame 16,228.
+
+Gap: real-game repeated-budget execution now reaches a later fault; nested original-call exit proof
+and completion beyond that fault remain missing.

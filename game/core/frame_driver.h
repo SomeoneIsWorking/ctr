@@ -2,6 +2,7 @@
 
 #include "async_disc_owner.h"
 #include "dma_callback_owner.h"
+#include "execution_exit.h"
 #include "frame_callback_owner.h"
 #include "game_runtime.h"
 #include "presentation_owner.h"
@@ -24,6 +25,7 @@ public:
   void stepFrame(Core &core, uint32_t frame) override;
 
   [[nodiscard]] uint32_t completedFrames() const;
+  [[nodiscard]] uint64_t budgetExitsForLastField() const;
   [[nodiscard]] const ProjectionOwner &projection() const;
   [[nodiscard]] const PresentationOwner &presentation() const;
   [[nodiscard]] DiscReadOwner &discReadOwner();
@@ -68,6 +70,7 @@ private:
   void requestFrameBoundary(Core &core);
   [[nodiscard]] bool frameBoundaryPending(Core &core) const;
   void finishField(Core &core, uint32_t frame);
+  [[nodiscard]] psx::cpu::ExecutionResult dispatchField(Core &core, uint32_t frame, uint32_t entry);
 
   CtrRuntime &runtime_;
   DiscReadOwner discReadOwner_;
@@ -77,6 +80,7 @@ private:
   PresentationOwner presentation_;
   RenderListBoundaryDiagnostic renderListDiagnostic_;
   uint32_t completedFrames_ = 0;
+  uint64_t budgetExitsThisField_ = 0;
   uint32_t bootResourceWaitFields_ = 0;
   uint32_t bootResourceWaitResume_ = 0;
   uint32_t startupAudioWaitResume_ = 0;

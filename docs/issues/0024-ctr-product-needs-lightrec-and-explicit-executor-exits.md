@@ -13,7 +13,7 @@ updated: 2026-09-12
 
 CTR was composed around a static dispatcher and local `FrameCompleted` exception unwinding. The
 break-first migration removed both. The per-Core Lightrec path and exact resident/BIGFILE image
-publication are now wired; nested-exit proof, runtime denominators, and the later saved frontier
+publication are now wired; complete nested-exit proof, sustained runtime denominators, and the later saved frontier
 remain incomplete.
 
 ## Required resolution
@@ -94,13 +94,59 @@ at the next field's `Timing::frameTick()` boundary: the authenticated three-word
 These observations establish the corrected live word's survival and expose the prior render-list
 budget frontier again. They do not establish interactive gameplay or complete budget behavior.
 
-The remaining smallest runtime discriminator is bounded counts at `0x8006A610`, `0x8006A57C`,
-and `0x8006A6B0`, plus `t9` and descriptor values across one continued budget slice. Advancing
-`t9` and a later frame exit would identify a finite quantum; a repeated descriptor/pointer without
-expected progress would redirect investigation to the render list or guest control flow. Neither
-explanation is established by one exit sample. The corrected run reaches this budget path; its
-descriptor and pointer progression now need measurement before changing the budget or render path.
-Resolve both exits before reaching issue 0023's current boundary with the existing native owners
-and nonzero Lightrec execution. Representative interactive gameplay, independent state/device comparison,
+`tools/ctr_budget_probe.py` now provides an opt-in Clang/GDB discriminator for that exact exit. It
+refuses any exit other than `BudgetExhausted` at synchronized `Core::pc=0x8006A57C`, requires exactly
+one active BF0233 catalogue entry spanning its measured image range and the unchanged prologue word,
+then calls the ordinary `CtrRuntime::dispatch` once from that PC with the unchanged current-turn
+budget. It records before/after `t9` and `t3`, the second typed result and cycle count, full
+translated block/instruction deltas, and target-PC hits at Lightrec block entries. It observes at
+most 4,096 block entries because GDB traps are slow, labels counts after that cap incomplete, and
+reports both scanned and retained counts including zero matches. Its Linux Clang synthetic controls
+drive the same executor with an advancing pair, an unchanged pair, an absent BF image, and an absent
+GDB trigger; 4/4 pass.
+The bounded diagnostic has been run once against retail CTR with the singleton headless game slot;
+the tool forces headless/silent presentation and normal pacing. It disables only
+the host frame-progress watchdog (`PSXPORT_WATCHDOG=0`) while GDB pauses the guest at block entries;
+the guest spin detector remains active. An external five-minute timeout allows the ~12,000 normally
+paced fields to reach the trigger and stops only the spawned GDB process group. GDB success without
+one admitted trigger is a failure, and an admitted trigger executes
+exactly one continued slice. The synthetic gate is
+`uv run --frozen python tools/ctr_budget_probe.py --selftest`.
+
+The retail probe admitted `BudgetExhausted` at synchronized `0x8006A57C` with one active BF0233
+match among four scanned images. One unchanged `CtrRuntime::dispatch` then reached typed
+`FrameBoundary` at `0x8003CEB4` after 110,766 cycles, 5,215 translated block executions, and
+56,904 translated instructions. GDB observed the first 4,096 of those block entries; the remaining
+1,119 were not inspected. Within that observed prefix `t9` moved from `0x80129C4C` through
+`0x8012A24C`, with 282 entries at `0x8006A57C`, 316 at `0x8006A610`, zero observed at
+`0x8006A6B0`, and zero at the impossible negative PC. The zero at `0x8006A6B0` is limited to the
+observed prefix and to block entries, not all executed guest instructions. This establishes a finite
+render-list quantum, not an infinite guest loop. The immediate title cause was
+`CtrFrameDriver::stepFrame` treating every first-turn budget exit as fatal despite the executor's
+synchronized continuation and the subsequent valid frame boundary.
+
+The frame driver now continues positive-cycle, synchronized `BudgetExhausted` exits through the
+ordinary shipping `CtrRuntime::dispatch` inside the same field. It accepts only a typed
+`FrameBoundary` to finish that field; other exits keep the existing fatal path. It rejects a
+zero-cycle or desynchronized budget exit instead of retrying a non-progressing host loop. There is
+no guessed per-field turn ceiling: the existing guest spin detector and host frame-progress watchdog
+remain the runaway guards. The spin detector covers host-starved in-region loops, while the default
+frame watchdog bounds elapsed time without presentation; disabling both removes that protection.
+An asset-free production-driver fixture completed one field after six
+budget exits with 564,483 translated block executions, 1,693,451 translated instructions, zero
+fallback blocks, one timing tick, and one presentation fence. Its negative forces an image-scoped
+native return to the same PC until the host-dispatch budget exits with zero guest cycles; the driver
+rejects that exit. An authenticated, headless, silent retail run after the change crossed the former
+budget stop and continued through BF0233 publication and read callbacks 15–18. It next aborted in
+frame 16,228 with a typed `Fault` at guest PC `0x8006AA80`; Lightrec reported invalid load/store
+addresses `0x1F800938` and `0x1F80093C`. The run made no visible-gameplay claim and did **not**
+reach issue 0023's preserved `0x8006AB00` fault. Its raw log is gitignored at
+`scratch/logs/ctr-frame-continuation-retail.log`.
+
+The next discriminator is the first bad address and source registers at `0x8006AA80`, including
+the live descriptor/list pair and its writer, before attributing the fault to issue 0023's later
+`0x8006AB00` input. Nested original-call continuations have separate
+scoped-PC ownership and have not been qualified for budget continuation by this top-level field
+test. Representative interactive gameplay, independent state/device comparison,
 override/original-call coverage, invalidation controls, product link/selector proof, and released-
 host qualification remain required. The deleted static machinery must not return.
