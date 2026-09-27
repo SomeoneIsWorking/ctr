@@ -93,6 +93,14 @@ if(BUILD_TESTING)
   target_link_libraries(ctr_overlay_image_owner_test PRIVATE ctr_runtime)
   add_test(NAME ctr_overlay_image_owner COMMAND ctr_overlay_image_owner_test)
 
+  # The projection publication owner had no test at all, and it is the seam a widescreen owner consumes
+  # (it publishes the owner's `ofx` and `H`). Pinned here so the offsets and the halving cannot drift
+  # silently; the file's header states what is NOT covered — the `std::abort()` refusal — and why.
+  add_executable(ctr_projection_owner_test tests/ctr_projection_owner.cpp)
+  target_compile_features(ctr_projection_owner_test PRIVATE cxx_std_20)
+  target_link_libraries(ctr_projection_owner_test PRIVATE ctr_runtime)
+  add_test(NAME ctr_projection_owner COMMAND ctr_projection_owner_test)
+
   add_executable(ctr_frame_execution_test tests/ctr_frame_execution.cpp)
   target_compile_features(ctr_frame_execution_test PRIVATE cxx_std_20)
   target_link_libraries(ctr_frame_execution_test PRIVATE ctr_runtime)

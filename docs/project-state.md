@@ -190,3 +190,30 @@ reached the separate `0x8006AA80` fault in frame 16,228.
 
 Gap: real-game repeated-budget execution now reaches a later fault; nested original-call exit proof
 and completion beyond that fault remain missing.
+
+## The projection publication owner now has a test; its `std::abort()` refusal still does not
+
+`game/video/projection_owner.h` states the owner's contract in one sentence — it "captures its view
+input and refuses if the published libgte state disagrees" — and that sentence had **no test at all**,
+while the owner publishes exactly the `ofx`/`H` pair (`centerX`, `screenDistance`) that a widescreen
+owner will consume. `tests/ctr_projection_owner.cpp` now pins the offsets it reads (`+0x18` screen
+distance, `+0x20` width, `+0x22` height), the halving that derives the centre, `source`, the `sequence`
+advance, `previous()` lagging by exactly one publication, and `valid()` rejecting an unpublished owner.
+
+**Mutation-verified against production code:** removing the halving in `signedHalf` makes the derived
+centre disagree with the retail body's published geometry, and the test fails
+(`0% tests passed, 1 tests failed out of 1`). So the assertions are pinned to the shipping owner rather
+than to a restatement of it.
+
+**WHAT IS NOT COVERED, and it is a real gap:** the refusal itself. A disagreement calls `std::abort()`,
+and this suite is an in-process `main()` with no death-test facility, so the branch that fires when the
+guest publishes geometry that does not match the view has no automated coverage. A fork-based death test
+would detect it but would not build on the Windows and macOS targets this project also ships, so the gap
+is recorded rather than closed with something that works on one platform. The honest options are a
+portable death-test facility in the shared harness, or a non-aborting refusal that returns a reason — and
+the second would weaken a deliberate fail-loud property, so it is not proposed.
+
+**NOT CLAIMED:** that the offsets are correct. The test pins the owner's behaviour against the numbers in
+its own source. Verifying them means reading the retail image, and **Crash Team Racing has no disc
+provisioned on this machine** — so nothing in this repository is currently evidence about CTR's binary,
+and no widescreen work for this title can be image-sourced here.
