@@ -131,12 +131,20 @@ class LauncherContractTest(unittest.TestCase):
 
     def test_player_and_agent_exec_environments_use_shared_policy(self) -> None:
         framework = run.ROOT / "external/psxport"
+        # psxport's `agent_environment` refuses to run without a settings file, because an unset
+        # `PSXPORT_SETTINGS` hands the product its working-directory discovery and the run's
+        # configuration becomes whatever untracked file sits beside the executable. So the agent leg
+        # is given CTR's TRACKED shipping settings explicitly, and the assertion below checks the
+        # product would run on that file rather than on built-in defaults.
+        shipping_settings = run.ROOT / "tools" / "shipping_settings.ini"
+        self.assertTrue(shipping_settings.is_file(), f"missing tracked settings: {shipping_settings}")
         poisoned = {
             "PSXPORT_VK_WINDOW": "1",
             "PSXPORT_VK_HEADLESS": "1",
             "PSXPORT_NOAUDIO": "1",
             "PSXPORT_NOPACE": "1",
             "PSXPORT_ASSET_DIR": "/poisoned/framework",
+            "PSXPORT_SETTINGS": str(shipping_settings),
             "KEEP": "yes",
         }
         with (
@@ -152,6 +160,7 @@ class LauncherContractTest(unittest.TestCase):
         self.assertEqual(player["KEEP"], "yes")
         self.assertEqual(player["PSXPORT_ASSET_DIR"], str(framework))
         self.assertEqual(agent["PSXPORT_ASSET_DIR"], str(framework))
+        self.assertEqual(agent["PSXPORT_SETTINGS"], str(shipping_settings.resolve()))
         for key in ("PSXPORT_VK_HEADLESS", "PSXPORT_NOAUDIO", "PSXPORT_NOPACE"):
             self.assertNotIn(key, player)
             self.assertEqual(agent[key], "1")

@@ -367,7 +367,14 @@ def prepare(disc: str | None, psxport: Path, cc: str, cxx: str) -> Path:
 def launch(psxport: Path, product: Path, *, headless: bool) -> None:
     policy = runpy.run_path(str(psxport / "tools/port/launch_environment.py"))
     policy_name = "agent_environment" if headless else "player_environment"
-    environment = policy[policy_name](os.environ)
+    if headless:
+        environment = policy[policy_name](os.environ)
+    else:
+        # `player_environment` additionally requires `product`: it names this title's run-log
+        # directory under the OS user-data location, so the log is the only copy of what the product
+        # said and cannot land in another title's file. `agent_environment` has no such argument, and
+        # the `product` parameter of THIS function is the executable path, so the slug is spelled out.
+        environment = policy[policy_name](os.environ, product="ctr")
     # CTR's product owns the framework checkout it just configured and linked. Its matching RmlUI
     # assets must come from that same checkout; an inherited path can silently pair the executable
     # with another framework tree or leave the overlay empty.
