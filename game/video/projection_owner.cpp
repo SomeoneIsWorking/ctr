@@ -1,6 +1,7 @@
 #include "projection_owner.h"
 
 #include "core.h"
+#include "proj_params.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -59,6 +60,31 @@ void ProjectionOwner::publish(Core &core, const RetailBody &retailBody) {
 
   previous_ = current_;
   current_ = next;
+  applyPresentationPlan(core, next);
+}
+
+void ProjectionOwner::latchPlan(const GuestProjectionPlan &plan,
+                                int32_t distanceScaleNumerator,
+                                int32_t distanceScaleDenominator) {
+  if (distanceScaleNumerator <= 0 || distanceScaleDenominator <= 0) {
+    lucent::error("ctr-projection",
+                  "projection scale {}/{} is not a positive ratio",
+                  distanceScaleNumerator,
+                  distanceScaleDenominator);
+    std::abort();
+  }
+  plan_ = plan;
+  distanceScaleNumerator_ = distanceScaleNumerator;
+  distanceScaleDenominator_ = distanceScaleDenominator;
+  planLatched_ = true;
+}
+
+const GteProjection &ProjectionOwner::publishedProjection() const {
+  return published_;
+}
+
+bool ProjectionOwner::widenedLastPublication() const {
+  return widened_;
 }
 
 const ProjectionPublication &ProjectionOwner::previous() const {
@@ -67,6 +93,35 @@ const ProjectionPublication &ProjectionOwner::previous() const {
 
 const ProjectionPublication &ProjectionOwner::current() const {
   return current_;
+}
+
+void ProjectionOwner::applyPresentationPlan(Core &core, const ProjectionPublication &retail) {
+  published_ = GteProjection{
+      .centerX = retail.centerX,
+      .centerY = retail.centerY,
+      .distance = static_cast<int32_t>(retail.screenDistance),
+  };
+  widened_ = false;
+  if (!planLatched_) {
+    return;
+  }
+  const WidenedViewProjection widened =
+      widenViewProjection(GuestViewProjection{.width = retail.nativeWidth,
+                                              .height = retail.nativeHeight,
+                                              .distance = static_cast<int32_t>(retail.screenDistance)},
+                          plan_,
+                          distanceScaleNumerator_,
+                          distanceScaleDenominator_);
+  if (!widened.widened) {
+    return;
+  }
+  // libgte_set_geom_* is the framework's single implementation of "publish this projection to
+  // the GTE and record it", so the GTE control registers and ProjParams cannot drift apart. It
+  // writes host state only; the guest's view descriptor keeps its retail values.
+  libgte_set_geom_offset(&core, widened.published.centerX, widened.published.centerY);
+  libgte_set_geom_screen(&core, widened.published.distance);
+  published_ = widened.published;
+  widened_ = true;
 }
 
 } // namespace ctr

@@ -51,6 +51,7 @@ add_library(
   game/core/runtime_composition.cpp
   game/video/presentation_owner.cpp
   game/video/projection_owner.cpp
+  game/video/view_projection_plan.cpp
 )
 target_include_directories(
   ctr_runtime
@@ -100,6 +101,13 @@ if(BUILD_TESTING)
   target_compile_features(ctr_projection_owner_test PRIVATE cxx_std_20)
   target_link_libraries(ctr_projection_owner_test PRIVATE ctr_runtime)
   add_test(NAME ctr_projection_owner COMMAND ctr_projection_owner_test)
+  # The binary probe's self-check reads the authenticated image, which hosted CI must not have.
+  # It therefore SKIPS (77) with its reason rather than failing, so an asset-free job reports
+  # "not measured here" instead of either a false pass or a broken-tool failure.
+  add_test(NAME ctr_binary_probe
+           COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/ctr_binary_probe.py"
+                   selftest)
+  set_tests_properties(ctr_binary_probe PROPERTIES SKIP_RETURN_CODE 77)
 
   add_executable(ctr_frame_execution_test tests/ctr_frame_execution.cpp)
   target_compile_features(ctr_frame_execution_test PRIVATE cxx_std_20)
