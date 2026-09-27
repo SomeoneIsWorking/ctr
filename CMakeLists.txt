@@ -133,12 +133,18 @@ if(BUILD_TESTING)
   add_test(NAME ctr_launcher COMMAND "${Python3_EXECUTABLE}" -B
            "${CMAKE_CURRENT_SOURCE_DIR}/tools/test_run.py")
   set_tests_properties(ctr_launcher PROPERTIES ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
+  # The behaviour test lives in tests/, where every other port keeps it and where the canonical copy
+  # lives in psxport. ctr had a second, older copy under tools/ that the canonical is not installed over,
+  # so this registration was silently exercising a stale file while reading as present.
   add_test(NAME ctr_framework_resolver COMMAND "${Python3_EXECUTABLE}" -B
-           "${CMAKE_CURRENT_SOURCE_DIR}/tools/test_psxport_sync.py")
+           "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_psxport_sync.py")
   set_tests_properties(ctr_framework_resolver PROPERTIES ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
+  # --build names THIS build dir. Without it the check falls back to build/ci, which ctr does not have,
+  # so the test was REFUSING for a missing receipt rather than checking the pin at all -- a live test that
+  # cannot report a stale pin is indistinguishable from a green one.
   add_test(NAME ctr_framework_pin COMMAND "${Python3_EXECUTABLE}"
            "${CMAKE_CURRENT_SOURCE_DIR}/tools/psxport_sync.py" --check
-           --resolved "${CMAKE_BINARY_DIR}/psxport_resolved.txt")
+           --build "${CMAKE_BINARY_DIR}")
 
   add_test(NAME ctr_help_without_assets COMMAND ctr_port --help)
   add_test(NAME ctr_short_help_without_assets COMMAND ctr_port -h)
@@ -198,3 +204,18 @@ add_custom_target(
   USES_TERMINAL
   VERBATIM
 )
+
+# THE LIVE PIN CHECK. Not a selftest: this runs the real function against this repository's real
+# psxport.pin and the real build receipt, so it can fail when the pin is actually wrong.
+#
+# MEASURED 2026-09-27: every port in the workspace registered only a SELFTEST of the check function, run
+# against a temporary fixture. A selftest asserts the function behaves; it cannot fail when this repo's
+# pin is stale, which is why ten ports reported green while four pins were demonstrably stale. --build
+# points at THIS build directory, configured moments ago, so the receipt is current by construction and
+# the staleness guard cannot fire spuriously. Verified: perturbing psxport.pin turns it red.
+if(BUILD_TESTING)
+  add_test(
+    NAME ctr_psxport_pin_live
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/psxport_sync.py"
+            --check --build "${CMAKE_BINARY_DIR}")
+endif()
