@@ -131,6 +131,20 @@ if(BUILD_TESTING)
                    selftest)
   set_tests_properties(ctr_binary_probe PROPERTIES SKIP_RETURN_CODE 77)
 
+  # The field-cadence census. It answers whether CTR is a 30 or 60 fps title, which is what
+  # decides whether an interpolated 60 fps path is IN scope for it. Both the selftest and the
+  # census read the authenticated image, which hosted CI must not have, so both SKIP (77) with
+  # their reason rather than failing or reporting a rate. The selftest is registered first
+  # because it is the one that must be green wherever the gate runs; it corrupts words through
+  # the probe's own in-memory view, so it never writes to the provisioned image.
+  add_test(NAME ctr_cadence_selftest
+           COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/re_cadence.py"
+                   --selftest)
+  set_tests_properties(ctr_cadence_selftest PROPERTIES SKIP_RETURN_CODE 77)
+  add_test(NAME ctr_cadence
+           COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/re_cadence.py")
+  set_tests_properties(ctr_cadence PROPERTIES SKIP_RETURN_CODE 77)
+
   add_executable(ctr_frame_execution_test tests/ctr_frame_execution.cpp)
   target_compile_features(ctr_frame_execution_test PRIVATE cxx_std_20)
   target_link_libraries(ctr_frame_execution_test PRIVATE ctr_runtime)

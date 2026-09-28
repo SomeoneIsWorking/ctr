@@ -39,6 +39,7 @@ order in `docs/migration.md`, binary evidence in `docs/re-frontier.md`, and atom
 | Native producers | Convert pre-GTE camera/object/material state into typed primitive commands | future producer modules under `game/video/` | target producer interfaces | Never consume GTE/OT/GP0/framebuffer output as product source |
 | Native renderer | Own primitive lifetime, ordering/depth, materials, viewport/projection, and presentation | future renderer modules under `game/video/` | target queue/renderer interfaces | Widescreen is applied at owned projection/viewport/culling boundaries |
 | Temporal presentation | Interpolate previous/current native transforms without mutating simulation | future presentation decorator | target temporal interface | Alpha endpoints reproduce exact simulation snapshots |
+| Field cadence | Fields consumed per game frame, which decides whether an interpolated 60 fps path is in scope. MEASURED at 2 fields (30 fps) from a vblank-drained countdown, not from the image's single `VSync(2)` | `tools/re_cadence.py` over `tools/ctr_binary_probe.py` | `main` / `--selftest` | Refuses at any access count other than 4; overlays are not provisioned and are named as such |
 | Build and launcher policy | Frozen Python setup, native/Lightrec product build, checks, and final player environment | `run.sh`, `bootstrap.py`, `tools/run.py`, `CMakeLists.txt`, `pyproject.toml`, `uv.lock` | `run.sh` | No offline translator, generated corpus, interpreter selector, or alternate engine mode |
 
 ## Where does it go?

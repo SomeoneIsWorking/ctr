@@ -104,9 +104,21 @@ and proven horizontal culling without stretching the final image.
 
 ### S007 — interpolated presentation
 
-Missing capability: no authoritative native simulation tick or consecutive native camera/object
-transforms exist. Presentation therefore has no grounded state pair to interpolate without rerunning
-guest code or consuming quantized output.
+**The field rate is MEASURED, so this item's scope is settled: it is IN scope.**
+`docs/issues/0030` measures **2 fields per game frame = 30 game frames/s** from the image, and
+registers the instrument (`tools/re_cadence.py`, CTest `ctr_cadence{,_selftest}`, 7/7) so the
+number is gated rather than hand-run. The workspace map's stated reason was wrong and is
+corrected there: the single `VSync(2)` at `0x8003206C` is a boot resource load inside
+`FUN_80031FDC`'s `param_5 == -1` branch, and the frame loop's only VSync is `VSync(0)`, which
+does not wait. The cadence comes from a two-field countdown at `[gp+0x348]`, armed with a
+literal 2 and drained by exactly 1 per field by the vertical-blank callback, with exactly 4
+accesses in the whole text — and the census refuses at 5, because a fifth access is how a 60 fps
+mode would hide. Coverage limit: 0 `BIGFILE.BIG` overlays are provisioned, so a frame-rate change
+made from an overlay would not be visible to this instrument.
+
+Missing capability, unchanged: no authoritative native simulation tick or consecutive native
+camera/object transforms exist. Presentation therefore has no grounded state pair to interpolate
+without rerunning guest code or consuming quantized output.
 
 ### S008 — playable default product
 
