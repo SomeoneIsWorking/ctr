@@ -131,7 +131,22 @@ wider bounding box. It is re-projection, not a stretch: the capture's perspectiv
 
 **Still missing, and this is what keeps the item `partial`:** the drawn band is 719 of 960 columns
 with a 241-column right margin that is 0/173,520 non-black, and **the margin did not change** when the
-3D widened. The limit is now 2D content that a horizontal projection change cannot reach, so no
+3D widened. **Issue 0032 names the content that bounds it, and measures it.** A per-GP0-class census
+of both legs — classified by the command byte, never by the `is3d` dead tap — over the **same 191
+frames**, gives:
+
+* **`0x38` (522 prims) and `0x68` (14,300 prims) stop at exactly `x1 = 512`, with byte-identical
+  coordinates AND identical per-frame counts in both legs.** That is 14,822 of 67,282 submitted
+  primitives, 22.0% of the frame, and the widening provably does not touch them. This is the concrete
+  referent for "2D content a horizontal projection change cannot reach".
+* **The 16:9 leg is not the 4:3 leg with X rescaled.** Submitted prims fell 8.7% (73,695 → 67,282)
+  as a **per-frame** drop — 174 of 191 frames submitted fewer — concentrated in `0x30` (−1,517) and
+  `0x34` (−4,050). And **`0x30`'s rightmost vertex moved LEFT, 812 → 785, while `0x36`'s moved right,
+  733 → 894**: two classes, same frames, opposite directions. Culling that tracks a widened projection
+  could legitimately drop off-screen polygons, so this is not yet a defect — but it must be accounted
+  for before the leg can be called a pure re-projection.
+
+The limit is now 2D content that a horizontal projection change cannot reach, so no
 amount of further widening the projection will fill it. The guest's derived viewport also moves with
 the focal length — `H` has 4 measured readers in this title — so a 1.34x H does not give a 1.34x
 picture, and the centre is deliberately not re-written because the two guest call sites scale it by
