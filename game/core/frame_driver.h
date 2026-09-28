@@ -3,22 +3,33 @@
 #include "async_disc_owner.h"
 #include "dma_callback_owner.h"
 #include "execution_exit.h"
+#include "field_boundary.h"
 #include "frame_callback_owner.h"
+#include "frame_suffix.h"
 #include "game_runtime.h"
 #include "presentation_owner.h"
 #include "projection_owner.h"
 #include "render_list_boundary_diagnostic.h"
+#include "startup_audio_wait.h"
+#include "startup_resource_load.h"
+#include "startup_resource_pump.h"
 #include "widescreen_owner.h"
 
 #include <cstdint>
+#include <optional>
 
 namespace ctr {
 
 class CtrRuntime;
 
-// Owns one finite CTR state-3 frame at a time. Lightrec executes retail code on both sides of each
-// extracted VSync callsite; title-local bridges resume at identity-gated re-entry
-// points without ever invoking guest libetc VSync.
+// Owns one finite CTR state-3 frame at a time, and composes the owners that make one possible.
+//
+// Lightrec executes retail code on both sides of each extracted VSync callsite; title-local bridges
+// resume at identity-gated re-entry points without ever invoking guest libetc VSync. This class is
+// the ladder that decides, for the field it has entered, which continuation is owed: a pending
+// frame boundary, the retail frame suffix, a startup audio wait, a startup resource pump, a startup
+// resource load, or the field's own entry. The owners named above each own one of those answers;
+// the driver only chooses between them and dispatches the field's entry.
 class CtrFrameDriver final : public FrameDriver {
 public:
   explicit CtrFrameDriver(CtrRuntime &runtime);
@@ -33,47 +44,32 @@ public:
   [[nodiscard]] DiscReadOwner &discReadOwner();
 
 private:
-  enum class BootResourcePumpPhase : uint8_t {
-    Inactive,
-    ResourcePoll,
-    CommitPoll,
-  };
+  // The frame's guest overrides are plain function pointers with no user data, so each callsite
+  // needs its own entry point. These are those entry points; each names one guest operation and
+  // does nothing but hand the core to the owner that owns it.
+  static void onStartupGpuVSync(Core *core);
+  static void onStartupDisplayVSync(Core *core);
+  static void onBootResourceWait(Core *core);
+  static void onBootResourcePump(Core *core);
+  static void onStartupAudioService(Core *core);
+  static void onStartupAudioLoop(Core *core);
+  static void onShutdownVSync(Core *core);
+  static void onVblankCallback(Core *core);
+  static void onFrameTiming(Core *core);
+  static void onProjectionProducer(Core *core);
+  static void onRenderListPublisher(Core *core);
 
-  static CtrFrameDriver *active_;
-
-  static void skipFirstStartupVSync(Core *core);
-  static void skipSecondStartupVSync(Core *core);
-  static void waitForBootResourceWithoutVSync(Core *core);
-  static void pumpBootResourceWithoutBusyWait(Core *core);
-  static void serviceStartupAudioWithoutBusyWait(Core *core);
-  static void continueStartupAudioLoop(Core *core);
-  static void skipShutdownVSync(Core *core);
-  static void observeVblankCallback(Core *core);
-  static void finishFrameWithoutDebugVSync(Core *core);
-  static void publishProjection(Core *core);
-  static void observeRenderListPublication(Core *core);
-
-  void
-  continueAfterVSync(Core &core, uint32_t superAddress, uint32_t expectedReturn, uint32_t continuation, uint32_t mode);
-  void beginBootResourceWait(Core &core);
-  void resumeBootResourceWait(Core &core);
-  void beginBootResourcePump(Core &core);
-  void resumeBootResourcePump(Core &core);
-  void finishBootResourcePump(Core &core);
-  void servicePendingInterrupts(Core &core);
-  void resumeStartupAudioLoop(Core &core);
-  void serviceStartupAudio(Core &core);
-  void resumeStartupAudioWait(Core &core);
-  void completeFrame(Core &core);
-  void resumeFrameSuffix(Core &core);
-  [[nodiscard]] bool frameSuffixIsWaiting(Core &core) const;
+  // The continuation ladder and the field's own dispatch. `dispatchField` is the one place an
+  // ordinary budget exit may be resumed, because it is the one place that decides an exit is the
+  // same field's finite quantity rather than the start of another one.
+  void resumeOwedContinuation(Core &core);
+  void refuseUnfinishedField(Core &core, uint32_t frame, const std::optional<psx::cpu::ExecutionResult> &execution);
+  [[nodiscard]] psx::cpu::ExecutionResult dispatchField(Core &core, uint32_t frame, uint32_t entry);
   void publishMeasuredProjection(Core &core);
   [[nodiscard]] static ProjectionOwner::Source classifyProjectionSource(uint32_t returnAddress);
   void observePublishedRenderList(Core &core);
-  void requestFrameBoundary(Core &core);
-  [[nodiscard]] bool frameBoundaryPending(Core &core) const;
-  void finishField(Core &core, uint32_t frame);
-  [[nodiscard]] psx::cpu::ExecutionResult dispatchField(Core &core, uint32_t frame, uint32_t entry);
+
+  static CtrFrameDriver *active_;
 
   CtrRuntime &runtime_;
   DiscReadOwner discReadOwner_;
@@ -83,15 +79,13 @@ private:
   CtrWidescreen widescreen_;
   PresentationOwner presentation_;
   RenderListBoundaryDiagnostic renderListDiagnostic_;
-  uint32_t completedFrames_ = 0;
+  FieldBoundary field_;
+  StartupResourceLoad resourceLoad_;
+  StartupResourcePump resourcePump_;
+  StartupAudioWait startupAudio_;
+  FrameSuffix frameSuffix_;
   uint64_t budgetExitsThisField_ = 0;
-  uint32_t bootResourceWaitFields_ = 0;
-  uint32_t bootResourceWaitResume_ = 0;
-  uint32_t startupAudioWaitResume_ = 0;
-  bool frameSuffixPending_ = false;
-  BootResourcePumpPhase bootResourcePumpPhase_ = BootResourcePumpPhase::Inactive;
   bool bootEntered_ = false;
-  bool frameBoundaryRequested_ = false;
 };
 
 } // namespace ctr

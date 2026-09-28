@@ -26,6 +26,12 @@ inline constexpr uint32_t kAfterSecondStartupVSync = 0x8003C7F4u;
 // libetc. Both measured callers are admitted explicitly when the preserved suffix returns.
 inline constexpr uint32_t kBootResourceWait = 0x80031FDCu;
 inline constexpr uint32_t kBootResourceWaitReturn = 0x80032074u;
+// The three retail bodies the -1 branch drives between entering 0x80031FDC and its omitted VSync(2),
+// each with the return address that branch gives it. They stay guest code; the title owns only the
+// caller frame around them.
+inline constexpr uint32_t kBootResourcePreWaitHelper = 0x8003E978u;
+inline constexpr uint32_t kBootResourceSetup = 0x800321B4u;
+inline constexpr uint32_t kBootResourceCommit = 0x80031EE4u;
 inline constexpr uint32_t kBootResourceWaitFirstCaller = 0x8003C8D4u;
 inline constexpr uint32_t kBootResourceWaitSecondCaller = 0x8003C984u;
 inline constexpr uint32_t kBootResourceWaitRaceCaller = 0x800336F8u;

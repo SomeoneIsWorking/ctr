@@ -43,12 +43,20 @@ add_library(
   game/core/async_disc_owner.cpp
   game/core/ctr_runtime.cpp
   game/core/dma_callback_owner.cpp
+  game/core/field_boundary.cpp
+  game/core/field_override_scope.cpp
   game/core/frame_callback_owner.cpp
   game/core/frame_driver.cpp
+  game/core/frame_suffix.cpp
   game/core/overlay_image_owner.cpp
   game/core/platform_hle_plan.cpp
   game/core/render_list_boundary_diagnostic.cpp
+  game/core/retail_return.cpp
   game/core/runtime_composition.cpp
+  game/core/startup_audio_wait.cpp
+  game/core/startup_resource_load.cpp
+  game/core/startup_resource_pump.cpp
+  game/core/vsync_bridge.cpp
   game/video/presentation_owner.cpp
   game/video/projection_owner.cpp
   game/video/widescreen_owner.cpp
@@ -128,6 +136,14 @@ if(BUILD_TESTING)
   target_link_libraries(ctr_frame_execution_test PRIVATE ctr_runtime)
   add_test(NAME ctr_frame_execution COMMAND ctr_frame_execution_test)
   set_tests_properties(ctr_frame_execution PROPERTIES TIMEOUT 20)
+
+  # The owners extracted out of CtrFrameDriver. Each is constructed directly here, so this reaches the
+  # DECISION each one exists to make rather than only the one end-to-end path the frame tests drive.
+  add_executable(ctr_field_owners_test tests/ctr_field_owners.cpp)
+  target_compile_features(ctr_field_owners_test PRIVATE cxx_std_20)
+  target_link_libraries(ctr_field_owners_test PRIVATE ctr_runtime)
+  add_test(NAME ctr_field_owners COMMAND ctr_field_owners_test)
+  set_tests_properties(ctr_field_owners PROPERTIES TIMEOUT 20)
 
   add_executable(ctr_frame_budget_test tests/ctr_frame_budget.cpp)
   target_compile_features(ctr_frame_budget_test PRIVATE cxx_std_20)
@@ -219,6 +235,7 @@ add_custom_target(
     ctr_command_line_test
     ctr_execution_exit_test
     ctr_disc_ownership_test
+    ctr_field_owners_test
     ctr_frame_execution_test
     ctr_frame_budget_test
     ctr_render_list_diagnostic_test
