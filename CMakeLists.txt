@@ -58,6 +58,7 @@ add_library(
   game/core/startup_resource_pump.cpp
   game/core/vsync_bridge.cpp
   game/video/presentation_owner.cpp
+  game/video/geometry_projection_owner.cpp
   game/video/projection_owner.cpp
   game/video/widescreen_owner.cpp
   game/video/view_projection_plan.cpp
@@ -110,6 +111,11 @@ if(BUILD_TESTING)
   target_compile_features(ctr_projection_owner_test PRIVATE cxx_std_20)
   target_link_libraries(ctr_projection_owner_test PRIVATE ctr_runtime)
   add_test(NAME ctr_projection_owner COMMAND ctr_projection_owner_test)
+
+  add_executable(ctr_geometry_projection_owner_test tests/ctr_geometry_projection_owner.cpp)
+  target_compile_features(ctr_geometry_projection_owner_test PRIVATE cxx_std_20)
+  target_link_libraries(ctr_geometry_projection_owner_test PRIVATE ctr_runtime)
+  add_test(NAME ctr_geometry_projection_owner COMMAND ctr_geometry_projection_owner_test)
   # The widescreen pair probe. Its --selftest is the census arithmetic on synthetic pixel arrays and
   # needs no disc, no game and no image library, so it is safe in hosted CI. The per-leg run needs
   # media and is run by hand.

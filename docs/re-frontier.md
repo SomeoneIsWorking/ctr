@@ -84,11 +84,43 @@ translation workflow.
   primitive producer and `0x80025138` as its callback registrar.
 - where: `game/core/platform_hle_plan.*`, `game/video/projection_owner.*`, retained binary evidence
   in C016 and issue 0013
-- gap: A serialized Lightrec capture must identify the active registration and producer callbacks,
-  then follow the view object to simulation-owned camera/transforms. The other raw GTE-control writes
-  remain dynamically unattributed.
+- gap: Follow the view object to simulation-owned camera/transforms, and attribute the 2D layers
+  that bound the drawn band (see below). The ten geometry submitters are attributed; their packet-build
+  step is still retail code.
 - notes: The runtime's projection owner observes the measured publication through a scoped original
   call. That is not a native camera, widescreen implementation, or primitive renderer.
+- notes: **EXTENDED 2026-09-28 (issue 0031).** `tools/ctr_binary_probe.py gte-projection` completes the
+  `H` census on the authenticated image: **18 writers** (16 raw `ctc2 rX,$26` words plus 2
+  `jal SetGeomScreen` calls) and **4 readers** (`cfc2 rX,$26` at 0x8006A6B8, 0x80070AF8, 0x80070EE8,
+  0x80071150). Ten of the writers are the geometry submitters' own publication, immediately before
+  their own RTPS:
+
+  | entry | H write | direct `jal` | 0 `j` targets |
+  |---|---|---|---|
+  | 0x80069FFC | 0x8006A0E0 | 1 | 0 |
+  | 0x8006AAA8 | 0x8006AB38 | 1 | 0 |
+  | 0x8006DC30 | 0x8006DCE4 | 1 | 0 |
+  | 0x8006E26C | 0x8006E300 | 1 | 0 |
+  | 0x8006E588 | 0x8006EB24 | 3 | 0 |
+  | 0x8006F004 | 0x8006F5B0 | 3 | 0 |
+  | 0x8006F9A8 | 0x8006FA68 | 1 | 0 |
+  | 0x8006FE70 | 0x8006FF28 | 2 | 0 |
+  | 0x80070388 | 0x80070428 | 2 | 0 |
+  | 0x80070950 | 0x800709CC | 2 | 0 |
+
+  All ten carry the same 5-instruction tail verbatim (`sll 15`, `sll 15`, `ctc2 $24`, `ctc2 $25`,
+  `ctc2 $26`) and read descriptor displacements `+0x18/+0x20/+0x22` at 10 of 10 sites. **The previous
+  recorded claim that nothing in the text reads `H` back was FALSE**; it is corrected in
+  `game/video/widescreen_owner.h`. The reader census is what makes the remaining widening gap
+  explicable: the guest derives its own viewport extents from `H`, so a widened focal length moves the
+  projection and the viewport together.
+
+  **WHAT WOULD SETTLE THE COUPLING, named because "not determined" is only a result if the next step
+  is concrete:** whether the four `H` readers are proportional (a wider `H` widens the derived
+  viewport by the same ratio, benign) or absolute (a gameplay-visible bound). One run, reading
+  `[scene+0xF4]` — the word 0x8006A6B8 writes as `2H - CR7` — in the 4:3 and 16:9 legs and comparing
+  it against the 684/512 ratio answers it, and the same run's prim census (`bg` column) names which
+  2D prims produce the last non-black column that bounds the drawn band.
 
 ### CTR-06 — Native widescreen
 - status: todo

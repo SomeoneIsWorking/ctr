@@ -80,27 +80,62 @@ landed evidence. Exact addresses and controls remain in `docs/re-frontier.md`.
 
 ### S004 — projection and primitive source evidence
 
-Partial evidence: C016 records `SetGeomScreen [0x8007781C,0x80077828)`, `SetGeomOffset
-[0x8007782C,0x80077844)`, projection publication `[0x80042910,0x80042974)`, and lens-flare producer
-`[0x80024C4C,0x80025138)`. The retained binary observation in `docs/re-frontier.md` records the
-title's pre-GTE view publication boundary.
+Partial evidence, and the primitive half is now much larger than it was. C016 records
+`SetGeomScreen [0x8007781C,0x80077828)`, `SetGeomOffset [0x8007782C,0x80077844)`, projection
+publication `[0x80042910,0x80042974)`, and lens-flare producer `[0x80024C4C,0x80025138)`.
 
-Gap: static identity does not establish the active camera, dynamic producer order, native primitive
-ownership, or a representative visible frame. The remaining raw GTE-control writes are not
-dynamically attributed.
+**Issue 0031 recovers the 3D submission path as ten named functions** (0x80069FFC, 0x8006AAA8,
+0x8006DC30, 0x8006E26C, 0x8006E588, 0x8006F004, 0x8006F9A8, 0x8006FE70, 0x80070388, 0x80070950),
+each `jal`-reachable with 0 `j` targets, each carrying an identical 5-instruction `OFX/OFY/H`
+publication tail and each reading the same view descriptor displacements `+0x18/+0x20/+0x22` at
+10 of 10 sites. `tools/ctr_binary_probe.py gte-projection` derives and gates all of it from the
+authenticated image, with two negative cases so its own 10-of-10 result is falsifiable.
+
+**The `H` census is complete: 18 writers (16 raw `ctc2 rX,$26` + 2 `jal SetGeomScreen`) and 4 readers
+(`cfc2 rX,$26`).** One of the ten submitters' publications is the site the existing owner already had;
+the other nine were unattributed and are now owned through
+`game/video/geometry_projection_owner.*`.
+
+Gap: the ten submitters' own *draw* step — what builds the Gouraud packet from the GTE's projected
+XY — is still retail code, and the 2D layers that bound the drawn band are not attributed. The
+coupling between a widened `H` and the guest's own derived viewport (`2H - CR7` at 0x8006A6B8, a
+division by H at 0x80070AF8, `4H` at 0x80070EE8, `H/2` at 0x80071150) is measured as EXISTING and
+NOT YET ACCOUNTED FOR.
 
 ### S005 — game-state native renderer
 
-Missing capability: current frame work remains guest owned. There is no native camera/object
-producer set, render queue, ordering/depth owner, or native renderer. The existing compatibility
-presentation evidence does not satisfy this capability, and guest GTE/OT/GP0/framebuffer data is not
-a permitted product input.
+Missing capability, and the precondition is no longer the one recorded before issue 0031. Current
+frame work remains guest owned: there is no native camera/object producer set, render queue,
+ordering/depth owner, or native renderer, and guest GTE/OT/GP0/framebuffer data is not a permitted
+product input.
+
+**The precondition changed from "there is no 3D geometry" to "the 3D geometry is not reachable".** The
+recorded reason for leaving this item `missing` was that 0 of 73,695 prims were 3D, so a native
+producer would have nothing to draw. That number was a fact about psxport's own depth classifier,
+whose only source (`ProjPrim::setPz`, reached through `gte_store_xy`/`gte_record_pz`/`gte_copy_pz`)
+has no caller anywhere in the framework since the static translator was deleted. The guest submits
+**73,547 of 73,695 (99.8%) Gouraud-shaded polygons**, 46,213 of them textured, and reaches
+110,432 perspective transforms in one run. See `docs/issues/0031` §1.
+
+The real blockers are unchanged and upstream: the run faults at `0x8006C0FC` in field 29,033
+(issue 0024), so the only 3D content the port reaches is the attract sequence.
 
 ### S006 — true widescreen
 
-Missing capability: no native camera/projection owner can widen view geometry. Recorded OFX/OFY/H
-values are evidence only. The future implementation must change owned projection, viewport, scissor,
-and proven horizontal culling without stretching the final image.
+**Partial, and the projection half is now measured as reaching 3D geometry.** The canvas widens
+(`render_width` 512 -> 684, the LAST `[wide]` line) and the guest's 3D is re-projected by the second
+projection owner: 911 of 110,553 perspective transforms consumed the plan's H (428) instead of
+retail's (320) in the 16:9 leg, against 0 of 110,432 in the 4:3 leg, which publishes nothing. The
+rightmost submitted `x1` moved 812 -> 894 and 39,916 of 67,134 matched Gouraud polygons (59.5%) have a
+wider bounding box. It is re-projection, not a stretch: the capture's perspective is correct.
+
+**Still missing, and this is what keeps the item `partial`:** the drawn band is 719 of 960 columns
+with a 241-column right margin that is 0/173,520 non-black, and **the margin did not change** when the
+3D widened. The limit is now 2D content that a horizontal projection change cannot reach, so no
+amount of further widening the projection will fill it. The guest's derived viewport also moves with
+the focal length — `H` has 4 measured readers in this title — so a 1.34x H does not give a 1.34x
+picture, and the centre is deliberately not re-written because the two guest call sites scale it by
+`sll 15` and `sll 16`. Recorded OFX/OFY/H values remain evidence only; nothing writes a guest byte.
 
 ### S007 — interpolated presentation
 

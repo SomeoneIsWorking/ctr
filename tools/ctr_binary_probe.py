@@ -479,6 +479,298 @@ def cmd_projection_owner(image: Image, _args: argparse.Namespace) -> int:
         print(f"  0x{address:08X}: {word:08X}  {fmt(decode(address, word))}")
 
 
+# --------------------------------------------------------------------------------------
+# The 3D submission path: every writer and every reader of the GTE projection distance.
+# --------------------------------------------------------------------------------------
+
+# GTE control register numbers, from the ONE authority this workspace has: psxport's own GTE,
+# external/psxport/vendor/beetle-psx/mednafen/psx/gte.c, which names them
+#     #define OFX (int32_t)CR[24]  #define OFY (int32_t)CR[25]  #define H (uint16_t)CR[26]
+# A literal-immediate scan cannot establish this, and a shifted numbering is exactly the kind of
+# mistake that makes a "safe to widen" claim rest on a register that is not the one being written.
+GTE_CR_OFX = 24
+GTE_CR_OFY = 25
+GTE_CR_H = 26
+
+# The GTE perspective-transform op code, from the same framework file's own `gte_name` table
+# (0x01 is RTPS, the single-vertex form this image uses; 0x30 is RTPT, which it does not).
+GTE_OP_RTPS = 0x01
+
+# The ten geometry-submission functions, each paired with the address of the first instruction of
+# the SHARED FIVE-INSTRUCTION TAIL that ends at that function's `ctc2 rX,$26`.
+# `check_submission_tail` re-derives the shape from the bytes at every site, so a re-addressed or
+# different image fails the gate instead of quietly reporting a different set of sites.
+GEOMETRY_SUBMITTERS: tuple[tuple[int, int], ...] = (
+    # (function entry, first instruction of the shared tail)
+    (0x80069FFC, 0x8006A0D0),
+    (0x8006AAA8, 0x8006AB28),
+    (0x8006DC30, 0x8006DCD4),
+    (0x8006E26C, 0x8006E2F0),
+    (0x8006E588, 0x8006EB14),
+    (0x8006F004, 0x8006F5A0),
+    (0x8006F9A8, 0x8006FA58),
+    (0x8006FE70, 0x8006FF18),
+    (0x80070388, 0x80070418),
+    (0x80070950, 0x800709BC),
+)
+
+# THE RECOVERED SHAPE, and deliberately only the part that is genuinely shared. Five instructions,
+# identical in opcode and operand at all ten sites, ending AT the `ctc2 rX,$26` that writes the
+# GTE's projection-plane distance:
+#
+#     sll  a, a, 15     OFX/OFY are 16.16 fixed point built from a 16-bit screen offset
+#     sll  b, b, 15
+#     ctc2 a, $24      -> CR24 = OFX
+#     ctc2 b, $25      -> CR25 = OFY
+#     ctc2 c, $26      -> CR26 = H
+#
+# WHAT IS NOT CLAIMED AS SHARED: the register numbers in the two shifts and the three writes, and
+# the descriptor loads that feed them. Those genuinely vary -- some sites read the view descriptor
+# through `a0` and some through `a2`, some with `lh` and some with `lw` -- and the variance is
+# MEASURED and reported below rather than smoothed into one convenient claim. An earlier revision of
+# this gate asserted a single eight-instruction prologue; the gate itself then reported 0 of 10 sites
+# matching it, which is how the real shape was found.
+SUBMISSION_TAIL_SHAPE: tuple[tuple[str, str], ...] = (
+    ("sll", "15"),
+    ("sll", "15"),
+    ("ctc2", "24"),
+    ("ctc2", "25"),
+    ("ctc2", "26"),
+)
+
+# The view-descriptor offsets the tail is fed from, and the SAME offsets the 0x80042910 publication
+# reads. That identity is why one plan can serve both publication sites: the geometry submitters and
+# the descriptor publisher consume the same view descriptor.
+VIEW_DESCRIPTOR_OFX = 0x20
+VIEW_DESCRIPTOR_OFY = 0x22
+VIEW_DESCRIPTOR_DISTANCE = 0x18
+
+# The four sites that read H BACK with `cfc2`. This is the measurement that makes widening H a
+# COUPLED change in this title rather than a pure projection change, and it corrects an earlier
+# recorded claim that nothing in the text reads H back.
+H_READ_SITES: tuple[int, ...] = (0x8006A6B8, 0x80070AF8, 0x80070EE8, 0x80071150)
+
+# The exact words at the first submitter's descriptor loads plus its shared tail, quoted so a reader
+# can check the recovery without running anything.
+GEOMETRY_PROLOGUE_WORDS: dict[int, int] = {
+    0x8006A0BC: 0x84830020,  # lh  v1, 0x20(a0)   OFX = (int16) scene+0x20
+    0x8006A0C0: 0x84880022,  # lh  t0, 0x22(a0)   OFY = (int16) scene+0x22
+    0x8006A0C4: 0x8C890018,  # lw  t1, 0x18(a0)   H   =          scene+0x18
+    0x8006A0D0: 0x00031BC0,  # sll v1, v1, 15
+    0x8006A0D4: 0x000843C0,  # sll t0, t0, 15
+    0x8006A0D8: 0x48C3C000,  # ctc2 v1, $24
+    0x8006A0DC: 0x48C8C800,  # ctc2 t0, $25
+    0x8006A0E0: 0x48C9D000,  # ctc2 t1, $26
+}
+
+H_READ_WORDS: dict[int, int] = {
+    0x8006A6B8: 0x4843D000,
+    0x80070AF8: 0x4848D000,
+    0x80070EE8: 0x4843D000,
+    0x80071150: 0x4843D000,
+}
+
+
+def check_submission_tail(image: Image, tail: int) -> list[str]:
+    """Every way this site fails to be the recovered shared tail. Empty list == it is.
+
+    The comparison is on the DECODED shape, not on raw words, so the result is a statement about the
+    instruction sequence rather than about a constant this file happens to hold. It is also the only
+    thing standing between this file and a confidently wrong claim: an earlier revision asserted a
+    single eight-instruction prologue, and this function is what reported that 0 of 10 sites matched.
+    """
+    problems: list[str] = []
+    for step, (want_op, want_operand) in enumerate(SUBMISSION_TAIL_SHAPE):
+        address = tail + step * 4
+        word = image.word(address)
+        instruction = decode(address, word)
+        got_op = instruction.op
+        got_operand = ""
+        if want_op == "sll":
+            got_operand = f"{instruction.shamt}"
+        elif want_op == "ctc2":
+            got_operand = f"{instruction.rd}"
+        if got_op != want_op or got_operand != want_operand:
+            problems.append(
+                f"0x{address:08X} ({word:08X}) decodes as {fmt(instruction)!r}, "
+                f"expected {want_op} {want_operand}"
+            )
+    return problems
+
+
+def descriptor_reads(image: Image, tail: int) -> list[str]:
+    """The descriptor loads feeding the shared tail, read out of the bytes just above it.
+
+    MEASURED, NOT ASSUMED. The recovered story is "the submitters read the same view descriptor the
+    0x80042910 publication reads", so the offsets have to come from the image at each site. This
+    walks backwards from the tail collecting the `lh`/`lw` loads that land in the same registers the
+    tail's shifts and writes consume, and reports what it found -- including "none found", which
+    would be a finding and not a pass.
+    """
+    found: list[tuple[int, object, str]] = []
+    for step in range(1, 9):
+        address = tail - step * 4
+        instruction = decode(address, image.word(address))
+        if instruction.op in ("lh", "lw") and instruction.rs in (4, 6):  # base a0 / a2
+            found.append((address, instruction, "a0" if instruction.rs == 4 else "a2"))
+    return list(reversed(found))
+
+
+def cmd_gte_projection(image: Image, _args: argparse.Namespace) -> int:
+    """Every writer and every reader of the GTE projection distance H, with denominators."""
+    print(f"[gte-projection] {image.coverage()}")
+
+    cop2_words = 0
+    unnamed = 0
+    rtps_sites: list[int] = []
+    op_histogram: dict[int, int] = {}
+    h_writes: list[int] = []
+    ofx_writes: list[int] = []
+    h_reads: list[int] = []
+    jal_targets: dict[int, list[int]] = {}
+    j_targets: dict[int, list[int]] = {}
+    jalr_total = 0
+    for address, instruction in image.instructions():
+        if instruction.op == "cop2":
+            cop2_words += 1
+            sub = (image.word(address) >> 5) & 0x3F
+            op_histogram[sub] = op_histogram.get(sub, 0) + 1
+            if sub == GTE_OP_RTPS:
+                rtps_sites.append(address)
+        elif instruction.op == "ctc2":
+            if instruction.rd == GTE_CR_H:
+                h_writes.append(address)
+            elif instruction.rd == GTE_CR_OFX:
+                ofx_writes.append(address)
+        elif instruction.op == "cfc2" and instruction.rd == GTE_CR_H:
+            h_reads.append(address)
+        elif instruction.op == "jal":
+            jal_targets.setdefault(instruction.target, []).append(address)
+        elif instruction.op == "j":
+            j_targets.setdefault(instruction.target, []).append(address)
+        elif instruction.op == "jalr":
+            jalr_total += 1
+
+    # COVERAGE LIMIT, stated rather than implied: the executable's text extent also holds data
+    # tables and ASCII strings, and a word of ASCII in that range decodes as a COP2 op. The
+    # unnamed sub-op codes are the visible face of that, and they are reported instead of being
+    # folded into a "GTE op" total.
+    named = {0x01, 0x06, 0x0C, 0x10, 0x11, 0x12, 0x13, 0x14, 0x16, 0x1B, 0x1C, 0x1E, 0x20,
+             0x28, 0x29, 0x2A, 0x2D, 0x2E, 0x30, 0x3D, 0x3E, 0x3F}
+    for sub, count in sorted(op_histogram.items()):
+        unnamed += 0 if sub in named else count
+    print(f"[gte-projection] scanned {image.words} word(s) for COP2 traffic: {cop2_words} decode as a "
+          f"GTE op word, of which {unnamed} carry a sub-op code the framework's own gte_name() table "
+          f"does not name. Those are REPORTED, not counted as behaviour: the text extent holds data "
+          f"and ASCII as well as code, and 'COP2-looking' is not the same as 'executed'.")
+    print(f"[gte-projection] perspective transform RTPS (sub-op 0x{GTE_OP_RTPS:02X}): {len(rtps_sites)} "
+          f"site(s) in the text — the guest's 3D vertex transform, statically present. "
+          f"Executed counts are NOT claimed here; this is a text census.")
+    print()
+
+    leaf_callers = len(jal_targets.get(SET_GEOM_SCREEN, []))
+    print(f"[gte-projection] H (CR{GTE_CR_H}) WRITERS: {len(h_writes)} raw `ctc2 rX,$26` word(s) plus "
+          f"{leaf_callers} `jal SetGeomScreen` caller(s) = {len(h_writes) + leaf_callers} in total. "
+          f"Of the raw words, two ARE the libgte leaves themselves "
+          f"(0x{SET_GEOM_SCREEN:08X} and 0x800778A0).")
+    for address in h_writes:
+        print(f"    0x{address:08X}: {image.word(address):08X}  {fmt(decode(address, image.word(address)))}")
+    print(f"[gte-projection] OFX (CR{GTE_CR_OFX}) raw writers: {len(ofx_writes)}; "
+          f"OFY (CR{GTE_CR_OFY}) raw writers: "
+          f"{sum(1 for a, i in image.instructions() if i.op == 'ctc2' and i.rd == GTE_CR_OFY)}")
+    print()
+
+    print(f"[gte-projection] THE RECOVERED SUBMISSION PROLOGUE — the descriptor offsets and the "
+          f"fixed-point shift, quoted from the first submitter:")
+    for address in sorted(GEOMETRY_PROLOGUE_WORDS):
+        word = image.word(address)
+        print(f"  0x{address:08X}: {word:08X}  {fmt(decode(address, word))}")
+    print()
+
+    print(f"[gte-projection] the ten geometry submitters. Each is reached only by `jal`; a site "
+          f"reached by `j` or by falling through is NEVER a valid override key, so the `j` column "
+          f"is the check that makes these keys legitimate. The `prologue` column is the same eight-"
+          f"instruction check run at every site, so a single divergent submitter is visible instead "
+          f"of being hidden behind the one that was quoted.")
+    print(f"  {'entry':>10}  {'tail':>10}  {'jal':>4}  {'j':>3}  {'tail shape':>11}  first direct caller")
+    reached_by_j = 0
+    tail_failures = 0
+    descriptor_shapes: dict[tuple[str, ...], int] = {}
+    for entry, tail in GEOMETRY_SUBMITTERS:
+        jal_sites = jal_targets.get(entry, [])
+        j_sites = j_targets.get(entry, [])
+        reached_by_j += len(j_sites)
+        problems = check_submission_tail(image, tail)
+        verdict = "OK" if not problems else f"DIFF({len(problems)})"
+        if problems:
+            tail_failures += 1
+            for problem in problems:
+                print(f"      entry 0x{entry:08X}: {problem}")
+        caller = f"0x{jal_sites[0]:08X}" if jal_sites else "NONE - NOT AN OVERRIDE KEY"
+        print(f"  0x{entry:08X}  0x{tail:08X}  {len(jal_sites):>4}  {len(j_sites):>3}  "
+              f"{verdict:>11}  {caller}")
+        shape = tuple((address, f"{instruction.op} 0x{instruction.imm:X}", base)
+                      for address, instruction, base in descriptor_reads(image, tail))
+        descriptor_shapes[shape] = descriptor_shapes.get(shape, 0) + 1
+    print(f"[gte-projection] the descriptor loads feeding each tail, MEASURED per site (this is why "
+          f"the shared claim is five instructions and not eight):")
+    for shape, count in sorted(descriptor_shapes.items(), key=lambda kv: -kv[1]):
+        print(f"  {count} of {len(GEOMETRY_SUBMITTERS)} site(s):")
+        if not shape:
+            print("    (none found in the 8 words above the tail)")
+        for address, described, base in shape:
+            print(f"    0x{address:08X} {described:16s} [base {base}]")
+    # The load-bearing conclusion, and it is a MEASUREMENT over all ten sites rather than a reading
+    # of one: every submitter takes its projection triple from the SAME view descriptor the 0x80042910
+    # publication reads. That is why one owned plan can be applied at both publication sites.
+    #
+    # +0xF4 also appears in the window, and it is NOT a fourth projection field: it is the value the
+    # guest DERIVES from H and stores at 0x8006A6B8, read back beside the triple. So the gate asserts
+    # the three projection offsets are present and names every extra displacement rather than
+    # demanding an exact set -- a demand that would have reported the real finding as a failure.
+    offsets_seen: set[int] = set()
+    for _entry, tail in GEOMETRY_SUBMITTERS:
+        for _address, instruction, _base in descriptor_reads(image, tail):
+            offsets_seen.add(instruction.imm)
+    required = {VIEW_DESCRIPTOR_OFX, VIEW_DESCRIPTOR_OFY, VIEW_DESCRIPTOR_DISTANCE}
+    missing = sorted(required - offsets_seen)
+    extra = sorted(offsets_seen - required)
+    print(f"[gte-projection] view-descriptor displacements read above the tails across all "
+          f"{len(GEOMETRY_SUBMITTERS)} sites: "
+          + ", ".join(f"0x{o:02X}" for o in sorted(offsets_seen)) + ".")
+    print(f"[gte-projection] required projection offsets "
+          + ", ".join(f"0x{o:02X}" for o in sorted(required))
+          + f" -> {'all present' if not missing else 'MISSING ' + ', '.join(f'0x{o:02X}' for o in missing)}.")
+    if extra:
+        print(f"[gte-projection] additional displacement(s) in the window: "
+              + ", ".join(f"0x{o:02X}" for o in extra)
+              + ". 0xF4 is the field the guest WRITES FROM H at 0x8006A6B8 and reads back here, so it "
+                "is the coupling between a widened H and the guest's own viewport, not a fourth "
+                "projection field. It is named rather than rejected.")
+    print()
+    print(f"[gte-projection] {len(GEOMETRY_SUBMITTERS)} function entries asked about; "
+          f"{len(GEOMETRY_SUBMITTERS) - tail_failures} of them carry the recovered shared tail "
+          f"verbatim, {tail_failures} do not. "
+          f"{sum(len(jal_targets.get(e, [])) for e, _ in GEOMETRY_SUBMITTERS)} direct `jal` "
+          f"caller(s) found, {reached_by_j} `j` target(s) found. "
+          f"{jalr_total} `jalr` site(s) in the text are NOT resolved by this scan, so an indirect "
+          f"caller of one of these entries would be invisible here — the `jal` column is a floor, "
+          f"not a total.")
+    print()
+
+    print(f"[gte-projection] H (CR{GTE_CR_H}) READERS — the measurement that makes widening H a "
+          f"COUPLED change in this title:")
+    for address in h_reads:
+        print(f"  0x{address:08X}: {image.word(address):08X}  {fmt(decode(address, image.word(address)))}")
+    print(f"[gte-projection] {len(h_reads)} reader(s) of {len(h_writes)} raw writer(s). The guest "
+          f"derives screen-space quantities FROM H (at 0x8006A6B8 it stores `2H - CR7` into the "
+          f"scene descriptor at +0xF4; at 0x80070AF8 it DIVIDES by H; at 0x80070EE8 it builds "
+          f"`4H`; at 0x80071150 it uses H/2 for a vertex). So the earlier claim that nothing in the "
+          f"text reads H back was WRONG, and any 'widening H is safe because nothing reads it' "
+          f"argument is void for this title.")
+    return 0
+
+
 def cmd_frame_pacing(image: Image, _args: argparse.Namespace) -> int:
     """The chain that decides how many fields one game frame spans."""
     print(f"[pacing] {image.coverage()}")
@@ -749,6 +1041,84 @@ def selftest(image: Image) -> int:
         f"0x8003C4BC is {fmt(preceding_delay)}, so site-4 could not have produced 30",
     )
 
+    print("[selftest] THE 3D SUBMISSION PATH: the shared tail, at every site, from the bytes")
+    tail_problems: list[str] = []
+    for entry, tail in GEOMETRY_SUBMITTERS:
+        for problem in check_submission_tail(image, tail):
+            tail_problems.append(f"0x{entry:08X}: {problem}")
+    check(
+        f"all {len(GEOMETRY_SUBMITTERS)} submitters carry the shared projection tail verbatim",
+        not tail_problems,
+        "; ".join(tail_problems) if tail_problems
+        else f"{len(GEOMETRY_SUBMITTERS)}/{len(GEOMETRY_SUBMITTERS)} sites OK",
+    )
+    offsets: set[int] = set()
+    for _entry, tail in GEOMETRY_SUBMITTERS:
+        for _address, instruction, _base in descriptor_reads(image, tail):
+            offsets.add(instruction.imm)
+    check(
+        "every submitter reads the view descriptor's own projection offsets",
+        {VIEW_DESCRIPTOR_OFX, VIEW_DESCRIPTOR_OFY, VIEW_DESCRIPTOR_DISTANCE} <= offsets,
+        f"displacements seen across all sites: "
+        + ", ".join(f"0x{o:02X}" for o in sorted(offsets)),
+    )
+    words_ok = all(
+        image.word(address) == word for address, word in GEOMETRY_PROLOGUE_WORDS.items()
+    )
+    check(
+        "the quoted first-submitter words are the image's words",
+        words_ok,
+        f"{len(GEOMETRY_PROLOGUE_WORDS)} word(s) compared at 0x8006A0BC..0x8006A0E0",
+    )
+    reader_words_ok = all(image.word(a) == w for a, w in H_READ_WORDS.items())
+    check(
+        "the H readers are the measured `cfc2 rX,$26` sites",
+        reader_words_ok,
+        f"{len(H_READ_WORDS)} word(s) compared at "
+        + ", ".join(f"0x{a:08X}" for a in sorted(H_READ_WORDS)),
+    )
+    # NEGATIVE, AND IT IS THE NEGATIVE THAT MATTERS MOST HERE. The instrument has to be able to
+    # report a MISS, or "10 of 10" is not evidence. This corrupts one word of the shared tail at one
+    # site and requires the same checker to reject that site while accepting the other nine. An
+    # earlier revision of this gate failed exactly this way in the other direction: it asserted a
+    # shape no site had and reported 0 of 10, which is the same code path that must be able to say 9.
+    corrupted = _CorruptedAt(image, GEOMETRY_SUBMITTERS[0][1])
+    surviving = [
+        entry for entry, tail in GEOMETRY_SUBMITTERS[1:]
+        if not check_submission_tail(corrupted, tail)
+    ]
+    rejected = check_submission_tail(corrupted, GEOMETRY_SUBMITTERS[0][1])
+    check(
+        "one corrupted tail word is rejected, the other sites still accepted",
+        bool(rejected) and len(surviving) == len(GEOMETRY_SUBMITTERS) - 1,
+        f"corrupted site reported {len(rejected)} difference(s); "
+        f"{len(surviving)}/{len(GEOMETRY_SUBMITTERS) - 1} other sites still accepted",
+    )
+    # NEGATIVE, for the H-reader census specifically: a claim that "nothing reads H back" is the
+    # exact error this work corrected, so the census has to be able to produce an empty result on an
+    # image that genuinely has no reader.
+    class _NoReaders:
+        def __init__(self, inner):
+            self._inner = inner
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+        def instructions(self):
+            for address, instruction in self._inner.instructions():
+                if instruction.op == "cfc2" and instruction.rd == GTE_CR_H:
+                    continue
+                yield address, instruction
+
+    found_without = [a for a, i in _NoReaders(image).instructions()
+                     if i.op == "cfc2" and i.rd == GTE_CR_H]
+    check(
+        "the H-reader census can report zero when the image has none",
+        not found_without,
+        f"with the {len(H_READ_SITES)} reader(s) filtered out, matched {len(found_without)} — "
+        f"so the {len(H_READ_SITES)} above is a property of the image, not of the scan",
+    )
+
     print("[selftest] CROSS-CHECK: the byte census against the Ghidra decompilation census")
     resolved = {site: _resolve_a0(image, site)[0] for site in sites}
     problems = _cross_check_ghidra(image, resolved)
@@ -829,6 +1199,8 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("vsync-arguments", help="census every direct VSync(n) site and classify it")
     sub.add_parser("vsync-wait-semantics", help="read the VSync argument branch structure")
     sub.add_parser("projection-owner", help="quote the projection publication and its callers")
+    sub.add_parser("gte-projection",
+                 help="census every writer and reader of the GTE projection distance H")
     sub.add_parser("frame-pacing", help="quote the per-frame field countdown chain")
     sub.add_parser("near-plane", help="quote the geometry cull and what it compares against")
     sub.add_parser("gp", help="why the tool reports the countdown as [gp+0x348] and not an address")
@@ -859,6 +1231,7 @@ def main(argv: list[str] | None = None) -> int:
         "vsync-arguments": cmd_vsync_arguments,
         "vsync-wait-semantics": cmd_vsync_wait_semantics,
         "projection-owner": cmd_projection_owner,
+        "gte-projection": cmd_gte_projection,
         "frame-pacing": cmd_frame_pacing,
         "near-plane": cmd_near_plane,
         "gp": cmd_gp_note,

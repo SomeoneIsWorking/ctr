@@ -7,6 +7,7 @@
 #include "frame_callback_owner.h"
 #include "frame_suffix.h"
 #include "game_runtime.h"
+#include "geometry_projection_owner.h"
 #include "presentation_owner.h"
 #include "projection_owner.h"
 #include "render_list_boundary_diagnostic.h"
@@ -39,6 +40,9 @@ public:
   [[nodiscard]] uint32_t completedFrames() const;
   [[nodiscard]] uint64_t budgetExitsForLastField() const;
   [[nodiscard]] const ProjectionOwner &projection() const;
+  // The second projection application point: the guest's own geometry submitters publish
+  // the same triple at ten measured sites the descriptor publication never reaches.
+  [[nodiscard]] const CtrGeometryProjectionOwner &geometryProjection() const;
   [[nodiscard]] const CtrWidescreen &widescreen() const;
   [[nodiscard]] const PresentationOwner &presentation() const;
   [[nodiscard]] DiscReadOwner &discReadOwner();
@@ -76,6 +80,7 @@ private:
   DmaCallbackOwner dmaCallbacks_;
   FrameCallbackOwner frameCallbacks_;
   ProjectionOwner projection_;
+  CtrGeometryProjectionOwner geometryProjection_;
   CtrWidescreen widescreen_;
   PresentationOwner presentation_;
   RenderListBoundaryDiagnostic renderListDiagnostic_;

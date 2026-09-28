@@ -77,6 +77,9 @@ void CtrFrameDriver::stepFrame(Core &core, uint32_t frame) {
   // The projection census denominator. Taken BEFORE the field's work so a field that faults still
   // counts as a field the owner was live for, which is what makes "0 of N" honest.
   projection_.beginField();
+  // Armed for the same window as the address overrides, and for the same reason: guest GTE
+  // ops only happen while guest code runs inside this field.
+  const ScopedGteProjectionObservation geometryObservation(core, geometryProjection_);
   // The widening plan is resolved from the guest's OWN published view, on the first publication
   // (inside ProjectionOwner::publish), not from a display register at boot. That is what removes the
   // ordering hazard: `s_disp_w` read 320 on the field a boot-time latch saw and 512 on the first
@@ -84,6 +87,11 @@ void CtrFrameDriver::stepFrame(Core &core, uint32_t frame) {
   projection_.setPlanSource([this](Core &projectionCore, const GuestViewProjection &view) {
     return widescreen_.planFor(projectionCore, view);
   });
+  // The geometry owner READS the plan this one resolves; it does not resolve a second one. Bound on
+  // every field rather than once at construction so the two owners cannot be left pointing at
+  // different plans by a future edit, and so a null owner here is a visible census refusal instead of
+  // a silent "0 widened" that reads like a title with no 3D geometry.
+  geometryProjection_.setProjectionOwner(&projection_);
 
   // Every guest address the field owns, and the name each is installed under. Only the last of them
   // is debug-only, and it says so on its own row: which owners a non-observing field drops is a
@@ -181,6 +189,7 @@ void CtrFrameDriver::refuseUnfinishedField(Core &core,
   // Reporting it HERE rather than at a clean shutdown is deliberate: the run that needs the number
   // most is the one that dies, and a report attached to orderly exit would be silent exactly then.
   projection_.reportCensus();
+  geometryProjection_.reportCensus();
   std::abort();
 }
 

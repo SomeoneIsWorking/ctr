@@ -606,13 +606,13 @@ def main() -> int:
     for frame in frames:
         narrow = censuses.get("4x3", {}).get(frame)
         wide = censuses.get("16:9", {}).get(frame)
-        if narrow_census is None or wide_census is None:
+        if narrow is None or wide is None:
             print(f"[verdict] frame {frame}: UNMEASURED (a capture is missing on at least one leg)")
             continue
-        call = verdict(grew, narrow_census, wide_census)
-        print(f"[verdict] frame {frame}: drawn band {narrow_census.drawn_columns} -> "
-              f"{wide_census.drawn_columns} column(s) on a canvas {narrow_census.width} -> "
-              f"{wide_census.width} wide -> {call}")
+        call = verdict(grew, narrow, wide)
+        print(f"[verdict] frame {frame}: drawn band {narrow.drawn_columns} -> "
+              f"{wide.drawn_columns} column(s) on a canvas {narrow.width} -> "
+              f"{wide.width} wide -> {call}")
         if call == "FAILED":
             print(f"[verdict] frame {frame}: the canvas grew but the drawn band did not, so the extra "
                   f"width is black margin. This is a FAILED widening and is reported as one.")

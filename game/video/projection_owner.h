@@ -76,6 +76,28 @@ public:
   [[nodiscard]] const GteProjection &publishedProjection() const;
   [[nodiscard]] bool widenedLastPublication() const;
 
+  // THE RESOLVED PLAN AND ITS SCALE, for the second application point.
+  //
+  // `ProjectionOwner` listens at ONE publication (0x80042910, the descriptor route). The guest's ten
+  // geometry submitters publish the same triple themselves, from the same view descriptor, at ten
+  // measured sites the owner never sees — so the plan has to reach those too, and a second copy of
+  // it would be two answers to one question. The plan and its scale therefore live here and are
+  // READ by `CtrGeometryProjectionOwner`, which applies the same `widenViewProjection` rule at the
+  // measured moment the GTE consumes the triple. Exposed as a read-only pair so the second owner
+  // cannot re-latch a different plan behind the first's back.
+  [[nodiscard]] bool planLatched() const {
+    return planLatched_;
+  }
+  [[nodiscard]] const GuestProjectionPlan &plan() const {
+    return plan_;
+  }
+  [[nodiscard]] int32_t distanceScaleNumerator() const {
+    return distanceScaleNumerator_;
+  }
+  [[nodiscard]] int32_t distanceScaleDenominator() const {
+    return distanceScaleDenominator_;
+  }
+
   // THE PUBLICATION CENSUS, and the reason it exists. `publish()` speaks only on a DISAGREEMENT,
   // because that is the only event a projection owner must fail loud on. A run in which the owner
   // never fired therefore prints NOTHING, and "no ctr-projection line" is indistinguishable from
