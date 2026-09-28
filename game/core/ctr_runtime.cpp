@@ -69,6 +69,14 @@ const PlatformHlePlan *CtrRuntime::platformHlePlan() const {
   return &ctr::platformHlePlan();
 }
 
+const GuestWidescreenProjection *CtrRuntime::guestWidescreenProjection() const {
+  return &widescreen_;
+}
+
+CtrWidescreen &CtrRuntime::widescreen() {
+  return widescreen_;
+}
+
 bool CtrRuntime::guestVramIsPicture(const Game &) const {
   // The title driver preserves the retail frame order but does not present guest VRAM or own a
   // native primitive renderer. Claiming picture content would invent a presentation path.

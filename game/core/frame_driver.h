@@ -8,6 +8,7 @@
 #include "presentation_owner.h"
 #include "projection_owner.h"
 #include "render_list_boundary_diagnostic.h"
+#include "widescreen_owner.h"
 
 #include <cstdint>
 
@@ -27,6 +28,7 @@ public:
   [[nodiscard]] uint32_t completedFrames() const;
   [[nodiscard]] uint64_t budgetExitsForLastField() const;
   [[nodiscard]] const ProjectionOwner &projection() const;
+  [[nodiscard]] const CtrWidescreen &widescreen() const;
   [[nodiscard]] const PresentationOwner &presentation() const;
   [[nodiscard]] DiscReadOwner &discReadOwner();
 
@@ -66,6 +68,7 @@ private:
   void resumeFrameSuffix(Core &core);
   [[nodiscard]] bool frameSuffixIsWaiting(Core &core) const;
   void publishMeasuredProjection(Core &core);
+  [[nodiscard]] static ProjectionOwner::Source classifyProjectionSource(uint32_t returnAddress);
   void observePublishedRenderList(Core &core);
   void requestFrameBoundary(Core &core);
   [[nodiscard]] bool frameBoundaryPending(Core &core) const;
@@ -77,6 +80,7 @@ private:
   DmaCallbackOwner dmaCallbacks_;
   FrameCallbackOwner frameCallbacks_;
   ProjectionOwner projection_;
+  CtrWidescreen widescreen_;
   PresentationOwner presentation_;
   RenderListBoundaryDiagnostic renderListDiagnostic_;
   uint32_t completedFrames_ = 0;

@@ -51,6 +51,7 @@ add_library(
   game/core/runtime_composition.cpp
   game/video/presentation_owner.cpp
   game/video/projection_owner.cpp
+  game/video/widescreen_owner.cpp
   game/video/view_projection_plan.cpp
 )
 target_include_directories(
@@ -101,6 +102,19 @@ if(BUILD_TESTING)
   target_compile_features(ctr_projection_owner_test PRIVATE cxx_std_20)
   target_link_libraries(ctr_projection_owner_test PRIVATE ctr_runtime)
   add_test(NAME ctr_projection_owner COMMAND ctr_projection_owner_test)
+  # The widescreen pair probe. Its --selftest is the census arithmetic on synthetic pixel arrays and
+  # needs no disc, no game and no image library, so it is safe in hosted CI. The per-leg run needs
+  # media and is run by hand.
+  add_test(NAME ctr_widescreen_pair_selftest
+           COMMAND "${Python3_EXECUTABLE}" -B
+                   "${CMAKE_CURRENT_SOURCE_DIR}/tools/ctr_widescreen_pair.py" --selftest)
+  set_tests_properties(ctr_widescreen_pair_selftest PROPERTIES ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
+
+  add_executable(ctr_widescreen_owner_test tests/ctr_widescreen_owner.cpp)
+  target_compile_features(ctr_widescreen_owner_test PRIVATE cxx_std_20)
+  target_link_libraries(ctr_widescreen_owner_test PRIVATE ctr_runtime)
+  add_test(NAME ctr_widescreen_owner COMMAND ctr_widescreen_owner_test)
+
   # The binary probe's self-check reads the authenticated image, which hosted CI must not have.
   # It therefore SKIPS (77) with its reason rather than failing, so an asset-free job reports
   # "not measured here" instead of either a false pass or a broken-tool failure.

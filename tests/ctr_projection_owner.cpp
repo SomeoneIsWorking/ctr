@@ -92,7 +92,7 @@ void test_publication_carries_the_views_own_numbers() {
   ctr::ProjectionOwner owner;
   check(!owner.current().valid(), "a default publication is not valid");
   check(!owner.previous().valid(), "previous() is empty before the first publication");
-  owner.publish(core, publishAgreeing);
+  owner.publish(core, publishAgreeing, ctr::ProjectionOwner::Source::LensFlare);
 
   const auto &now = owner.current();
   checkEq(now.source, kView, "source is the view pointer the guest passed in $a0");
@@ -130,12 +130,12 @@ void test_previous_lags_and_the_sequence_advances() {
 
   writeView(core, kView, 320, 240, 0x1000u);
   core.r[4] = kView;
-  owner.publish(core, publishAgreeing);
+  owner.publish(core, publishAgreeing, ctr::ProjectionOwner::Source::LensFlare);
   check(!owner.previous().valid(), "previous() is still empty after exactly one publication");
 
   // A second publication with DIFFERENT numbers: this is the transition a widescreen owner would make.
   writeView(core, kView, 368, 240, 0x1200u);
-  owner.publish(core, publishAgreeing);
+  owner.publish(core, publishAgreeing, ctr::ProjectionOwner::Source::LensFlare);
   checkEq(owner.previous().nativeWidth, 320, "previous() holds the FIRST publication's width");
   checkEq(owner.previous().screenDistance, 0x1000, "previous() holds the FIRST publication's H");
   checkEq(owner.current().nativeWidth, 368, "current() holds the second publication's width");
@@ -168,7 +168,7 @@ void test_publication_requires_a_body_and_accepts_one() {
   ctr::ProjectionOwner owner;
   ctr::ProjectionOwner::RetailBody body = publishAgreeing;
   check(static_cast<bool>(body), "a callable body is what publish requires");
-  owner.publish(core, body);
+  owner.publish(core, body, ctr::ProjectionOwner::Source::Overlay);
   checkEq(owner.current().centerX, 128, "a 256-wide view centres at 128");
   checkEq(owner.current().centerY, 112, "a 224-high view centres at 112");
 }
@@ -208,7 +208,7 @@ void test_without_a_plan_publication_is_retail() {
   core.r[4] = kView;
 
   ctr::ProjectionOwner owner;
-  owner.publish(core, publishAgreeing);
+  owner.publish(core, publishAgreeing, ctr::ProjectionOwner::Source::LensFlare);
   check(!owner.widenedLastPublication(), "no plan latched means the publication was not widened");
   checkEq(owner.publishedProjection().centerX, 160, "unlatched OFX is retail's width/2");
   checkEq(owner.publishedProjection().centerY, 120, "unlatched OFY is retail's height/2");
@@ -240,7 +240,7 @@ void test_a_standard_aspect_plan_stays_retail() {
 
   ctr::ProjectionOwner owner;
   owner.latchPlan(plan, 1, 1);
-  owner.publish(core, publishAgreeing);
+  owner.publish(core, publishAgreeing, ctr::ProjectionOwner::Source::LensFlare);
   check(!owner.widenedLastPublication(), "a 4:3 plan does not widen");
   checkEq(owner.publishedProjection().centerX, 160, "4:3 plan leaves OFX at retail's value");
   checkEq(owner.publishedProjection().distance, 0x140, "4:3 plan leaves H at retail's value");
@@ -282,7 +282,7 @@ void test_a_wide_plan_widens_the_gte_and_not_the_guest() {
 
   ctr::ProjectionOwner owner;
   owner.latchPlan(plan, numerator, denominator);
-  owner.publish(core, publishAgreeing);
+  owner.publish(core, publishAgreeing, ctr::ProjectionOwner::Source::LensFlare);
 
   check(owner.widenedLastPublication(), "a wide plan widens the publication");
   checkEq(
@@ -332,7 +332,7 @@ void test_the_retail_comparison_sees_retail_not_the_plan() {
   const GuestProjectionPlan plan = makePlan(320, 240, {1280, 720}, PresentationAspect::Wide16x9);
   ctr::ProjectionOwner owner;
   owner.latchPlan(plan, plan.projectionExtent.width, plan.nativeProjectionExtent.width);
-  owner.publish(core, publishAgreeing);
+  owner.publish(core, publishAgreeing, ctr::ProjectionOwner::Source::LensFlare);
 
   // The captured publication is the guest's own, unmodified: the plan never rewrites history.
   checkEq(owner.current().centerX, 160, "the captured publication is still retail's centre");

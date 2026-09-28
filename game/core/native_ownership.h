@@ -111,6 +111,28 @@ inline constexpr uint32_t kSetGeomScreen = 0x8007781Cu;
 inline constexpr uint32_t kSetGeomOffset = 0x8007782Cu;
 inline constexpr uint32_t kProjectionWindowEnd = 0x80077844u;
 
+// State zero publishes a LITERAL projection by calling the two libgte leaves directly, bypassing the
+// view descriptor that 0x80042910 reads. Measured instruction words in SCUS_944.26:
+//
+//   0x8003C84C: 24040100  addiu a0, zero, 256   -> OFX = 0x100
+//   0x8003C850: 0C01DE0B  jal 0x8007782C        -> SetGeomOffset
+//   0x8003C854: 24050078  addiu a1, zero, 120   -> OFY = 0x78
+//   0x8003C858: 0C01DE07  jal 0x8007781C        -> SetGeomScreen
+//   0x8003C85C: 24040140  addiu a0, zero, 320   -> H   = 0x140
+//
+// So SetGeomOffset and SetGeomScreen have TWO callers each, and an owner installed only at
+// 0x80042910 leaves every frame up to and including the first descriptor publication at retail
+// geometry — a widening that is correct from the first dynamic frame onward and absent from the
+// boot frame, which is a latent inconsistency rather than a stylistic one.
+inline constexpr uint32_t kStartupLiteralPublication = 0x8003C84Cu;
+inline constexpr int32_t kStartupProjectionOfx = 256;
+inline constexpr int32_t kStartupProjectionOfy = 120;
+inline constexpr int32_t kStartupProjectionH = 320;
+// The two delay slots that carry the second and third literals, so the owner can preserve the exact
+// register effects of the call sequence it replaces.
+inline constexpr uint32_t kStartupProjectionOfyDelay = 0x8003C854u;
+inline constexpr uint32_t kStartupProjectionHDelay = 0x8003C85Cu;
+
 // Stock libcd leaves reached by CdInit. CTR's retail CdSync polls VSync(-1) while waiting for a
 // controller interrupt. The PC CD model completes commands synchronously, so these two library
 // leaves report that native result and the polling loop is never entered.

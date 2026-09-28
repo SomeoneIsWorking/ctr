@@ -100,6 +100,16 @@ void CtrFrameDriver::stepFrame(Core &core, uint32_t frame) {
     std::abort();
   }
   budgetExitsThisField_ = 0;
+  // The projection census denominator. Taken BEFORE the field's work so a field that faults still
+  // counts as a field the owner was live for, which is what makes "0 of N" honest.
+  projection_.beginField();
+  // The widening plan is resolved from the guest's OWN published view, on the first publication
+  // (inside ProjectionOwner::publish), not from a display register at boot. That is what removes the
+  // ordering hazard: `s_disp_w` read 320 on the field a boot-time latch saw and 512 on the first
+  // present, and a plan built from 320 is NARROWER than the real 512-dot picture.
+  projection_.setPlanSource([this](Core &projectionCore, const GuestViewProjection &view) {
+    return widescreen_.planFor(projectionCore, view);
+  });
 
   const std::array<OverrideBinding, 11> bindings{{
       {native::kStartupGpuInit, "startup GPU VSync owner", skipFirstStartupVSync},
@@ -178,6 +188,11 @@ void CtrFrameDriver::stepFrame(Core &core, uint32_t frame) {
   } else {
     lucent::error("ctr-frame", "retail execution returned without completing CTR frame {}", frame);
   }
+  // A run that cannot finish still measured something, and the projection census is the one
+  // measurement that decides whether a native producer has any pre-GTE state to consume at all.
+  // Reporting it HERE rather than at a clean shutdown is deliberate: the run that needs the number
+  // most is the one that dies, and a report attached to orderly exit would be silent exactly then.
+  projection_.reportCensus();
   std::abort();
 }
 
@@ -232,6 +247,10 @@ uint64_t CtrFrameDriver::budgetExitsForLastField() const {
 
 const ProjectionOwner &CtrFrameDriver::projection() const {
   return projection_;
+}
+
+const CtrWidescreen &CtrFrameDriver::widescreen() const {
+  return widescreen_;
 }
 
 const PresentationOwner &CtrFrameDriver::presentation() const {
@@ -605,20 +624,37 @@ void CtrFrameDriver::resumeFrameSuffix(Core &core) {
 
 void CtrFrameDriver::publishMeasuredProjection(Core &core) {
   const uint32_t returnAddress = core.r[31];
-  if (returnAddress != native::kProjectionReturnLensflare && returnAddress != native::kProjectionReturnState &&
-      returnAddress != native::kProjectionReturnOverlay) {
-    lucent::error("ctr-projection",
-                  "projection owner reached from unmeasured return 0x{:08X}; expected one of "
-                  "0x{:08X}/0x{:08X}/0x{:08X}",
-                  returnAddress,
-                  native::kProjectionReturnLensflare,
-                  native::kProjectionReturnState,
-                  native::kProjectionReturnOverlay);
-    std::abort();
+  const ProjectionOwner::Source source = classifyProjectionSource(returnAddress);
+  projection_.publish(
+      core,
+      [this](Core &projectionCore) {
+        runtime_.callOriginalToReturn(projectionCore, native::kProjectionProducer, "CTR projection producer");
+      },
+      source);
+}
+
+ProjectionOwner::Source CtrFrameDriver::classifyProjectionSource(uint32_t returnAddress) {
+  // The three measured return addresses ARE the identity here, so the classification is the same
+  // comparison the refusal used to make. It is a function rather than an inline chain because the
+  // census tallies per source and a second, differently-spelled list of the three addresses would
+  // be exactly the duplication that lets a fourth caller in unnoticed.
+  if (returnAddress == native::kProjectionReturnLensflare) {
+    return ProjectionOwner::Source::LensFlare;
   }
-  projection_.publish(core, [this](Core &projectionCore) {
-    runtime_.callOriginalToReturn(projectionCore, native::kProjectionProducer, "CTR projection producer");
-  });
+  if (returnAddress == native::kProjectionReturnState) {
+    return ProjectionOwner::Source::StateZero;
+  }
+  if (returnAddress == native::kProjectionReturnOverlay) {
+    return ProjectionOwner::Source::Overlay;
+  }
+  lucent::error("ctr-projection",
+                "projection owner reached from unmeasured return 0x{:08X}; expected one of "
+                "0x{:08X}/0x{:08X}/0x{:08X}",
+                returnAddress,
+                native::kProjectionReturnLensflare,
+                native::kProjectionReturnState,
+                native::kProjectionReturnOverlay);
+  std::abort();
 }
 
 void CtrFrameDriver::observePublishedRenderList(Core &core) {

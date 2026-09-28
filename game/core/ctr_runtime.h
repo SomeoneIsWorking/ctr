@@ -3,6 +3,7 @@
 #include "execution_exit.h"
 #include "game_runtime.h"
 #include "native_dispatch.h"
+#include "widescreen_owner.h"
 
 #include <cstdint>
 #include <memory>
@@ -29,6 +30,12 @@ public:
   const PlatformHlePlan *platformHlePlan() const override;
   bool guestVramIsPicture(const Game &game) const override;
 
+  // CTR's own answer to the framework's widescreen question. Returning the base nullptr made every
+  // plan 4:3 whatever the settings file said, so this override is the measured root cause of CTR not
+  // widening rather than a hook left for completeness.
+  const GuestWidescreenProjection *guestWidescreenProjection() const override;
+  [[nodiscard]] CtrWidescreen &widescreen();
+
   bool installOverride(Core &core, uint32_t address, std::string_view name, psx::cpu::NativeFunction function) const;
   bool removeOverride(Core &core, uint32_t address) const;
   psx::cpu::ExecutionResult dispatch(Core &core, uint32_t address) const;
@@ -40,6 +47,7 @@ public:
 private:
   static const GuestProgramImage programImage_;
   const uint32_t bootTarget_;
+  CtrWidescreen widescreen_{};
 };
 
 } // namespace ctr
