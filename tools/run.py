@@ -255,7 +255,7 @@ def toolchain_build(cc: str, cxx: str) -> Path:
 
 
 def sync_framework() -> Path:
-    command([sys.executable, ROOT / "tools" / "psxport_sync.py", "--auto"])
+    command([sys.executable, ROOT / "tools" / "psxport_fetch.py", "--auto"])
     configured = os.environ.get("PSXPORT_DIR")
     psxport = Path(configured or ROOT / "external" / "psxport").resolve()
     if not (psxport / "cmake" / "psxport.cmake").is_file():
