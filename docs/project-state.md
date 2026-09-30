@@ -23,6 +23,7 @@ missing one.
 | S008 | The default CTR product reaches sustained playable gameplay with input and audio | missing | S005, S009, S010 | G001 |
 | S009 | The native/Lightrec product reaches the preserved CTR frontier without a standalone interpreter mode or generated code | partial | S001, S002, S003, S010 | G001, G004 |
 | S010 | CTR frame/service suspension uses explicit typed executor exits | partial | S003 | G001 |
+| S011 | CTR: load operations complete without loading-only waits or presentation; logos cancel through the recovered route | missing | S009 | G005 |
 
 ## Current focus
 
@@ -252,6 +253,13 @@ reached the separate `0x8006AA80` fault in frame 16,228.
 
 Gap: real-game repeated-budget execution now reaches a later fault; nested original-call exit proof
 and completion beyond that fault remain missing.
+
+### S011 — CTR loading removal
+
+Missing. No load operation has been censused or classified for CTR. Gap: enumerate its load
+issuers and the wait and presentation each drives, then complete each through the title's own load
+mechanics without its loading-only wait, with payload and terminal state compared against retail
+and the absence of loading presentation captured.
 
 ## The projection publication owner now has a test; its `std::abort()` refusal still does not
 
