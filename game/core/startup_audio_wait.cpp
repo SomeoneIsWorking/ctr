@@ -21,7 +21,7 @@ bool StartupAudioWait::ownsContinuation() const {
 
 void StartupAudioWait::resumeLoop(Core &core) {
   dmaCallbacks_.serviceSpu(core, runtime_);
-  if (dmaCallbacks_.hasPendingSpu()) {
+  if (dmaCallbacks_.hasPendingSpu(core)) {
     continuationAddress_ = native::kStartupAudioLoop;
     field_.request(core);
     return;

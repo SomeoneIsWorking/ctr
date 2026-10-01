@@ -156,7 +156,7 @@ void StartupResourcePump::servicePendingWork(Core &core) {
   // consumes a completion for which it has no legacy callback-table view, then service all remaining
   // IRQ sources normally.
   dmaCallbacks_.serviceSpu(core, runtime_);
-  if (dmaCallbacks_.hasPendingSpu()) {
+  if (dmaCallbacks_.hasPendingSpu(core)) {
     field_.request(core);
     return;
   }

@@ -58,12 +58,12 @@ DmaCallbackOwner::DmaCallbackOwner(DmaCompletionBackend backend) : backend_(back
   }
 }
 
-bool DmaCallbackOwner::hasPendingSpu() const {
-  return backend_.owed(native::kSpuDmaChannel);
+bool DmaCallbackOwner::hasPendingSpu(const Core &core) const {
+  return backend_.owed(core, native::kSpuDmaChannel);
 }
 
 bool DmaCallbackOwner::serviceSpu(Core &core, const CtrRuntime &runtime) const {
-  if (!hasPendingSpu()) {
+  if (!hasPendingSpu(core)) {
     return false;
   }
   if (!core.game) {
@@ -77,8 +77,8 @@ bool DmaCallbackOwner::serviceSpu(Core &core, const CtrRuntime &runtime) const {
     return false;
   }
 
-  backend_.take(native::kSpuDmaChannel);
-  backend_.ack(native::kSpuDmaChannel);
+  backend_.take(core, native::kSpuDmaChannel);
+  backend_.ack(core, native::kSpuDmaChannel);
   const uint32_t callback = core.mem_r32(native::kSpuDmaCallbackSlot);
   if (callback == 0u) {
     return true;

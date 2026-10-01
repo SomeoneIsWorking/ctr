@@ -9,9 +9,19 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <limits>
 #include <memory>
+#include <string>
 #include <string_view>
+
+#if defined(__unix__) || defined(__APPLE__)
+#include <sys/wait.h>
+#include <unistd.h>
+#define CTR_FRAME_BUDGET_HAS_FORK 1
+#else
+#define CTR_FRAME_BUDGET_HAS_FORK 0
+#endif
 
 namespace {
 
@@ -79,6 +89,78 @@ int runStalled(Core &core, ctr::CtrFrameDriver &driver, ctr::CtrRuntime &runtime
   return 1;
 }
 
+// THE NEGATIVE CASE'S PROCESS BOUNDARY. `runStalled` must not return: CtrFrameDriver::stepFrame
+// refuses a zero-cycle host loop and terminates, and CTest counts any aborted process as a failure
+// whatever properties are set on the test. So this mode runs the refusing path in a child and
+// asserts the two things that distinguish the two outcomes:
+//
+//   * the child died from a signal, which is the driver's refusal, and
+//   * the child never printed runStalled's own "FAIL: zero-cycle host loop completed a field",
+//     which is the only other exit from that path.
+//
+// Asserting the child's death rather than the refusal's message keeps this independent of the
+// logger's wording.
+#if CTR_FRAME_BUDGET_HAS_FORK
+int runStalledExpectingRefusal() {
+  int channel[2] = {-1, -1};
+  if (::pipe(channel) != 0) {
+    std::puts("FAIL: could not create the refusal pipe");
+    return 1;
+  }
+  const ::pid_t child = ::fork();
+  if (child < 0) {
+    std::puts("FAIL: could not fork the refusing child");
+    return 1;
+  }
+  if (child == 0) {
+    ::close(channel[0]);
+    ::dup2(channel[1], STDOUT_FILENO);
+    ::dup2(channel[1], STDERR_FILENO);
+    ::close(channel[1]);
+    ctr::CtrRuntime runtime(kEntry);
+    psxport_install_game(runtime);
+    auto game = std::make_unique<Game>();
+    Core &core = game->core;
+    core.imageCatalog().activate("ctr-frame-budget", {0x00010000u, 0x0008d800u}, 1u);
+    auto &driver = static_cast<ctr::CtrFrameDriver &>(*game->frameDriver);
+    ::_exit(runStalled(core, driver, runtime));
+  }
+
+  ::close(channel[1]);
+  std::string captured;
+  char buffer[512];
+  for (;;) {
+    const ::ssize_t read_count = ::read(channel[0], buffer, sizeof buffer);
+    if (read_count <= 0) {
+      break;
+    }
+    captured.append(buffer, static_cast<std::size_t>(read_count));
+  }
+  ::close(channel[0]);
+
+  int status = 0;
+  if (::waitpid(child, &status, 0) != child) {
+    std::puts("FAIL: the refusing child was not reaped");
+    return 1;
+  }
+  if (!WIFSIGNALED(status)) {
+    std::printf("FAIL: zero-cycle host loop did not terminate the child (status 0x%X)\n", status);
+    return 1;
+  }
+  if (captured.find("zero-cycle host loop completed a field") != std::string::npos) {
+    std::puts("FAIL: zero-cycle host loop completed a field");
+    return 1;
+  }
+  std::printf("CTR zero-cycle host loop: refused by the driver (child signal %d)\n", WTERMSIG(status));
+  return 0;
+}
+#else
+int runStalledExpectingRefusal() {
+  std::puts("SKIP: this host has no fork, and the refusal is observable only across a process boundary");
+  return 77;
+}
+#endif
+
 } // namespace
 
 int main(int argc, char **argv) {
@@ -86,11 +168,14 @@ int main(int argc, char **argv) {
     std::puts("usage: ctr_frame_budget_test {finite|stalled}");
     return 2;
   }
+  if (std::string_view(argv[1]) == "stalled") {
+    return runStalledExpectingRefusal();
+  }
   ctr::CtrRuntime runtime(kEntry);
   psxport_install_game(runtime);
   auto game = std::make_unique<Game>();
   Core &core = game->core;
   core.imageCatalog().activate("ctr-frame-budget", {0x00010000u, 0x0008d800u}, 1u);
   auto &driver = static_cast<ctr::CtrFrameDriver &>(*game->frameDriver);
-  return std::string_view(argv[1]) == "finite" ? runFinite(core, driver) : runStalled(core, driver, runtime);
+  return runFinite(core, driver);
 }

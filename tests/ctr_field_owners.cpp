@@ -96,11 +96,11 @@ void clearPending(Core &core) {
 
 // A DMA backend that owes nothing, so the resource pump and the audio wait can be driven without
 // the SPU. `owed` is the only operation either owner consults on the paths under test.
-bool oweNothing(int) {
+bool oweNothing(const Core &, int) {
   return false;
 }
-void takeNothing(int) {}
-void ackNothing(int) {}
+void takeNothing(Core &, int) {}
+void ackNothing(Core &, int) {}
 
 ctr::DmaCompletionBackend inertDmaBackend() {
   return {

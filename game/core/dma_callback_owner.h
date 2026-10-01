@@ -8,10 +8,12 @@ namespace ctr {
 
 class CtrRuntime;
 
+// The framework's DMA completion hooks (dma_irq.h) take the Core, because owed/taken state and the
+// DICR acknowledgement both live per-instance on it. This table mirrors that contract exactly.
 struct DmaCompletionBackend {
-  bool (*owed)(int channel);
-  void (*take)(int channel);
-  void (*ack)(int channel);
+  bool (*owed)(const Core &core, int channel);
+  void (*take)(Core &core, int channel);
+  void (*ack)(Core &core, int channel);
 };
 
 // Delivers CTR's measured SPU DMA callback from its guest callback table. Direct runtimes do not
@@ -21,7 +23,7 @@ class DmaCallbackOwner final {
 public:
   explicit DmaCallbackOwner(DmaCompletionBackend backend = nativeBackend());
 
-  [[nodiscard]] bool hasPendingSpu() const;
+  [[nodiscard]] bool hasPendingSpu(const Core &core) const;
   bool serviceSpu(Core &core, const CtrRuntime &runtime) const;
 
   static DmaCompletionBackend nativeBackend();

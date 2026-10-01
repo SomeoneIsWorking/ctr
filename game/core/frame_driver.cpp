@@ -127,7 +127,7 @@ void CtrFrameDriver::stepFrame(Core &core, uint32_t frame) {
   // entry only after the read call returns, and the completion chain reads that same field.
   discReadOwner_.deliverPending(core, runtime_);
   dmaCallbacks_.serviceSpu(core, runtime_);
-  if (dmaCallbacks_.hasPendingSpu()) {
+  if (dmaCallbacks_.hasPendingSpu(core)) {
     field_.request(core);
   }
 

@@ -128,16 +128,16 @@ if(BUILD_TESTING)
   target_compile_features(ctr_frame_budget_test PRIVATE cxx_std_20)
   target_link_libraries(ctr_frame_budget_test PRIVATE ctr_runtime)
   # The finite field is a positive test. The zero-cycle host loop is a NEGATIVE test: the driver
-  # refuses it and terminates the process, so CTest inverts it. Both drive the shipping frame
-  # driver; the negative is registered without a wrapping tool.
+  # refuses it and terminates, which CTest reports as a failure however the test is configured, so
+  # the test binary owns that process boundary itself (see runStalledExpectingRefusal). A host with
+  # no fork reports 77 rather than pretending the refusal was observed.
   add_test(NAME ctr_frame_budget
            COMMAND ctr_frame_budget_test finite)
   set_tests_properties(ctr_frame_budget PROPERTIES TIMEOUT 70)
   add_test(NAME ctr_frame_budget_zero_cycle_host_loop
            COMMAND ctr_frame_budget_test stalled)
   set_tests_properties(ctr_frame_budget_zero_cycle_host_loop
-                       PROPERTIES TIMEOUT 70 WILL_FAIL TRUE
-                                PASS_REGULAR_EXPRESSION "cannot resume budget exit.*cycles=0")
+                       PROPERTIES TIMEOUT 70 SKIP_RETURN_CODE 77)
 
   add_executable(ctr_render_list_diagnostic_test tests/ctr_render_list_diagnostic.cpp)
   target_compile_features(ctr_render_list_diagnostic_test PRIVATE cxx_std_20)
