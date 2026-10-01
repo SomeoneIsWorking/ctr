@@ -17,8 +17,7 @@
 //
 // WHAT IS NOT COVERED, and it is a real gap rather than an oversight: no case here observes a real
 // run's fault or its GPU, so the census is pinned against synthetic publications. The live numbers
-// (176 publications over 29,034 fields, per source) are in docs/issues/0026 and came from the
-// product, not from this file.
+// (176 publications over 29,034 fields, per source) come from a real product run, not from this file.
 
 #include "core.h"
 #include "ctr_runtime.h"

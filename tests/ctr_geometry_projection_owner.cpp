@@ -2,10 +2,10 @@
 // GTE projection triple.
 //
 // WHY THIS EXISTS. The widescreen owner widens the GTE at ONE publication (0x80042910) and the canvas
-// widens, and the picture does not. The reason, measured by `tools/ctr_binary_probe.py gte-projection`
-// and quoted in docs/issues/0031, is that the guest writes the same triple itself at ten more sites:
-// sixteen raw `ctc2 rX,$26` words and two `jal SetGeomScreen` calls write H in total, and ten of the
-// raw writes are inside the geometry-submission functions. `CtrGeometryProjectionOwner` applies the
+// widens, and the picture does not. The measured reason is that the guest writes the same triple
+// itself at ten more sites: sixteen raw `ctc2 rX,$26` words and two `jal SetGeomScreen` calls write
+// H in total, and ten of the raw writes are inside the geometry-submission functions.
+// `CtrGeometryProjectionOwner` applies the
 // owned plan at the measured moment the GTE consumes the triple, so the widening reaches 3D geometry.
 //
 // WHAT IS COVERED, and each item is one way this owner could be wrong in a way that would be invisible:
@@ -169,7 +169,7 @@ int main() {
     check(afterFirst.distance == kWidenedH, "the first perspective transform ran with the WIDENED H, not retail's");
     // The centre is deliberately NOT re-written here. `widenViewProjection` re-centres, but the two
     // guest publication sites scale the centre differently (<<16 vs <<15), so applying it here would
-    // be a guess. The shift this leaves in the 3D path is measured in docs/issues/0031.
+    // be a guess. The shift this leaves in the 3D path is measured in a real two-leg run.
     check(afterFirst.centerX == 256 << 16,
           "the centre is left exactly as the guest published it, not re-centred by a guessed scale");
 

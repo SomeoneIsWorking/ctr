@@ -30,12 +30,12 @@ class ProjectionOwner;
 // The claim was: CTR's geometry cull compares object Z against a scratchpad near plane that is a
 // literal 0 or 2, not against `H`, "and nothing in the 128,512-word text reads `H` back".
 //
-// The first half is right and is still measured (`tools/ctr_binary_probe.py near-plane`): the two
+// The first half is right and is still measured: the two
 // geometry paths store a literal 0 or 2 at `DAT_1F800054`, chosen by the caller's third argument
 // (`0x8006E5C0 addiu v1,a2,-2` / `bgtz`, stored at `0x8006E5D0`, repeated at `0x8006F04C`). So
 // raising `H` does not cull near geometry the way it would in a title that uses `H` as its bound.
 //
-// The second half is FALSE. `tools/ctr_binary_probe.py gte-projection` finds **4** `cfc2 rX,$26`
+// The second half is FALSE. The executable has **4** `cfc2 rX,$26`
 // sites that read `H` back out of the GTE: 0x8006A6B8, 0x80070AF8, 0x80070EE8 and 0x80071150. The
 // guest stores `2H - CR7` into its scene descriptor at +0xF4, DIVIDES by `H` at 0x80070AF8, builds
 // `4H` at 0x80070EE8, and uses `H/2` for a vertex at 0x80071150. `H` in this title is therefore a
@@ -47,7 +47,7 @@ class ProjectionOwner;
 // by much less than the focal-length ratio. Measured: 911 of 110,553 perspective transforms widened
 // (16:9) against 0 of 110,432 (4:3), the rightmost submitted x moved 812 -> 894, and the drawn band
 // 695 -> 719 of 960 columns with a 241-column margin that is 0/173,520 non-black and belongs to 2D
-// content a projection change cannot reach. See docs/issues/0031 and `CtrGeometryProjectionOwner`.
+// content a projection change cannot reach. See `CtrGeometryProjectionOwner`.
 //
 // WHAT IT NEVER DOES: write a guest byte. The plan reaches the GTE control registers only, through
 // the projection owner's existing `libgte_set_geom_*` path, and the guest's view descriptor keeps its

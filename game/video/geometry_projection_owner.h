@@ -13,8 +13,8 @@ class ProjectionOwner;
 // CTR's SECOND projection application point, and it exists because the first one was measured to
 // cover 1 of 18 sites.
 //
-// WHAT WAS MEASURED, and the arithmetic is the whole argument. `tools/ctr_binary_probe.py
-// gte-projection` re-derives all of it from the authenticated image and is gated in CTest:
+// WHAT WAS MEASURED, and the arithmetic is the whole argument. Every count below is re-derivable
+// from the identity-verified executable:
 //
 //   * the guest writes the GTE projection distance H (control register 26) from 16 raw `ctc2 rX,$26`
 //     words plus 2 `jal SetGeomScreen` calls — 18 writers in 128,512 words;

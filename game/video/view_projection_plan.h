@@ -9,7 +9,7 @@ namespace ctr {
 // The GTE projection triple CTR's own publication leaves are: libgte SetGeomOffset takes the
 // horizontal/vertical centre and SetGeomScreen takes the projection distance, and in this
 // executable they are three `ctc2` writes to GTE control registers 36, 37 and 26
-// (0x8007781C, 0x8007782C, read with tools/ctr_binary_probe.py projection-owner).
+// (0x8007781C, 0x8007782C; measured on the identity-verified executable).
 struct GteProjection {
   int32_t centerX = 0;  // GTE CR36 (OFX) — the horizontal centre
   int32_t centerY = 0;  // GTE CR37 (OFY) — the vertical centre
@@ -35,7 +35,7 @@ struct GuestViewProjection {
 // is fixed by H and the horizontal EXTENT only decides how many pixels that field is spread
 // across. Widening the extent alone would therefore stretch the picture, which is banned.
 // Widening H is the only way to add horizontal field, and the measured reason it is safe in
-// this title is in docs/issues/0026: CTR's geometry cull compares object Z against a scratchpad
+// this title is on `CtrWidescreen`: CTR's geometry cull compares object Z against a scratchpad
 // near plane that is a literal 0 or 2 (0x8006E5D0, 0x8006F04C), NOT against H, so raising H
 // cannot cull near geometry the way it could in a title that uses H as the bound.
 struct WidenedViewProjection {

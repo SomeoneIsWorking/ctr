@@ -18,12 +18,10 @@
 //     that does not match the view has NO automated coverage. That is a real gap and it is named in
 //     `docs/project-state.md` rather than papered over; a fork-based death test would not be portable to
 //     the Windows and macOS builds this project also ships.
-//   * NOW GROUNDED — the offsets are no longer taken on trust. The image is provisioned and
-//     `tools/ctr_binary_probe.py projection-owner` reads the retail body at 0x80042910 out of
-//     `scratch/raw/ctr/SCUS_944.26`: `lhu v0,32(s0)` / `lhu v0,34(s0)` / `lw a0,24(s0)` are the
-//     width, height and H reads, and the body ends at 0x80042974. This suite still pins the owner's
-//     BEHAVIOUR; the grounding that makes those numbers real is the probe's, quoted in
-//     `docs/issues/0026`.
+//   * GROUNDED AGAINST THE RETAIL BODY. The offsets are no longer taken on trust: the identity-verified
+//     image's body at 0x80042910 is `lhu v0,32(s0)` / `lhu v0,34(s0)` / `lw a0,24(s0)` for the
+//     width, height and H reads, and it ends at 0x80042974. This suite pins the owner's BEHAVIOUR;
+//     those three instructions are what make its offsets real.
 //
 // NO GAME, NO DISC, NO WINDOW: one `Game`, guest memory written directly, and a retail body supplied by
 // the test that publishes whatever the test wants.

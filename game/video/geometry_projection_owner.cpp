@@ -190,8 +190,8 @@ CtrGeometryProjectionOwner::Outcome CtrGeometryProjectionOwner::applyOwnedPlan(C
   // the centring a `<<16` producer needs, and nothing in the recovered bytes says which struct the
   // submitters' +0x20 actually is. Widening H is a pure projection change that adds horizontal field
   // with no convention assumption; re-centring is left where it is already implemented and measured,
-  // at the 0x80042910 publication, and the shift this leaves in the 3D path is measured in
-  // docs/issues/0031 rather than designed away.
+  // at the 0x80042910 publication, and the shift this leaves in the 3D path is measured in a real
+  // two-leg run rather than designed away.
   libgte_set_geom_screen(&core, widened.published.distance);
   lastPublishedDistance_ = widened.published.distance;
   publishedOnce_ = true;
