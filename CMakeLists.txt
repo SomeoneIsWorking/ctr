@@ -191,17 +191,12 @@ if(BUILD_TESTING)
   add_test(NAME ctr_launcher COMMAND "${Python3_EXECUTABLE}" -B
            "${CMAKE_CURRENT_SOURCE_DIR}/tools/test_run.py")
   set_tests_properties(ctr_launcher PROPERTIES ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
-  # The behaviour test lives in tests/, where every other port keeps it and where the canonical copy
-  # lives in psxport. ctr had a second, older copy under tools/ that the canonical is not installed over,
-  # so this registration was silently exercising a stale file while reading as present.
-  add_test(NAME ctr_framework_resolver COMMAND "${Python3_EXECUTABLE}" -B
-           "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_psxport_sync.py")
-  set_tests_properties(ctr_framework_resolver PROPERTIES ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
   # --build names THIS build dir. Without it the check falls back to build/ci, which ctr does not have,
   # so the test was REFUSING for a missing receipt rather than checking the pin at all -- a live test that
   # cannot report a stale pin is indistinguishable from a green one.
   add_test(NAME ctr_framework_pin COMMAND "${Python3_EXECUTABLE}"
-           "${CMAKE_CURRENT_SOURCE_DIR}/tools/psxport_sync.py" --check
+           "${CMAKE_CURRENT_SOURCE_DIR}/external/psxport/tools/psxport_sync.py"
+           --repo "${CMAKE_SOURCE_DIR}" --check
            --build "${CMAKE_BINARY_DIR}")
 
   add_test(NAME ctr_help_without_assets COMMAND ctr_port --help)
@@ -245,8 +240,8 @@ add_custom_target(
 )
 add_custom_target(
   verify
-  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/psxport_sync.py"
-          --check --resolved "${CMAKE_BINARY_DIR}/psxport_resolved.txt"
+  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/external/psxport/tools/psxport_sync.py"
+          --repo "${CMAKE_SOURCE_DIR}" --check --build "${CMAKE_BINARY_DIR}"
   COMMAND "${CMAKE_CTEST_COMMAND}" --test-dir "${CMAKE_BINARY_DIR}" --output-on-failure
   DEPENDS
     cpp_policy
@@ -275,6 +270,10 @@ add_custom_target(
 if(BUILD_TESTING)
   add_test(
     NAME ctr_psxport_pin_live
-    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/psxport_sync.py"
-            --check --build "${CMAKE_BINARY_DIR}")
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/external/psxport/tools/psxport_sync.py"
+            --repo "${CMAKE_SOURCE_DIR}" --check --build "${CMAKE_BINARY_DIR}")
 endif()
+
+# The pin tool's own behaviour (staleness guard, a bump that records the commit the build RESOLVED) is
+# tested once, in the framework (tests/test_psxport_sync.py). The only pin tool this repository ships
+# is tools/psxport_fetch.py.
