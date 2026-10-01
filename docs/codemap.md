@@ -3,7 +3,8 @@
 CTR's app composition wires process owners; title core modules own
 retail/native boundaries; simulation owns authoritative transforms; video owns producer commands,
 rendering, and temporal presentation. Capability state belongs in `docs/project-state.md`, migration
-order in `docs/migration.md`, and atomic work in `docs/issues/`.
+order in `docs/migration.md`, per-step reverse-engineering status in `docs/re-frontier.md`, and
+atomic work in `docs/issues/`.
 
 ## Ownership
 
@@ -31,7 +32,8 @@ order in `docs/migration.md`, and atomic work in `docs/issues/`.
 | Presentation fence | Rotate one field fence and commit only captured retail/native work | `game/video/presentation_owner.*` | `PresentationOwner::finishField` | Called after a validated executor exit, never from guest VSync |
 | Input/media provisioning | Resolve user media, verify `SCUS_944.26` and `BIGFILE.BIG`, and generate non-executable image identity facts | `tools/provision.py`, `tools/extract_overlays.py` | provisioning CLIs | Runtime publication belongs to the title image owner; provisioning never emits guest code |
 | Title identity facts | Record the selected retail revision and its measured executable/load facts | `titles/` | `titles/ctr/README.md` | Game bytes remain untracked; title policy consumes verified facts |
-| Differential evidence | Compare deterministic executor state/device/memory with an independent emulator | separate diagnostic target; recorded evidence in the open issues and `titles/ctr/README.md` | separate diagnostic target | An interpreter-only oracle is separately built and absent from gameplay; backend refusal fallback remains executor-owned |
+| Differential evidence | Compare deterministic executor state/device/memory with an independent emulator | separate diagnostic target; recorded evidence in `docs/re-frontier.md` and `titles/ctr/README.md` | separate diagnostic target | An interpreter-only oracle is separately built and absent from gameplay; backend refusal fallback remains executor-owned |
+| Reverse-engineering status | Which areas of the executable are grounded in bytes, how far, and what is next | `docs/re-frontier.md` | `docs/re-frontier.md` | A step's status moves only with new evidence from the image or a run; a measured fact is never dropped when its tool is retired |
 | Product verification | Exercise shipping runtime owners, exit results, link composition, and negative controls | `tests/`, `tools/verify.py` | `tools/verify.py` over PSXPort's shared `port.consumer_verify` | Tests call production seams and do not duplicate instruction or exit semantics |
 | Native simulation | Own authoritative ticks and current camera/object transforms | future cohesive modules under `game/` | target `Simulation` | Simulation state is independent of presentation interpolation |
 | Native producers | Convert pre-GTE camera/object/material state into typed primitive commands | future producer modules under `game/video/` | target producer interfaces | Never consume GTE/OT/GP0/framebuffer output as product source |
@@ -47,5 +49,5 @@ order in `docs/migration.md`, and atomic work in `docs/issues/`.
 - Frame, host-work, interrupt, or service suspension: title continuation state plus a typed executor exit.
 - Disc/overlay identity and runtime mapping: provisioning tools plus title runtime policy.
 - Native camera/transforms: simulation owner; native primitives/order/depth: video owners.
-- Capability, migration order, or atomic work: `docs/project-state.md`, `docs/migration.md`, or
-  `docs/issues/` respectively.
+- Capability, migration order, RE status, or atomic work: `docs/project-state.md`,
+  `docs/migration.md`, `docs/re-frontier.md`, or `docs/issues/` respectively.

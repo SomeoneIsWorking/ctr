@@ -8,7 +8,8 @@ guest owned.
 ## Current evidence
 
 - The USA disc and `SCUS_944.26` executable are reproducibly identified and provisioned. Exact
-  hashes, PS-X EXE fields, and addresses are tabulated in `titles/ctr/README.md`.
+  hashes and PS-X EXE fields are tabulated in `titles/ctr/README.md`; what is reverse-engineered, and
+  how far, is tracked per step in `docs/re-frontier.md`.
 - Existing evidence reaches resident main, state-3 frame ownership, asynchronous CD/DMA service,
   runtime-loaded `BIGFILE.BIG` overlays, the first presentation boundary, and CTR's alternate-link
   GTE library chain.
@@ -47,7 +48,7 @@ transforms and decorates presentation only. These modes remain off during faithf
 comparison.
 
 See `docs/project-state.md` for factual coverage, `docs/project-goals.md` for completion conditions,
-and `docs/codemap.md` for ownership.
+`docs/codemap.md` for ownership, and `docs/re-frontier.md` for reverse-engineering status.
 
 ## Verification
 

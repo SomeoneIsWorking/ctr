@@ -1,7 +1,7 @@
 # Native/Lightrec migration
 
-This is CTR's local execution migration plan. Measured binary facts are tabulated in
-`titles/ctr/README.md` and summarised in `AGENTS.md`; psxport owns the shared runtime contract.
+This is CTR's local execution migration plan. Measured binary facts and each area's RE status live
+in `docs/re-frontier.md`; psxport owns the shared runtime contract.
 
 ## Product boundary
 

@@ -1,16 +1,16 @@
 # Project state
 
 Epic intent lives in `docs/project-goals.md`, migration order in `docs/migration.md`, ownership in
-`docs/codemap.md`, and atomic work in `docs/issues/`. The comparison baseline is the North American
-retail game under an accurate vanilla PlayStation emulator; every row below is a user-visible delta
-from it.
+`docs/codemap.md`, per-step reverse-engineering status in `docs/re-frontier.md`, and atomic work in
+`docs/issues/`. The comparison baseline is the North American retail game under an accurate vanilla
+PlayStation emulator; every row below is a user-visible delta from it.
 
 | ID | Capability | State | Evidence or gap |
 |---|---|---|---|
 | S001 | USA disc and `SCUS_944.26` reproducibly identified and provisioned | verified | `SYSTEM.CNF` selects `SCUS_944.26`, LBA 24, 516,096 bytes, SHA-256 `7b4aac0b…efb838`, load `0x80010000`, text `[0x80010000,0x8008D800)`; `tools/provision.py` extracts transactionally and refuses a mutated image |
 | S002 | Independent CPU execution establishes deterministic retail boot boundaries | verified | Beetle/Mednafen CPU reached InitHeap after 92,378 instructions, agreeing 7/7 with an independent crt0 decoder |
-| S003 | Preserved evidence reaches the current resident and live execution frontiers | partial | comparison reached pre-instruction `0x800772E0` 34/34 fields (forced 33/34 negative); issue 0023 is the live boundary and must be reproduced through Lightrec |
-| S004 | Projection and primitive-producer source boundaries grounded in the executable | partial | libgte leaves `SetGeomScreen [0x8007781C,0x80077828)`, `SetGeomOffset [0x8007782C,0x80077844)`, publication `[0x80042910,0x80042974)`, lens-flare producer `[0x80024C4C,0x80025138)`; the ten submitters' packet-build step and the bounding 2D layers are still retail code |
+| S003 | Preserved evidence reaches the current resident and live execution frontiers | partial | comparison reached pre-instruction `0x800772E0` 34/34 fields (forced 33/34 negative), tracked as steps CTR-01..CTR-04 and CTR-JIT-* in `docs/re-frontier.md`; issue 0023 is the live boundary and must be reproduced through Lightrec |
+| S004 | Projection and primitive-producer source boundaries grounded in the executable | partial | libgte leaves `SetGeomScreen [0x8007781C,0x80077828)`, `SetGeomOffset [0x8007782C,0x80077844)`, publication `[0x80042910,0x80042974)`, lens-flare producer `[0x80024C4C,0x80025138)` (frontier step CTR-05); the ten submitters' packet-build step and the bounding 2D layers are still retail code |
 | S005 | Frames produced by a game-state native renderer | missing | no native camera/object producer set, render queue, ordering/depth owner, or renderer; the run faults at `0x8006C0FC` in field 29,033 (issue 0024), so the only 3D content reached is the attract sequence |
 | S006 | Native camera and projection support true widescreen | partial | canvas widens 512 -> 684 and guest 3D is re-projected (911 of 110,553 transforms take the plan's H); the drawn band is still 719 of 960 columns because 14,822 of 67,282 submitted prims are untouched 2D (issue 0032), and 0 `BIGFILE.BIG` overlays are covered |
 | S007 | Native camera and object transforms interpolated for presentation | missing | in scope: 2 fields per game frame = 30 fps, paced by a two-field countdown at `[gp+0x348]` drained by the vertical-blank callback, not by the single boot-time `VSync(2)`; no native simulation owner or previous/current transform pair exists yet |

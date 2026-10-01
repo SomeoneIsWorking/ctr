@@ -2,8 +2,8 @@
 
 CTR targets one native PC gameplay product: title-owned native subsystems plus psxport's pinned
 Lightrec executor for every remaining retail instruction. Read `docs/migration.md`,
-`docs/project-state.md`, and `docs/codemap.md` before implementation. The workspace rules in
-`../AGENTS.md` and framework-consumer rules in `external/psxport/AGENTS.md` apply.
+`docs/project-state.md`, `docs/codemap.md`, and `docs/re-frontier.md` before implementation. The
+workspace rules in `../AGENTS.md` and framework-consumer rules in `external/psxport/AGENTS.md` apply.
 
 ## Execution contract
 
@@ -39,8 +39,9 @@ simulation transforms. GTE/OT/GP0/framebuffer output is diagnostic evidence only
 ## Measured binary facts
 
 `SCUS_944.26` is LBA 24, 516,096 bytes, SHA-256 `7b4aac0bf2f6310984e599295df17b457da5a23b270c20200cefef6079efb838`,
-load `0x80010000`, text `[0x80010000,0x8008D800)`, header stack `0x801FFFF0`; measured values are
-tabulated in `titles/ctr/README.md`. CTR runs at 2 fields per game frame (30 fps), paced by a
+load `0x80010000`, text `[0x80010000,0x8008D800)`, header stack `0x801FFFF0`; the full measured set
+and the ordered RE status of each area are in `titles/ctr/README.md` and `docs/re-frontier.md`. CTR
+runs at 2 fields per game frame (30 fps), paced by a
 two-field countdown at `[gp+0x348]` drained by the vertical-blank callback — the single `VSync(2)`
 in the image is a boot resource load, not the frame loop. `H` has 4 measured readers, so widening it
 also moves the guest's own derived viewport.
