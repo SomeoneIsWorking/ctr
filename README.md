@@ -53,7 +53,7 @@ and `docs/codemap.md` for ownership.
 
 Run `uv run --frozen python tools/verify.py` for the asset-free Clang/Ninja product gate. The
 verifier uses PSXPort's shared dependency, build, test, and linked-execution checks, plus CTR's
-provisioning and native-owner tests. `psxport.pin` records the verified framework revision. Lightrec
+provisioning and native-owner tests. `external/psxport` is the workspace's live framework checkout. Lightrec
 and GNU Lightning are exact dependencies owned by that framework; custom checkout/prefix paths
 use its `PSXPORT_LIGHTREC_DIR` and `PSXPORT_LIGHTNING_PREFIX` configuration.
 

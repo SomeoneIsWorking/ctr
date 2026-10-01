@@ -11,18 +11,7 @@ if(NOT EXISTS "${PSXPORT_DIR}/cmake/psxport.cmake")
   message(FATAL_ERROR
           "PSXPORT_DIR=${PSXPORT_DIR} has no cmake/psxport.cmake; run the Python framework resolver")
 endif()
-execute_process(
-  COMMAND git -C "${PSXPORT_DIR}" rev-parse HEAD
-  OUTPUT_VARIABLE PSXPORT_RESOLVED_SHA
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-  ERROR_QUIET
-  RESULT_VARIABLE _psxport_rev_rc
-)
-if(NOT _psxport_rev_rc EQUAL 0)
-  set(PSXPORT_RESOLVED_SHA "unknown")
-endif()
-file(WRITE "${CMAKE_BINARY_DIR}/psxport_resolved.txt"
-     "dir = ${PSXPORT_DIR}\ncommit = ${PSXPORT_RESOLVED_SHA}\n")
+message(STATUS "psxport framework: ${PSXPORT_DIR}")
 
 set(PSXPORT_BUILD_SMOKE ON CACHE BOOL "Build the framework agnosticism smoke" FORCE)
 add_subdirectory("${PSXPORT_DIR}" psxport_build)
@@ -158,13 +147,6 @@ if(BUILD_TESTING)
   add_test(NAME ctr_launcher COMMAND "${Python3_EXECUTABLE}" -B
            "${CMAKE_CURRENT_SOURCE_DIR}/tools/test_run.py")
   set_tests_properties(ctr_launcher PROPERTIES ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
-  # --build names THIS build dir. Without it the check falls back to build/ci, which ctr does not have,
-  # so the test was REFUSING for a missing receipt rather than checking the pin at all -- a live test that
-  # cannot report a stale pin is indistinguishable from a green one.
-  add_test(NAME ctr_framework_pin COMMAND "${Python3_EXECUTABLE}"
-           "${CMAKE_CURRENT_SOURCE_DIR}/external/psxport/tools/psxport_sync.py"
-           --repo "${CMAKE_SOURCE_DIR}" --check
-           --build "${CMAKE_BINARY_DIR}")
 
   add_test(NAME ctr_help_without_assets COMMAND ctr_port --help)
   add_test(NAME ctr_short_help_without_assets COMMAND ctr_port -h)
@@ -207,8 +189,6 @@ add_custom_target(
 )
 add_custom_target(
   verify
-  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/external/psxport/tools/psxport_sync.py"
-          --repo "${CMAKE_SOURCE_DIR}" --check --build "${CMAKE_BINARY_DIR}"
   COMMAND "${CMAKE_CTEST_COMMAND}" --test-dir "${CMAKE_BINARY_DIR}" --output-on-failure
   DEPENDS
     cpp_policy
@@ -224,17 +204,3 @@ add_custom_target(
   USES_TERMINAL
   VERBATIM
 )
-
-# The live pin check: the real function against this repository's real psxport.pin and the real build
-# receipt, so it can fail when the pin is actually wrong. --build points at THIS build directory, so
-# the receipt is current by construction and the staleness guard cannot fire spuriously.
-if(BUILD_TESTING)
-  add_test(
-    NAME ctr_psxport_pin_live
-    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/external/psxport/tools/psxport_sync.py"
-            --repo "${CMAKE_SOURCE_DIR}" --check --build "${CMAKE_BINARY_DIR}")
-endif()
-
-# The pin tool's own behaviour (staleness guard, a bump that records the commit the build RESOLVED) is
-# tested once, in the framework (tests/test_psxport_sync.py). The only pin tool this repository ships
-# is tools/psxport_fetch.py.
