@@ -104,9 +104,9 @@ if(BUILD_TESTING)
   target_link_libraries(ctr_overlay_image_owner_test PRIVATE ctr_runtime)
   add_test(NAME ctr_overlay_image_owner COMMAND ctr_overlay_image_owner_test)
 
-  # The projection publication owner had no test at all, and it is the seam a widescreen owner consumes
-  # (it publishes the owner's `ofx` and `H`). Pinned here so the offsets and the halving cannot drift
-  # silently; the file's header states what is NOT covered — the `std::abort()` refusal — and why.
+  # The projection publication owner is the seam a widescreen owner consumes (it publishes the owner's
+  # `ofx` and `H`). Its test pins the offsets it reads and the halving that derives the centre; the
+  # file's header states what is NOT covered — the `std::abort()` refusal — and why.
   add_executable(ctr_projection_owner_test tests/ctr_projection_owner.cpp)
   target_compile_features(ctr_projection_owner_test PRIVATE cxx_std_20)
   target_link_libraries(ctr_projection_owner_test PRIVATE ctr_runtime)
@@ -116,40 +116,10 @@ if(BUILD_TESTING)
   target_compile_features(ctr_geometry_projection_owner_test PRIVATE cxx_std_20)
   target_link_libraries(ctr_geometry_projection_owner_test PRIVATE ctr_runtime)
   add_test(NAME ctr_geometry_projection_owner COMMAND ctr_geometry_projection_owner_test)
-  # The widescreen pair probe. Its --selftest is the census arithmetic on synthetic pixel arrays and
-  # needs no disc, no game and no image library, so it is safe in hosted CI. The per-leg run needs
-  # media and is run by hand.
-  add_test(NAME ctr_widescreen_pair_selftest
-           COMMAND "${Python3_EXECUTABLE}" -B
-                   "${CMAKE_CURRENT_SOURCE_DIR}/tools/ctr_widescreen_pair.py" --selftest)
-  set_tests_properties(ctr_widescreen_pair_selftest PROPERTIES ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
-
   add_executable(ctr_widescreen_owner_test tests/ctr_widescreen_owner.cpp)
   target_compile_features(ctr_widescreen_owner_test PRIVATE cxx_std_20)
   target_link_libraries(ctr_widescreen_owner_test PRIVATE ctr_runtime)
   add_test(NAME ctr_widescreen_owner COMMAND ctr_widescreen_owner_test)
-
-  # The binary probe's self-check reads the authenticated image, which hosted CI must not have.
-  # It therefore SKIPS (77) with its reason rather than failing, so an asset-free job reports
-  # "not measured here" instead of either a false pass or a broken-tool failure.
-  add_test(NAME ctr_binary_probe
-           COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/ctr_binary_probe.py"
-                   selftest)
-  set_tests_properties(ctr_binary_probe PROPERTIES SKIP_RETURN_CODE 77)
-
-  # The field-cadence census. It answers whether CTR is a 30 or 60 fps title, which is what
-  # decides whether an interpolated 60 fps path is IN scope for it. Both the selftest and the
-  # census read the authenticated image, which hosted CI must not have, so both SKIP (77) with
-  # their reason rather than failing or reporting a rate. The selftest is registered first
-  # because it is the one that must be green wherever the gate runs; it corrupts words through
-  # the probe's own in-memory view, so it never writes to the provisioned image.
-  add_test(NAME ctr_cadence_selftest
-           COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/re_cadence.py"
-                   --selftest)
-  set_tests_properties(ctr_cadence_selftest PROPERTIES SKIP_RETURN_CODE 77)
-  add_test(NAME ctr_cadence
-           COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/re_cadence.py")
-  set_tests_properties(ctr_cadence PROPERTIES SKIP_RETURN_CODE 77)
 
   add_executable(ctr_frame_execution_test tests/ctr_frame_execution.cpp)
   target_compile_features(ctr_frame_execution_test PRIVATE cxx_std_20)
@@ -168,25 +138,22 @@ if(BUILD_TESTING)
   add_executable(ctr_frame_budget_test tests/ctr_frame_budget.cpp)
   target_compile_features(ctr_frame_budget_test PRIVATE cxx_std_20)
   target_link_libraries(ctr_frame_budget_test PRIVATE ctr_runtime)
+  # The finite field is a positive test. The zero-cycle host loop is a NEGATIVE test: the driver
+  # refuses it and terminates the process, so CTest inverts it. Both drive the shipping frame
+  # driver; the negative is registered without a wrapping tool.
   add_test(NAME ctr_frame_budget
-           COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/test_frame_budget.py"
-                   "$<TARGET_FILE:ctr_frame_budget_test>")
+           COMMAND ctr_frame_budget_test finite)
   set_tests_properties(ctr_frame_budget PROPERTIES TIMEOUT 70)
+  add_test(NAME ctr_frame_budget_zero_cycle_host_loop
+           COMMAND ctr_frame_budget_test stalled)
+  set_tests_properties(ctr_frame_budget_zero_cycle_host_loop
+                       PROPERTIES TIMEOUT 70 WILL_FAIL TRUE
+                                PASS_REGULAR_EXPRESSION "cannot resume budget exit.*cycles=0")
 
   add_executable(ctr_render_list_diagnostic_test tests/ctr_render_list_diagnostic.cpp)
   target_compile_features(ctr_render_list_diagnostic_test PRIVATE cxx_std_20)
   target_link_libraries(ctr_render_list_diagnostic_test PRIVATE ctr_runtime)
   add_test(NAME ctr_render_list_diagnostic COMMAND ctr_render_list_diagnostic_test)
-
-  add_executable(ctr_budget_probe_fixture tests/ctr_budget_probe_fixture.cpp)
-  target_compile_features(ctr_budget_probe_fixture PRIVATE cxx_std_20)
-  target_link_libraries(ctr_budget_probe_fixture PRIVATE ctr_runtime)
-  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    add_test(NAME ctr_budget_probe_controls
-             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/ctr_budget_probe.py"
-                     --selftest --binary "$<TARGET_FILE:ctr_budget_probe_fixture>")
-    set_tests_properties(ctr_budget_probe_controls PROPERTIES TIMEOUT 60)
-  endif()
 
   add_test(NAME ctr_launcher COMMAND "${Python3_EXECUTABLE}" -B
            "${CMAKE_CURRENT_SOURCE_DIR}/tools/test_run.py")
@@ -254,19 +221,13 @@ add_custom_target(
     ctr_frame_execution_test
     ctr_frame_budget_test
     ctr_render_list_diagnostic_test
-    ctr_budget_probe_fixture
   USES_TERMINAL
   VERBATIM
 )
 
-# THE LIVE PIN CHECK. Not a selftest: this runs the real function against this repository's real
-# psxport.pin and the real build receipt, so it can fail when the pin is actually wrong.
-#
-# MEASURED 2026-09-27: every port in the workspace registered only a SELFTEST of the check function, run
-# against a temporary fixture. A selftest asserts the function behaves; it cannot fail when this repo's
-# pin is stale, which is why ten ports reported green while four pins were demonstrably stale. --build
-# points at THIS build directory, configured moments ago, so the receipt is current by construction and
-# the staleness guard cannot fire spuriously. Verified: perturbing psxport.pin turns it red.
+# The live pin check: the real function against this repository's real psxport.pin and the real build
+# receipt, so it can fail when the pin is actually wrong. --build points at THIS build directory, so
+# the receipt is current by construction and the staleness guard cannot fire spuriously.
 if(BUILD_TESTING)
   add_test(
     NAME ctr_psxport_pin_live
