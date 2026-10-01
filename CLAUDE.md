@@ -2,7 +2,7 @@
 
 `AGENTS.md` is the repository-local instruction authority. Read it completely before work. The
 product architecture and ordered migration are in `docs/migration.md`; factual coverage is in
-`docs/project-state.md`; binary evidence is in `docs/re-frontier.md`.
+`docs/project-state.md`.
 
 CTR's product is the native host plus psxport's pinned Lightrec executor over authenticated
 `SCUS_944.26`; activation of measured `BIGFILE.BIG` runtime images remains open. It must not expose

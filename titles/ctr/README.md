@@ -17,7 +17,7 @@ Measured crt0 facts include BSS `[0x8008D668,0x8009F6FC)`, GP `0x8008CF6C`, stac
 `0x807FFFF8`, heap base `0x8009F6FC`, heap size `0x007588FC`, and libc initializer `0x80080620`.
 The independent CPU reaches InitHeap after 92,378 instructions. Recorded comparison evidence then
 reaches `0x8003C58C`, `0x800779E4`, `0x80032DC0`, `0x8001D06C`, `0x800718BC`, and pre-instruction
-`0x800772E0`; exact field counts and negative controls remain in `../../docs/re-frontier.md`.
+`0x800772E0`.
 
 Render-source evidence grounds `SetGeomScreen [0x8007781C,0x80077828)`, `SetGeomOffset
 [0x8007782C,0x80077844)`, projection publication `[0x80042910,0x80042974)`, and lens-flare producer

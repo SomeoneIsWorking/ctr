@@ -32,7 +32,7 @@ The first live image discriminator crossed `0x800B0B38` after publishing the thr
 images, then stopped on a `budget-exhausted` exit at resident `0x8006A57C` in frame 12,771. The
 saved log records only the exit PC, not its guest registers, loop count, or budget detail. The exact
 SHA-256-verified USA executable places that PC inside the hand-written GTE primitive path entered at
-`0x8006A52C`, the interior entry already identified in issue 0022. At `0x8006A610`, this path reads
+`0x8006A52C`, the interior entry reached through the GTE library's `t2` alternate link. At `0x8006A610`, this path reads
 descriptor `t3` from `t9`, advances `t9` by four bytes, and branches to `0x8006A52C` for a negative
 descriptor. Three indirect calls and GTE vertex loads precede `0x8006A57C`, which masks the
 descriptor's low nine bits. `0x8006A6B0` branches back to `0x8006A57C` during the primitive path;
@@ -94,24 +94,13 @@ at the next field's `Timing::frameTick()` boundary: the authenticated three-word
 These observations establish the corrected live word's survival and expose the prior render-list
 budget frontier again. They do not establish interactive gameplay or complete budget behavior.
 
-`tools/ctr_budget_probe.py` now provides an opt-in Clang/GDB discriminator for that exact exit. It
-refuses any exit other than `BudgetExhausted` at synchronized `Core::pc=0x8006A57C`, requires exactly
+An opt-in Clang/GDB discriminator was used for that exact exit. It
+refused any exit other than `BudgetExhausted` at synchronized `Core::pc=0x8006A57C`, required exactly
 one active BF0233 catalogue entry spanning its measured image range and the unchanged prologue word,
-then calls the ordinary `CtrRuntime::dispatch` once from that PC with the unchanged current-turn
-budget. It records before/after `t9` and `t3`, the second typed result and cycle count, full
-translated block/instruction deltas, and target-PC hits at Lightrec block entries. It observes at
-most 4,096 block entries because GDB traps are slow, labels counts after that cap incomplete, and
-reports both scanned and retained counts including zero matches. Its Linux Clang synthetic controls
-drive the same executor with an advancing pair, an unchanged pair, an absent BF image, and an absent
-GDB trigger; 4/4 pass.
-The bounded diagnostic has been run once against retail CTR with the singleton headless game slot;
-the tool forces headless/silent presentation and normal pacing. It disables only
-the host frame-progress watchdog (`PSXPORT_WATCHDOG=0`) while GDB pauses the guest at block entries;
-the guest spin detector remains active. An external five-minute timeout allows the ~12,000 normally
-paced fields to reach the trigger and stops only the spawned GDB process group. GDB success without
-one admitted trigger is a failure, and an admitted trigger executes
-exactly one continued slice. The synthetic gate is
-`uv run --frozen python tools/ctr_budget_probe.py --selftest`.
+then called the ordinary `CtrRuntime::dispatch` once from that PC with the unchanged current-turn
+budget. It recorded before/after `t9` and `t3`, the second typed result and cycle count, full
+translated block/instruction deltas, and target-PC hits at Lightrec block entries, observing at
+most 4,096 block entries because GDB traps are slow.
 
 The retail probe admitted `BudgetExhausted` at synchronized `0x8006A57C` with one active BF0233
 match among four scanned images. One unchanged `CtrRuntime::dispatch` then reached typed

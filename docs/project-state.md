@@ -1,289 +1,42 @@
 # Project state
 
-Factual capability coverage for the Crash Team Racing port. Epic intent lives in
-`docs/project-goals.md`, migration order in `docs/migration.md`, atomic work in `docs/issues/`,
-ownership in `docs/codemap.md`, and the ordered binary-evidence chain in `docs/re-frontier.md`.
+Epic intent lives in `docs/project-goals.md`, migration order in `docs/migration.md`, ownership in
+`docs/codemap.md`, and atomic work in `docs/issues/`. The comparison baseline is the North American
+retail game under an accurate vanilla PlayStation emulator; every row below is a user-visible delta
+from it.
 
-## Comparison baseline
+| ID | Capability | State | Evidence or gap |
+|---|---|---|---|
+| S001 | USA disc and `SCUS_944.26` reproducibly identified and provisioned | verified | `SYSTEM.CNF` selects `SCUS_944.26`, LBA 24, 516,096 bytes, SHA-256 `7b4aac0b…efb838`, load `0x80010000`, text `[0x80010000,0x8008D800)`; `tools/provision.py` extracts transactionally and refuses a mutated image |
+| S002 | Independent CPU execution establishes deterministic retail boot boundaries | verified | Beetle/Mednafen CPU reached InitHeap after 92,378 instructions, agreeing 7/7 with an independent crt0 decoder |
+| S003 | Preserved evidence reaches the current resident and live execution frontiers | partial | comparison reached pre-instruction `0x800772E0` 34/34 fields (forced 33/34 negative); issue 0023 is the live boundary and must be reproduced through Lightrec |
+| S004 | Projection and primitive-producer source boundaries grounded in the executable | partial | libgte leaves `SetGeomScreen [0x8007781C,0x80077828)`, `SetGeomOffset [0x8007782C,0x80077844)`, publication `[0x80042910,0x80042974)`, lens-flare producer `[0x80024C4C,0x80025138)`; the ten submitters' packet-build step and the bounding 2D layers are still retail code |
+| S005 | Frames produced by a game-state native renderer | missing | no native camera/object producer set, render queue, ordering/depth owner, or renderer; the run faults at `0x8006C0FC` in field 29,033 (issue 0024), so the only 3D content reached is the attract sequence |
+| S006 | Native camera and projection support true widescreen | partial | canvas widens 512 -> 684 and guest 3D is re-projected (911 of 110,553 transforms take the plan's H); the drawn band is still 719 of 960 columns because 14,822 of 67,282 submitted prims are untouched 2D (issue 0032), and 0 `BIGFILE.BIG` overlays are covered |
+| S007 | Native camera and object transforms interpolated for presentation | missing | in scope: 2 fields per game frame = 30 fps, paced by a two-field countdown at `[gp+0x348]` drained by the vertical-blank callback, not by the single boot-time `VSync(2)`; no native simulation owner or previous/current transform pair exists yet |
+| S008 | Default product reaches sustained playable gameplay with input and audio | missing | boot, first submitted image, and the attract/FMV sequence are not a playable race |
+| S009 | Native/Lightrec product reaches the preserved frontier without an interpreter mode or generated code | partial | static route absent; BF0225/BF0226/BF0233 published at exact non-overlapping extents after callbacks 13-15; retail execution crossed `0x800B0B38` and now faults at `0x8006AA80` in frame 16,228 on scratchpad addresses `0x1F800938`/`0x1F80093C` |
+| S010 | Frame/service suspension uses explicit typed executor exits | partial | `frame_driver.cpp` requests `FrameBoundary` and returns normally; asset-free focused coverage preserves reason, PC, cycles, detail, and refuses a zero-cycle host loop; real-game nested and repeated exits beyond the `0x8006AA80` fault are unproven |
+| S011 | Load operations complete without loading-only waits or presentation | missing | no load issuer, wait, or presentation has been censused for CTR; logos still need a cancellation route |
 
-The comparison baseline is the North American retail game under an accurate vanilla PlayStation
-emulator. This project separately tracks its native PC host, runtime Lightrec execution, native
-renderer, widescreen, interpolation, and player setup so one implemented difference cannot hide a
-missing one.
+Current focus: S009 — reproduce issue 0023's corrupt render-list boundary (`0x8010B2D4`, `lw
+v1,0x74(a2)` at `0x8006AB00`) through the per-`Core` Lightrec executor with the CD/DMA/frame/
+projection owners active, then prove overlay activation, scoped original calls, invalidation, and
+bounded fallback accounting.
 
-| ID | Capability / observable outcome | State | Dependencies | Goals |
-|---|---|---|---|---|
-| S001 | The selected USA disc and `SCUS_944.26` executable are reproducibly identified and provisioned | verified | — | G001, G004 |
-| S002 | Independent CPU execution establishes deterministic retail boot boundaries | verified | S001 | G001, G004 |
-| S003 | Preserved evidence reaches the current resident and live execution frontiers | partial | S001, S002 | G001, G004 |
-| S004 | CTR projection and primitive-producer source boundaries are grounded in the selected executable | partial | S001 | G002, G003 |
-| S005 | CTR frames are produced by a game-state native renderer | missing | S004, S009 | G001, G002, G003 |
-| S006 | The native camera and projection support true widescreen | missing | S005 | G002 |
-| S007 | Native camera and object transforms are interpolated for presentation | missing | S005 | G003 |
-| S008 | The default CTR product reaches sustained playable gameplay with input and audio | missing | S005, S009, S010 | G001 |
-| S009 | The native/Lightrec product reaches the preserved CTR frontier without a standalone interpreter mode or generated code | partial | S001, S002, S003, S010 | G001, G004 |
-| S010 | CTR frame/service suspension uses explicit typed executor exits | partial | S003 | G001 |
-| S011 | CTR: load operations complete without loading-only waits or presentation; logos cancel through the recovered route | missing | S009 | G005 |
+Hosted CI is asset-free: the Linux x86_64 job builds the native/Lightrec product, runs its focused
+tests, and inspects the linked executable for forbidden static or standalone-interpreter ownership.
+It proves compilation and composition only. Real gameplay and oracle comparison require user media.
+Windows x86_64, macOS arm64, and Android arm64-v8a have no truthful title job: the shared
+PSXPort/Lightrec Windows and Apple Silicon product builds and the shared Android packaging plus
+CTR touch/setup ownership are not complete.
 
-## Current focus
+Known gaps tracked as issues: 0023 (corrupt GTE descriptor pair), 0024 (Lightrec + typed exits),
+0027 (projection census reported from one of thirteen refusal sites), 0028 (frame-timing bridge
+dereferences an unchecked game-state pointer), 0029 (override entry points select their instance
+through a process global), 0032 (2D primitives bound the widened margin).
 
-S009 is the current focus. The static route and exception unwinding are already absent. Reproduce
-issue 0023's live boundary through psxport's per-`Core` Lightrec executor with the existing native
-owners active, then prove overlay activation, scoped original calls, invalidation, and bounded
-fallback accounting on the shipping boundary.
-
-## Hosted verification and host gaps
-
-Hosted CI is asset-free and must not download a disc, executable, BIOS, extracted module, or runtime
-trace. The Linux x86_64 job builds the actual CTR native/Lightrec product with the recorded framework
-revision, runs its focused tests, and inspects the linked executable for forbidden static or
-standalone-interpreter ownership. It proves compilation and composition only, not game execution.
-Evidence: the Linux x86_64 asset-free composition gate passed on main commit
-`3499978413daf00fd2eed95d5630c30bdb491551` in
-[run 33960150550](https://github.com/SomeoneIsWorking/ctr/actions/runs/33960150550).
-
-| Host | Hosted boundary | Current gap |
-|---|---|---|
-| Linux x86_64 | Native/Lightrec product build, focused tests, and linked-boundary inspection | Real CTR gameplay and oracle comparison require user media and remain local evidence |
-| Windows x86_64 | No truthful title job yet | The shared PSXPort/Lightrec Windows product build and dependency contract are not complete |
-| macOS arm64 | No truthful title job yet | Apple Silicon executable-memory, ABI, cache-coherency, and product build qualification are missing |
-| Android arm64-v8a | No truthful title job yet | Shared Android packaging plus PSXPort/Lightrec arm64 execution and CTR touch/setup ownership are missing |
-
-## Capability details
-
-### S001 — reproducible retail input
-
-Evidence: claims C001/C002 and instruments I001/I002 record `SYSTEM.CNF` selecting
-`SCUS_944.26`, the 516,096-byte executable and complete SHA-256 identity, PS-X EXE fields,
-transactional extraction, and positive/negative provisioner controls. `BIGFILE.BIG` identity, its
-608-entry monotonic index, and the measured runtime-module entries are recorded in C020/I016. No
-game bytes are tracked.
-
-### S002 — independent boot execution
-
-Evidence: C003/I003 record the independent Beetle/Mednafen CPU reaching the first InitHeap boundary
-after 92,378 instructions and agreeing with the symbolic crt0 decoder on 7/7 comparable fields. The
-oracle fixture also demonstrates a named hardware-stop result.
-
-### S003 — preserved resident and live execution frontiers
-
-Partial evidence: the independent comparison reaches pre-instruction `0x800772E0` with 34/34 CPU
-fields and a forced 33/34 negative. Preserved observations later crossed the title-owned frame, CD,
-DMA, presentation, runtime-module, and alternate-link GTE paths. Issue 0023 is the current live
-boundary: the input pair at `0x8010B2D4` is already corrupt before `lw v1,0x74(a2)` at
-`0x8006AB00` faults. Everything beyond the repaired alternate-link dispatch was new territory; no
-earlier verified path moved.
-
-Gap: this evidence was produced by the retired generated-source route and is frozen as the boundary
-S009 must reproduce. Do not regenerate, build, run, or extend it. The independent CPU/device proof
-also still ends at `0x800772E0`; previously proposed device/zero-fill extensions are not current
-landed evidence. Exact addresses and controls remain in `docs/re-frontier.md`.
-
-### S004 — projection and primitive source evidence
-
-Partial evidence, and the primitive half is now much larger than it was. C016 records
-`SetGeomScreen [0x8007781C,0x80077828)`, `SetGeomOffset [0x8007782C,0x80077844)`, projection
-publication `[0x80042910,0x80042974)`, and lens-flare producer `[0x80024C4C,0x80025138)`.
-
-**Issue 0031 recovers the 3D submission path as ten named functions** (0x80069FFC, 0x8006AAA8,
-0x8006DC30, 0x8006E26C, 0x8006E588, 0x8006F004, 0x8006F9A8, 0x8006FE70, 0x80070388, 0x80070950),
-each `jal`-reachable with 0 `j` targets, each carrying an identical 5-instruction `OFX/OFY/H`
-publication tail and each reading the same view descriptor displacements `+0x18/+0x20/+0x22` at
-10 of 10 sites. `tools/ctr_binary_probe.py gte-projection` derives and gates all of it from the
-authenticated image, with two negative cases so its own 10-of-10 result is falsifiable.
-
-**The `H` census is complete: 18 writers (16 raw `ctc2 rX,$26` + 2 `jal SetGeomScreen`) and 4 readers
-(`cfc2 rX,$26`).** One of the ten submitters' publications is the site the existing owner already had;
-the other nine were unattributed and are now owned through
-`game/video/geometry_projection_owner.*`.
-
-Gap: the ten submitters' own *draw* step — what builds the Gouraud packet from the GTE's projected
-XY — is still retail code, and the 2D layers that bound the drawn band are not attributed. The
-coupling between a widened `H` and the guest's own derived viewport (`2H - CR7` at 0x8006A6B8, a
-division by H at 0x80070AF8, `4H` at 0x80070EE8, `H/2` at 0x80071150) is measured as EXISTING and
-NOT YET ACCOUNTED FOR.
-
-### S005 — game-state native renderer
-
-Missing capability, and the precondition is no longer the one recorded before issue 0031. Current
-frame work remains guest owned: there is no native camera/object producer set, render queue,
-ordering/depth owner, or native renderer, and guest GTE/OT/GP0/framebuffer data is not a permitted
-product input.
-
-**The precondition changed from "there is no 3D geometry" to "the 3D geometry is not reachable".** The
-recorded reason for leaving this item `missing` was that 0 of 73,695 prims were 3D, so a native
-producer would have nothing to draw. That number was a fact about psxport's own depth classifier,
-whose only source (`ProjPrim::setPz`, reached through `gte_store_xy`/`gte_record_pz`/`gte_copy_pz`)
-has no caller anywhere in the framework since the static translator was deleted. The guest submits
-**73,547 of 73,695 (99.8%) Gouraud-shaded polygons**, 46,213 of them textured, and reaches
-110,432 perspective transforms in one run. See `docs/issues/0031` §1.
-
-The real blockers are unchanged and upstream: the run faults at `0x8006C0FC` in field 29,033
-(issue 0024), so the only 3D content the port reaches is the attract sequence.
-
-### S006 — true widescreen
-
-**Partial, and the projection half is now measured as reaching 3D geometry.** The canvas widens
-(`render_width` 512 -> 684, the LAST `[wide]` line) and the guest's 3D is re-projected by the second
-projection owner: 911 of 110,553 perspective transforms consumed the plan's H (428) instead of
-retail's (320) in the 16:9 leg, against 0 of 110,432 in the 4:3 leg, which publishes nothing. The
-rightmost submitted `x1` moved 812 -> 894 and 39,916 of 67,134 matched Gouraud polygons (59.5%) have a
-wider bounding box. It is re-projection, not a stretch: the capture's perspective is correct.
-
-**Still missing, and this is what keeps the item `partial`:** the drawn band is 719 of 960 columns
-with a 241-column right margin that is 0/173,520 non-black, and **the margin did not change** when the
-3D widened. **Issue 0032 names the content that bounds it, and measures it.** A per-GP0-class census
-of both legs — classified by the command byte, never by the `is3d` dead tap — over the **same 191
-frames**, gives:
-
-* **`0x38` (522 prims) and `0x68` (14,300 prims) stop at exactly `x1 = 512`, with byte-identical
-  coordinates AND identical per-frame counts in both legs.** That is 14,822 of 67,282 submitted
-  primitives, 22.0% of the frame, and the widening provably does not touch them. This is the concrete
-  referent for "2D content a horizontal projection change cannot reach".
-* **The 16:9 leg is not the 4:3 leg with X rescaled.** Submitted prims fell 8.7% (73,695 → 67,282)
-  as a **per-frame** drop — 174 of 191 frames submitted fewer — concentrated in `0x30` (−1,517) and
-  `0x34` (−4,050). And **`0x30`'s rightmost vertex moved LEFT, 812 → 785, while `0x36`'s moved right,
-  733 → 894**: two classes, same frames, opposite directions. Culling that tracks a widened projection
-  could legitimately drop off-screen polygons, so this is not yet a defect — but it must be accounted
-  for before the leg can be called a pure re-projection.
-
-The limit is now 2D content that a horizontal projection change cannot reach, so no
-amount of further widening the projection will fill it. The guest's derived viewport also moves with
-the focal length — `H` has 4 measured readers in this title — so a 1.34x H does not give a 1.34x
-picture, and the centre is deliberately not re-written because the two guest call sites scale it by
-`sll 15` and `sll 16`. Recorded OFX/OFY/H values remain evidence only; nothing writes a guest byte.
-
-### S007 — interpolated presentation
-
-**The field rate is MEASURED, so this item's scope is settled: it is IN scope.**
-`docs/issues/0030` measures **2 fields per game frame = 30 game frames/s** from the image, and
-registers the instrument (`tools/re_cadence.py`, CTest `ctr_cadence{,_selftest}`, 7/7) so the
-number is gated rather than hand-run. The workspace map's stated reason was wrong and is
-corrected there: the single `VSync(2)` at `0x8003206C` is a boot resource load inside
-`FUN_80031FDC`'s `param_5 == -1` branch, and the frame loop's only VSync is `VSync(0)`, which
-does not wait. The cadence comes from a two-field countdown at `[gp+0x348]`, armed with a
-literal 2 and drained by exactly 1 per field by the vertical-blank callback, with exactly 4
-accesses in the whole text — and the census refuses at 5, because a fifth access is how a 60 fps
-mode would hide. Coverage limit: 0 `BIGFILE.BIG` overlays are provisioned, so a frame-rate change
-made from an overlay would not be visible to this instrument.
-
-Missing capability, unchanged: no authoritative native simulation tick or consecutive native
-camera/object transforms exist. Presentation therefore has no grounded state pair to interpolate
-without rerunning guest code or consuming quantized output.
-
-### S008 — playable default product
-
-Missing capability: no native/Lightrec product reaches a representative playable race with working
-input, audio, presentation, timing, and persistence. A boot boundary, first submitted image, menu,
-or attract/FMV sequence cannot verify this item.
-
-### S009 — native/Lightrec product
-
-Partial capability: the static translator, generated corpus, registry, seed inputs, and static-only
-tools/tests are absent. CTR builds against psxport's per-`Core` Lightrec executor, and composition
-targets its image-aware dispatch, original-call, invalidation, and typed-exit boundaries. The linked
-boundary is covered asset-free. The three observed BIGFILE code images now use exact read/content
-identity and post-callback publication, with asset-free negative controls for changed content,
-wrong destination/mode, premature publication, independent Core lifetime, and replacement. Full
-module coverage, sustained product execution accounting, and frontier reproduction remain incomplete.
-Issue 0024 owns this migration.
-
-A bounded silent Linux run of the current Clang/Lightrec product against verified media completed
-Vulkan device, 3D raster, headless renderer, and RmlUI initialization. The first 960x720 presentation
-had 0 of 691,200 non-black pixels; this is a completed black output, not evidence of a native CTR
-renderer. After fifteen libcd callback completions, retail execution failed fast at frame 14,928 on
-`0x800B0B38` because no active code image owns that address. It lies within the measured BF0233
-BIGFILE entry loaded at `0x800AB9F0`, reproducing issue 0019's next-stage module boundary under
-Lightrec. Repeated unclaimed interrupt masks `0x200`/`0x204` did not prevent that progress and are
-not this failure's immediate cause. At that earlier run, runtime block/fallback denominators,
-module publication, visible gameplay, and issue 0023's later corrupt-list boundary were unverified.
-
-After the image-owner change, a bounded silent run authenticated and published BF0225, BF0226, and
-BF0233 at their exact non-overlapping extents following callbacks 13-15. Retail execution crossed
-the former `0x800B0B38` strict-dispatch fault, delivered three more callbacks, and performed further
-37-, 225-, and 328-sector reads. Its next stop was `budget-exhausted` at resident `0x8006A57C`
-in frame 12,771. A later authenticated BF0233 retail probe showed that this was a finite guest
-quantum: one unchanged runtime dispatch from the synchronized exit PC reached typed `FrameBoundary`
-at `0x8003CEB4` after 110,766 cycles, 5,215 executed blocks, and 56,904 executed instructions.
-The first 4,096 block entries observed advancing `t9`; 1,119 later entries were not inspected.
-The title frame driver was refusing the first valid budget exit. Its shipping dispatch owner now
-resumes synchronized positive-cycle budget exits within the same field, with an asset-free finite
-field and zero-cycle host-loop negative passing. A corrected retail run crossed that budget stop
-and next faulted at `0x8006AA80` in frame 16,228 on invalid scratchpad load/store addresses
-`0x1F800938` and `0x1F80093C`. A bounded retail trace reproduced both bad
-addresses in the duplicate `0x8006BF30` render path with `t3=0xFFFFFFFF`,
-`at=0x1F800000`, and `a1=0x1F8007F8` while BF0233 was active. Its distinct
-typed PC was `0x8006C0FC`; the second word came from live list memory at
-`0x801B6070`. Authenticated control flow selects that packed stream through
-the current descriptor's initial `+0xC8` pointer; the live cursor had advanced,
-and its writer remains unknown.
-This does not establish a visible CTR picture, sustained gameplay,
-or the later issue 0023 boundary.
-
-Gap: identify who wrote the live `0x8006B21C,0xFFFFFFFF` render-list pair and
-whether that pair is valid for the authenticated primitive path,
-then reach issue 0023's
-corrupt render-list boundary with nonzero Lightrec execution. Representative gameplay, deterministic oracle/device comparison,
-override and original-call coverage, invalidation controls, and released-host qualification remain
-required.
-
-### S010 — explicit executor exits
-
-Partial capability: `game/core/frame_driver.cpp` no longer uses `FrameCompleted` exceptions. Native
-wait and completion owners record title state, request `ExecutionExitReason::FrameBoundary`, and
-return normally. `CtrFrameDriver::stepFrame` validates the typed result and finishes one field. The
-production propagation seam has focused coverage preserving its reason, guest PC, cycle count, and
-detail. A synthetic five-field program executes through Lightrec and the production frame driver:
-the timing override calls its original body, the suffix restores a different return address, each
-field advances one presentation fence, and the next field starts at the exact continuation without
-leaking an override or pending exit. It requires nonzero translated blocks/instructions and zero
-fallback. The negative exposed the old function-dispatch assumption: field 1 stopped immediately
-because its entry equaled the incoming return register. Whole-field dispatch now uses the shared
-until-exit API; suffix calls name their independently known continuation. The final two fields
-rewrite previously translated code through the shared native-store owner, suspend/resume the audio
-wait, and cross a nested original-call/native-return boundary. They require exactly two services
-and five presentation fences, exposing stale translated code and repeated native continuation
-before their shared fixes.
-
-The production frame driver also completes a synthetic field after six ordinary budget exits with
-one timing tick and one presentation fence, nonzero translated execution, and zero fallback. A
-zero-cycle host-dispatch loop is refused before retry; there is no guessed turn ceiling that could
-reject a long finite render list. The corrected retail product crossed the earlier budget stop and
-reached the separate `0x8006AA80` fault in frame 16,228.
-
-Gap: real-game repeated-budget execution now reaches a later fault; nested original-call exit proof
-and completion beyond that fault remain missing.
-
-### S011 — CTR loading removal
-
-Missing. No load operation has been censused or classified for CTR. Gap: enumerate its load
-issuers and the wait and presentation each drives, then complete each through the title's own load
-mechanics without its loading-only wait, with payload and terminal state compared against retail
-and the absence of loading presentation captured.
-
-## The projection publication owner now has a test; its `std::abort()` refusal still does not
-
-`game/video/projection_owner.h` states the owner's contract in one sentence — it "captures its view
-input and refuses if the published libgte state disagrees" — and that sentence had **no test at all**,
-while the owner publishes exactly the `ofx`/`H` pair (`centerX`, `screenDistance`) that a widescreen
-owner will consume. `tests/ctr_projection_owner.cpp` now pins the offsets it reads (`+0x18` screen
-distance, `+0x20` width, `+0x22` height), the halving that derives the centre, `source`, the `sequence`
-advance, `previous()` lagging by exactly one publication, and `valid()` rejecting an unpublished owner.
-
-**Mutation-verified against production code:** removing the halving in `signedHalf` makes the derived
-centre disagree with the retail body's published geometry, and the test fails
-(`0% tests passed, 1 tests failed out of 1`). So the assertions are pinned to the shipping owner rather
-than to a restatement of it.
-
-**WHAT IS NOT COVERED, and it is a real gap:** the refusal itself. A disagreement calls `std::abort()`,
-and this suite is an in-process `main()` with no death-test facility, so the branch that fires when the
-guest publishes geometry that does not match the view has no automated coverage. A fork-based death test
-would detect it but would not build on the Windows and macOS targets this project also ships, so the gap
-is recorded rather than closed with something that works on one platform. The honest options are a
-portable death-test facility in the shared harness, or a non-aborting refusal that returns a reason — and
-the second would weaken a deliberate fail-loud property, so it is not proposed.
-
-**NOT CLAIMED:** that the offsets are correct. The test pins the owner's behaviour against the numbers in
-its own source. Verifying them means reading the retail image, and **Crash Team Racing has no disc
-provisioned on this machine** — so nothing in this repository is currently evidence about CTR's binary,
-and no widescreen work for this title can be image-sourced here.
+Not covered: `game/video/projection_owner.cpp` refuses a publication disagreement with
+`std::abort()`, and no portable death-test facility exists, so that branch has no automated
+coverage. The offsets the owner reads are pinned against its own source, not against the retail
+image.

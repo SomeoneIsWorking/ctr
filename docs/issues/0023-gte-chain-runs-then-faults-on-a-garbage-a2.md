@@ -11,7 +11,7 @@ updated: 2026-09-04
 
 ## Observed boundary
 
-After crossing issue 0022's alternate-link chain repeatedly, execution faults on
+After crossing the alternate-link GTE chain repeatedly, execution faults on
 `lw v1,0x74(a2)` at `0x8006AB00`. The input pair at `0x8010B2D4` is already
 `0x252C0001,0x043DFFDA`; the second word leads to the invalid descriptor value observed as
 `a2=0x0CC22321`. This excludes the alternate-link return itself as the immediate cause.

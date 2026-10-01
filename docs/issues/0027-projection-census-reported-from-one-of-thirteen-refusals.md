@@ -46,7 +46,7 @@ refusal in the field path reaches `std::abort()` without it:
 > the projection census is the one measurement that decides whether a native producer has any
 > pre-GTE state to consume at all
 
-and issue 0026's whole argument (0 of 73,695 prims are 3D) rests on census readings. The likeliest
+and the recorded "0 of 73,695 prims are 3D" reading rests on census readings. The likeliest
 way this port dies is a **return-identity refusal**, because the live frontier in issue 0023 is a
 corrupt render list reaching a GTE call, not a timing problem. A run that dies at
 `refuseUnexpectedRetailReturn` prints the offending address and nothing else, so the one number that

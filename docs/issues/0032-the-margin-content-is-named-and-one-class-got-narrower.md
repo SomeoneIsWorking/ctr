@@ -69,8 +69,8 @@ provably did not touch them.
 bounded one, and that is why its coordinates can be identical while its visible extent does not move.
 **That is the concrete referent for "2D content a projection change cannot reach": two GP0 classes,
 22.0% of the frame's primitives, derived from something other than the horizontal projection.**
-Issue 0031 already narrowed the 3D submission path to ten `jal`-reachable submitters; this is the
-other half of the frame, and it has no equivalent owner yet.
+`CtrGeometryProjectionOwner` already narrowed the 3D submission path to ten `jal`-reachable
+submitters; this is the other half of the frame, and it has no equivalent owner yet.
 
 ## Finding 2 — one class got NARROWER, and 8.7% of the prims vanished
 
@@ -112,8 +112,9 @@ it is a different question from the margin.
 
 1. **Find what writes `x1` for `0x38` and `0x68`.** Both stop at 512 while every projected class moves
    and both are per-frame identical across legs, so they are computed from a different owner than the
-   projection. If that owner is the guest's `H`, the title needs the treatment the 3D path got in issue
-   0031 — recovered into readable C++ with the byte evidence.
+   projection. If that owner is the guest's `H`, the title needs the treatment
+   `CtrGeometryProjectionOwner` gives the 3D path — recovered into readable C++ with the byte
+   evidence.
 2. **Explain `0x30`'s leftward movement and the 8.7% per-frame drop**, or establish that the removed
    prims were legitimately off-screen. Until then the 16:9 leg cannot be called a pure re-projection.
 3. Record the frame count in the primdump capture itself. Both legs happened to cover 191 frames here,

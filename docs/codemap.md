@@ -3,8 +3,7 @@
 CTR's app composition wires process owners; title core modules own
 retail/native boundaries; simulation owns authoritative transforms; video owns producer commands,
 rendering, and temporal presentation. Capability state belongs in `docs/project-state.md`, migration
-order in `docs/migration.md`, binary evidence in `docs/re-frontier.md`, and atomic work in
-`docs/issues/`.
+order in `docs/migration.md`, and atomic work in `docs/issues/`.
 
 ## Ownership
 
@@ -29,18 +28,16 @@ order in `docs/migration.md`, binary evidence in `docs/re-frontier.md`, and atom
 | Projection publication | Capture pre-GTE view facts, compare the retail publication via an executor original call, and count every publication per source against a field denominator | `game/video/projection_owner.*` | `ProjectionOwner::publish`, `ProjectionOwner::reportCensus` | Evidence plumbing is not widescreen or camera ownership; a run that never publishes reports zero OF N FIELDS, never silence |
 | Widescreen decision | Answer the framework's guest-aspect question and resolve the projection plan from the extent the GUEST's own publication carried | `game/video/widescreen_owner.*` | `CtrWidescreen::presentationAspect`, `CtrWidescreen::planFor` | A null `guestWidescreenProjection()` IS the defect; the plan's native extent is never a constant and never a boot-time display register. The "nothing reads `H` back" safety argument was MEASURED FALSE (4 `cfc2 rX,$26` sites) and is corrected in that header |
 | Geometry projection | Apply the SAME owned plan at the measured instant the GTE consumes the projection triple, so the guest's ten geometry submitters stop overwriting the widening | `game/video/geometry_projection_owner.*` | `CtrGeometryProjectionOwner::observe`, `ScopedGteProjectionObservation` | The `ctc2 $26` sites are interior labels and are NEVER override keys; the ten entries are `jal`-reachable but the guest writes CR24/25/26 inside the body, so the seam is the GTE op observer. The plan is READ from `ProjectionOwner`, never latched twice; a missing plan owner is a counted wiring refusal, not a silent no-op |
-| Widescreen pair measurement | Quote the LAST `[wide]` line per leg, census the drawn band and margins with denominators, and compare guest telemetry between the legs | `tools/ctr_widescreen_pair.py` | `tools/ctr_widescreen_pair.py --selftest` | A wider canvas is not a widening: the drawn band is the measurement, and a FAILED widening is reported as one |
 | Presentation fence | Rotate one field fence and commit only captured retail/native work | `game/video/presentation_owner.*` | `PresentationOwner::finishField` | Called after a validated executor exit, never from guest VSync |
 | Input/media provisioning | Resolve user media, verify `SCUS_944.26` and `BIGFILE.BIG`, and generate non-executable image identity facts | `tools/provision.py`, `tools/extract_overlays.py` | provisioning CLIs | Runtime publication belongs to the title image owner; provisioning never emits guest code |
 | Title identity facts | Record the selected retail revision and its measured executable/load facts | `titles/` | `titles/ctr/README.md` | Game bytes remain untracked; title policy consumes verified facts |
-| Differential evidence | Compare deterministic executor state/device/memory with an independent emulator | target dynamic harness; recorded evidence in `docs/info/` and `docs/re-frontier.md` | separate diagnostic target | An interpreter-only oracle is separately built and absent from gameplay; backend refusal fallback remains executor-owned |
+| Differential evidence | Compare deterministic executor state/device/memory with an independent emulator | separate diagnostic target; recorded evidence in the open issues and `titles/ctr/README.md` | separate diagnostic target | An interpreter-only oracle is separately built and absent from gameplay; backend refusal fallback remains executor-owned |
 | Product verification | Exercise shipping runtime owners, exit results, link composition, and negative controls | `tests/`, `tools/verify.py` | `tools/verify.py` over PSXPort's shared `port.consumer_verify` | Tests call production seams and do not duplicate instruction or exit semantics |
-| Budget frontier diagnostic | Admit only the synchronized resident budget exit with active BF0233, then observe one unchanged Lightrec continuation under GDB | `tools/ctr_budget_probe*.py`, `tests/ctr_budget_probe_fixture.cpp` | `tools/ctr_budget_probe.py` | The tool owns observation and refusal; the shipping executor still owns translation, cycles, state, and exits |
 | Native simulation | Own authoritative ticks and current camera/object transforms | future cohesive modules under `game/` | target `Simulation` | Simulation state is independent of presentation interpolation |
 | Native producers | Convert pre-GTE camera/object/material state into typed primitive commands | future producer modules under `game/video/` | target producer interfaces | Never consume GTE/OT/GP0/framebuffer output as product source |
 | Native renderer | Own primitive lifetime, ordering/depth, materials, viewport/projection, and presentation | future renderer modules under `game/video/` | target queue/renderer interfaces | Widescreen is applied at owned projection/viewport/culling boundaries |
 | Temporal presentation | Interpolate previous/current native transforms without mutating simulation | future presentation decorator | target temporal interface | Alpha endpoints reproduce exact simulation snapshots |
-| Field cadence | Fields consumed per game frame, which decides whether an interpolated 60 fps path is in scope. MEASURED at 2 fields (30 fps) from a vblank-drained countdown, not from the image's single `VSync(2)` | `tools/re_cadence.py` over `tools/ctr_binary_probe.py` | `main` / `--selftest` | Refuses at any access count other than 4; overlays are not provisioned and are named as such |
+| Field cadence | Two fields per game frame (30 fps), paced by a vblank-drained countdown rather than the image's single boot-time `VSync(2)`; it decides whether an interpolated 60 fps path is in scope | `game/core/frame_callback_owner.*` | measured in `AGENTS.md` | Overlays are not provisioned, so an overlay-armed rate change would not be visible |
 | Build and launcher policy | Frozen Python setup, native/Lightrec product build, checks, and final player environment | `run.sh`, `bootstrap.py`, `tools/run.py`, `CMakeLists.txt`, `pyproject.toml`, `uv.lock` | `run.sh` | No offline translator, generated corpus, interpreter selector, or alternate engine mode |
 
 ## Where does it go?
@@ -50,5 +47,5 @@ order in `docs/migration.md`, binary evidence in `docs/re-frontier.md`, and atom
 - Frame, host-work, interrupt, or service suspension: title continuation state plus a typed executor exit.
 - Disc/overlay identity and runtime mapping: provisioning tools plus title runtime policy.
 - Native camera/transforms: simulation owner; native primitives/order/depth: video owners.
-- Capability, migration order, evidence, or atomic work: `docs/project-state.md`,
-  `docs/migration.md`, `docs/re-frontier.md`, or `docs/issues/` respectively.
+- Capability, migration order, or atomic work: `docs/project-state.md`, `docs/migration.md`, or
+  `docs/issues/` respectively.
