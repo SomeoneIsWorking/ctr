@@ -29,23 +29,23 @@ add_custom_command(
 add_library(
   ctr_runtime STATIC
   "${CTR_OVERLAY_CATALOG}"
-  game/core/async_disc_owner.cpp
-  game/core/ctr_runtime.cpp
-  game/core/dma_callback_owner.cpp
-  game/core/field_boundary.cpp
-  game/core/field_override_scope.cpp
-  game/core/frame_callback_owner.cpp
-  game/core/frame_driver.cpp
-  game/core/frame_suffix.cpp
-  game/core/overlay_image_owner.cpp
-  game/core/platform_hle_plan.cpp
-  game/core/render_list_boundary_diagnostic.cpp
-  game/core/retail_return.cpp
-  game/core/runtime_composition.cpp
-  game/core/startup_audio_wait.cpp
-  game/core/startup_resource_load.cpp
-  game/core/startup_resource_pump.cpp
-  game/core/vsync_bridge.cpp
+  game/boot/startup_audio_wait.cpp
+  game/boot/startup_resource_load.cpp
+  game/boot/startup_resource_pump.cpp
+  game/debug/render_list_boundary_diagnostic.cpp
+  game/disc/async_disc_owner.cpp
+  game/disc/overlay_image_owner.cpp
+  game/entry/ctr_runtime.cpp
+  game/entry/runtime_composition.cpp
+  game/execution/dma_callback_owner.cpp
+  game/execution/platform_hle_plan.cpp
+  game/frame/field_boundary.cpp
+  game/frame/field_override_scope.cpp
+  game/frame/frame_callback_owner.cpp
+  game/frame/frame_driver.cpp
+  game/frame/frame_suffix.cpp
+  game/frame/retail_return.cpp
+  game/frame/vsync_bridge.cpp
   game/video/presentation_owner.cpp
   game/video/geometry_projection_owner.cpp
   game/video/projection_owner.cpp
@@ -55,18 +55,24 @@ add_library(
 target_include_directories(
   ctr_runtime
   PUBLIC
-    "${CMAKE_CURRENT_SOURCE_DIR}/game/core"
+    "${CMAKE_CURRENT_SOURCE_DIR}/game/boot"
+    "${CMAKE_CURRENT_SOURCE_DIR}/game/debug"
+    "${CMAKE_CURRENT_SOURCE_DIR}/game/disc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/game/entry"
+    "${CMAKE_CURRENT_SOURCE_DIR}/game/execution"
+    "${CMAKE_CURRENT_SOURCE_DIR}/game/frame"
+    "${CMAKE_CURRENT_SOURCE_DIR}/game/title"
     "${CMAKE_CURRENT_SOURCE_DIR}/game/video"
     "${CMAKE_CURRENT_BINARY_DIR}/identity"
 )
 target_compile_features(ctr_runtime PUBLIC cxx_std_20)
 target_link_libraries(ctr_runtime PUBLIC psxport)
 
-add_library(ctr_command_line STATIC game/app/command_line.cpp)
-target_include_directories(ctr_command_line PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/game/app")
+add_library(ctr_command_line STATIC game/entry/command_line.cpp)
+target_include_directories(ctr_command_line PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/game/entry")
 target_compile_features(ctr_command_line PUBLIC cxx_std_20)
 
-add_executable(ctr_port game/app/main.cpp)
+add_executable(ctr_port game/entry/main.cpp)
 target_compile_features(ctr_port PRIVATE cxx_std_20)
 target_link_libraries(ctr_port PRIVATE ctr_command_line ctr_runtime)
 set_target_properties(ctr_port PROPERTIES ENABLE_EXPORTS ON)

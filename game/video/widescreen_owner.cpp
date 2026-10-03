@@ -108,18 +108,6 @@ bool CtrWidescreen::latched() const {
   return latched_;
 }
 
-const GuestProjectionPlan &CtrWidescreen::plan() const {
-  return plan_;
-}
-
-int32_t CtrWidescreen::distanceScaleNumerator() const {
-  return distanceScaleNumerator_;
-}
-
-int32_t CtrWidescreen::distanceScaleDenominator() const {
-  return distanceScaleDenominator_;
-}
-
 const char *CtrWidescreen::aspectName(PresentationAspect aspect) {
   switch (aspect) {
   case PresentationAspect::Standard4x3:

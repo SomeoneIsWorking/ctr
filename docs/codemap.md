@@ -12,47 +12,55 @@ stateless rules (`widenViewProjection`, `frameSuffixStillWaiting`) and the two C
 
 ## Directories
 
+Every directory is one concept and carries one vocabulary. The namespace is the flat title
+namespace `ctr` throughout, with `ctr::native` for the measured address facts; a sub-namespace is only
+introduced where a concept needs one.
+
 | Directory | Namespace | What it owns |
 |---|---|---|
-| `game/app/` | `ctr` | The process entry point and its argument policy. Composition only; it implements no subsystem. |
-| `game/core/` | `ctr`, `ctr::native` | The title's runtime-facing owners: the frame turn, the continuation owners a field can owe, the CD/DMA completions the guest is waiting on, and the measured guest addresses they are keyed by. |
+| `game/entry/` | `ctr` | The process entry point, its argument policy, and the title's `GameRuntime`: composition only. |
+| `game/boot/` | `ctr` | The state-zero owners a boot cannot finish without: the startup resource load, its poll pump, and the post-archive XA wait. |
+| `game/frame/` | `ctr` | The frame turn itself and the field-exit protocol around it: the driver, the field boundary, the per-field override window, the vblank/DrawSync callbacks, the retail frame suffix, and the VSync bridges. |
+| `game/disc/` | `ctr` | What the guest is blocked on when the host completes a disc transfer: the owed libcd completion and the BIGFILE image publication. |
+| `game/execution/` | `ctr` | The boundary where the guest's own calls enter the host: the SPU DMA completion and the platform HLE plan (libgte, libcd, libgpu addresses and bindings). |
+| `game/debug/` | `ctr` | Debug-only observers, which change no control flow and supply no product data. |
+| `game/title/` | `ctr::native` | The measured `SCUS_944.26` addresses and game-state offsets every owner is keyed by. Facts only. |
 | `game/video/` | `ctr` | Presentation-facing owners: the projection publication, the widescreen decision, and the presentation fence. |
 | `tests/` | — | Focused tests that drive the production seams above; they never restate a rule the owner implements. |
 | `tools/` | — | Provisioning and launcher Python. No C++ owner lives here. |
 | `titles/ctr/` | — | Measured title facts (revision, executable facts) and generated non-executable image identity. |
 
-## `game/app/` — the process entry
+## `game/entry/` — the process entry and the title runtime
 
 | Class / function | Responsibility |
 |---|---|
 | `main` (`main.cpp`) | Parse arguments, refuse a missing executable, construct `Game`, install the title's owners, then step fields forever. It composes; it implements nothing. |
 | `ctr::CommandLineAction`, `ctr::parseCommandLine`, `ctr::printUsage` (`command_line.*`) | The argument policy: run, `--help`, or a named refusal. |
+| `ctr::CtrRuntime` (`ctr_runtime.*`) | The title's `GameRuntime`: identity facts, platform HLE facts, override install/remove, and every guest dispatch (one field, one continuation, one original call). It dispatches; it does not decide what runs next. |
 
-## `game/core/` — runtime-facing owners
+## `game/boot/`, `game/frame/`, `game/disc/`, `game/execution/`, `game/debug/`, `game/title/` — runtime-facing owners
 
 | Class / function | Responsibility |
 |---|---|
-| `ctr::CtrRuntime` (`ctr_runtime.*`) | The title's `GameRuntime`: identity facts, platform HLE facts, override install/remove, and every guest dispatch (one field, one continuation, one original call). It dispatches; it does not decide what runs next. |
-| `ctr::CtrFrameDriver`, `ctr::ctrFrameDriver` (`frame_driver.*`) | One finite CTR field: arm the field's overrides and GTE observation, run the host's per-field work, serve the owed continuation, dispatch the field, and finish it. `ctrFrameDriver(Core&)` is the single Core-to-driver resolver every bare guest override uses. |
-| `ctr::FieldBoundary` (`field_boundary.*`) | When a field ends: the title's own request OR the framework's typed exit, and the commit that consumes it, runs the debug teardown and the presentation fence, and counts the field. |
-| `ctr::FieldOverrideScope` (`field_override_scope.*`) | Installs the field's guest-address overrides on entry and removes exactly those on exit; which rows a non-observing field drops is a property of each row. |
-| `ctr::StartupResourceLoad` (`startup_resource_load.*`) | The fifth-argument −1 branch of `0x80031FDC`: the retail setup and commit, the two fields its omitted `VSync(2)` owed, and the caller frame it resumes. |
-| `ctr::StartupResourcePump` (`startup_resource_pump.*`) | The phase of the two non-returning `0x8002DD24` polls, yielding one host field per false poll and delivering owed SPU work before the generic IRQ path. |
-| `ctr::StartupAudioWait` (`startup_audio_wait.*`) | The post-archive XA wait at `0x8008D708`: the retail service call, one host audio field per wait, and the continuation it resumes. |
-| `ctr::FrameSuffix` / `ctr::FrameSuffixWait` / `ctr::frameSuffixStillWaiting` (`frame_suffix.*`) | The three guest words the retail suffix waits on, the pure predicate over them, and when the suffix may run and end the field. |
-| `ctr::FrameCallbackOwner` (`frame_callback_owner.*`) | The retail callbacks the direct runtime does not generate: vblank registration and per-field DrawSync/VSync delivery, each preserving the interrupted register context. |
-| `ctr::DmaCallbackOwner`, `ctr::DmaCompletionBackend` (`dma_callback_owner.*`) | Delivers the measured SPU channel-4 completion from the guest's own callback table, at the finite host boundary before the generic IRQ path can consume it. |
-| `ctr::DiscReadOwner`, `ctr::discReadOwner`, `ctr::cdReadWithCompletionCallback` (`async_disc_owner.*`) | The owed libcd completion: when it is delivered, and the retail callback that owns its effects. `cdReadWithCompletionCallback` is the PlatformHle binding for the stock `CdRead` leaf. |
-| `ctr::OverlayImageOwner`, `ctr::CompletedDiscRead` (`overlay_image_owner.*`) | A BIGFILE transfer as an image candidate, and the publication of its relocated RAM extent after the retail callback returns. |
+| `ctr::CtrFrameDriver`, `ctr::ctrFrameDriver` (`game/frame/frame_driver.*`) | One finite CTR field: arm the field's overrides and GTE observation, run the host's per-field work, serve the owed continuation, dispatch the field, and finish it. `ctrFrameDriver(Core&)` is the single Core-to-driver resolver every bare guest override uses. |
+| `ctr::FieldBoundary` (`game/frame/field_boundary.*`) | When a field ends: the title's own request OR the framework's typed exit, and the commit that consumes it, runs the debug teardown and the presentation fence, and counts the field. |
+| `ctr::FieldOverrideScope` (`game/frame/field_override_scope.*`) | Installs the field's guest-address overrides on entry and removes exactly those on exit; which rows a non-observing field drops is a property of each row. |
+| `ctr::StartupResourceLoad` (`game/boot/startup_resource_load.*`) | The fifth-argument −1 branch of `0x80031FDC`: the retail setup and commit, the two fields its omitted `VSync(2)` owed, and the caller frame it resumes. |
+| `ctr::StartupResourcePump` (`game/boot/startup_resource_pump.*`) | The phase of the two non-returning `0x8002DD24` polls, yielding one host field per false poll and delivering owed SPU work before the generic IRQ path. |
+| `ctr::StartupAudioWait` (`game/boot/startup_audio_wait.*`) | The post-archive XA wait at `0x8008D708`: the retail service call, one host audio field per wait, and the continuation it resumes. |
+| `ctr::FrameSuffix` / `ctr::FrameSuffixWait` / `ctr::frameSuffixStillWaiting` (`game/frame/frame_suffix.*`) | The three guest words the retail suffix waits on, the pure predicate over them, and when the suffix may run and end the field. |
+| `ctr::FrameCallbackOwner` (`game/frame/frame_callback_owner.*`) | The retail callbacks the direct runtime does not generate: vblank registration and per-field DrawSync/VSync delivery, each preserving the interrupted register context. |
+| `ctr::DmaCallbackOwner`, `ctr::DmaCompletionBackend` (`game/execution/dma_callback_owner.*`) | Delivers the measured SPU channel-4 completion from the guest's own callback table, at the finite host boundary before the generic IRQ path can consume it. |
+| `ctr::DiscReadOwner`, `ctr::discReadOwner`, `ctr::cdReadWithCompletionCallback` (`game/disc/async_disc_owner.*`) | The owed libcd completion: when it is delivered, and the retail callback that owns its effects. `cdReadWithCompletionCallback` is the PlatformHle binding for the stock `CdRead` leaf. |
+| `ctr::OverlayImageOwner`, `ctr::CompletedDiscRead` (`game/disc/overlay_image_owner.*`) | A BIGFILE transfer as an image candidate, and the publication of its relocated RAM extent after the retail callback returns. |
 | `ctr::CtrWidescreen` (`game/video/widescreen_owner.*`) | The one widening decision: the aspect answer, and the plan resolved from the extent the guest's own publication carried. |
 | `ctr::ProjectionOwner` (`game/video/projection_owner.*`) | The measured pre-GTE publication: capture the view input, compare the retail libgte state, then apply the plan. Also the per-source publication census. |
 | `ctr::CtrGeometryProjectionOwner`, `ctr::ScopedGteProjectionObservation` (`game/video/geometry_projection_owner.*`) | The second application point: the same plan, applied at the GTE op that consumes the triple, armed for exactly one field. |
 | `ctr::PresentationOwner` (`game/video/presentation_owner.*`) | The framework presentation fence at a field boundary: commit a captured frame, or record the field as explicitly unpresented. |
-| `ctr::RenderListBoundaryDiagnostic` (`render_list_boundary_diagnostic.*`) | Debug-only observation of the `0x8003B43C` list publication; it never supplies list contents or changes control flow. |
-| `ctr::platformHlePlan` (`platform_hle_plan.*`) | The authenticated libgte/libcd/libgpu addresses and windows, plus the six bindings installed for a direct runtime. |
-| `ctr::runVsyncBridge`, `ctr::VsyncBridge`, `ctr::refuseUnexpectedRetailReturn` (`vsync_bridge.*`, `retail_return.*`) | One extracted VSync callsite as data, the bridge that omits only that call, and the shared refusal for a return address the title has no identity for. |
-| `ctr::installRuntimeOwners` (`runtime_composition.*`) | The composition step between `Game` construction and boot: the disc media key and the render path. |
-| `ctr::native` constants (`native_ownership.h`) | Every measured guest address and game-state offset the owners above are keyed by. Facts only; no behaviour. |
+| `ctr::RenderListBoundaryDiagnostic` (`game/debug/render_list_boundary_diagnostic.*`) | Debug-only observation of the `0x8003B43C` list publication; it never supplies list contents or changes control flow. |
+| `ctr::platformHlePlan` (`game/execution/platform_hle_plan.*`) | The authenticated libgte/libcd/libgpu addresses and windows, plus the six bindings installed for a direct runtime. |
+| `ctr::runVsyncBridge`, `ctr::VsyncBridge`, `ctr::refuseUnexpectedRetailReturn` (`game/frame/vsync_bridge.*`, `retail_return.*`) | One extracted VSync callsite as data, the bridge that omits only that call, and the shared refusal for a return address the title has no identity for. |
+| `ctr::native` constants (`game/title/native_ownership.h`) | Every measured guest address and game-state offset the owners above are keyed by. Facts only; no behaviour. |
 
 ## Who owns it
 
@@ -132,7 +140,7 @@ entry, and `FieldBoundary` is the only thing that ends a field.
 
 ## Where does it go?
 
-- A guest address or game-state offset: `game/core/native_ownership.h`.
+- A guest address or game-state offset: `game/title/native_ownership.h`.
 - A per-field decision about what runs next: the smallest owner named in the ladder, composed by
   `CtrFrameDriver`.
 - Anything that must survive a field boundary: the owner that holds it, as a resumable method pair

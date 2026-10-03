@@ -81,7 +81,7 @@ void test_publication_carries_the_views_own_numbers() {
   Core &core = game->core;
   // The widening path publishes through libgte_set_geom_*, which writes the bound GTE
   // control registers. Without a bind that write dereferences nothing and faults, so the
-  // test binds the same way game/app/main.cpp does rather than avoiding the write.
+  // test binds the same way game/entry/main.cpp does rather than avoiding the write.
   gte_bind(&core);
   constexpr uint32_t kView = 0x800A0000u;
   writeView(core, kView, 320, 240, 0x1000u);
@@ -121,7 +121,7 @@ void test_previous_lags_and_the_sequence_advances() {
   Core &core = game->core;
   // The widening path publishes through libgte_set_geom_*, which writes the bound GTE
   // control registers. Without a bind that write dereferences nothing and faults, so the
-  // test binds the same way game/app/main.cpp does rather than avoiding the write.
+  // test binds the same way game/entry/main.cpp does rather than avoiding the write.
   gte_bind(&core);
   constexpr uint32_t kView = 0x800A0000u;
   ctr::ProjectionOwner owner;
@@ -158,7 +158,7 @@ void test_publication_requires_a_body_and_accepts_one() {
   Core &core = game->core;
   // The widening path publishes through libgte_set_geom_*, which writes the bound GTE
   // control registers. Without a bind that write dereferences nothing and faults, so the
-  // test binds the same way game/app/main.cpp does rather than avoiding the write.
+  // test binds the same way game/entry/main.cpp does rather than avoiding the write.
   gte_bind(&core);
   constexpr uint32_t kView = 0x800A0000u;
   writeView(core, kView, 256, 224, 0x0F00u);
@@ -199,7 +199,7 @@ void test_without_a_plan_publication_is_retail() {
   Core &core = game->core;
   // The widening path publishes through libgte_set_geom_*, which writes the bound GTE
   // control registers. Without a bind that write dereferences nothing and faults, so the
-  // test binds the same way game/app/main.cpp does rather than avoiding the write.
+  // test binds the same way game/entry/main.cpp does rather than avoiding the write.
   gte_bind(&core);
   constexpr uint32_t kView = 0x800A0000u;
   writeView(core, kView, 320, 240, 0x140u);
@@ -227,7 +227,7 @@ void test_a_standard_aspect_plan_stays_retail() {
   Core &core = game->core;
   // The widening path publishes through libgte_set_geom_*, which writes the bound GTE
   // control registers. Without a bind that write dereferences nothing and faults, so the
-  // test binds the same way game/app/main.cpp does rather than avoiding the write.
+  // test binds the same way game/entry/main.cpp does rather than avoiding the write.
   gte_bind(&core);
   constexpr uint32_t kView = 0x800A0000u;
   writeView(core, kView, 320, 240, 0x140u);
@@ -254,7 +254,7 @@ void test_a_wide_plan_widens_the_gte_and_not_the_guest() {
   Core &core = game->core;
   // The widening path publishes through libgte_set_geom_*, which writes the bound GTE
   // control registers. Without a bind that write dereferences nothing and faults, so the
-  // test binds the same way game/app/main.cpp does rather than avoiding the write.
+  // test binds the same way game/entry/main.cpp does rather than avoiding the write.
   gte_bind(&core);
   constexpr uint32_t kView = 0x800A0000u;
   constexpr uint16_t kWidth = 320;
@@ -321,7 +321,7 @@ void test_the_retail_comparison_sees_retail_not_the_plan() {
   Core &core = game->core;
   // The widening path publishes through libgte_set_geom_*, which writes the bound GTE
   // control registers. Without a bind that write dereferences nothing and faults, so the
-  // test binds the same way game/app/main.cpp does rather than avoiding the write.
+  // test binds the same way game/entry/main.cpp does rather than avoiding the write.
   gte_bind(&core);
   constexpr uint32_t kView = 0x800A0000u;
   writeView(core, kView, 320, 240, 320);

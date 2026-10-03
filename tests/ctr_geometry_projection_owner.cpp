@@ -68,7 +68,7 @@ int main() {
   auto game = std::make_unique<Game>();
   Core &core = game->core;
   // The owner reads the GTE control registers, and `libgte_set_geom_*` writes the BOUND ones, so the
-  // test binds the same way game/app/main.cpp does rather than avoiding the writes.
+  // test binds the same way game/entry/main.cpp does rather than avoiding the writes.
   gte_bind(&core);
 
   std::printf("[ctr-geometry-projection] THE REGISTER NUMBERS, against the framework's own writer\n");

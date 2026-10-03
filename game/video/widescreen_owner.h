@@ -39,9 +39,8 @@ public:
   // Has the plan been resolved yet? It is resolved on the first publication, not at boot.
   [[nodiscard]] bool latched() const;
 
-  [[nodiscard]] const GuestProjectionPlan &plan() const;
-  [[nodiscard]] int32_t distanceScaleNumerator() const;
-  [[nodiscard]] int32_t distanceScaleDenominator() const;
+  // The resolved plan itself is NOT exposed here: `planFor` hands it to the projection owner on
+  // resolution, and that owner is where the plan and its scale live for every later reader.
   void report(const GuestViewProjection &view) const;
 
   static const char *aspectName(PresentationAspect aspect);
