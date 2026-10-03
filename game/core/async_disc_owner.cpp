@@ -64,16 +64,7 @@ void DiscReadOwner::deliverPending(Core &core, const CtrRuntime &runtime) {
 }
 
 DiscReadOwner &discReadOwner(Core &core) {
-  if (!core.game || !core.game->frameDriver) {
-    lucent::error("ctr-disc", "native CdRead has no bound CTR frame driver");
-    std::abort();
-  }
-  auto *driver = dynamic_cast<CtrFrameDriver *>(core.game->frameDriver.get());
-  if (!driver) {
-    lucent::error("ctr-disc", "native CdRead is bound to a non-CTR frame driver");
-    std::abort();
-  }
-  return driver->discReadOwner();
+  return ctrFrameDriver(core).discReadOwner();
 }
 
 void cdReadWithCompletionCallback(Core *core) {

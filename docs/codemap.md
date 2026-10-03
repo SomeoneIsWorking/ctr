@@ -1,53 +1,145 @@
 # Codemap
 
-CTR's app composition wires process owners; title core modules own
-retail/native boundaries; simulation owns authoritative transforms; video owns producer commands,
-rendering, and temporal presentation. Capability state belongs in `docs/project-state.md`, migration
-order in `docs/migration.md`, per-step reverse-engineering status in `docs/re-frontier.md`, and
-atomic work in `docs/issues/`.
+CTR's structural authority: where every title subsystem lives, which namespace and class owns it, and
+what that owner decides. Capability state is `docs/project-state.md`, migration order
+`docs/migration.md`, per-step reverse-engineering status `docs/re-frontier.md`, atomic work
+`docs/issues/`. Framework ownership is `external/psxport/docs/codemap.md`; every chain below names the
+framework hop explicitly rather than restating it.
 
-## Ownership
+Nothing in `game/` is in the global namespace. Every owner is a class in namespace `ctr`; the two
+stateless rules (`widenViewProjection`, `frameSuffixStillWaiting`) and the two Core-to-owner resolvers
+(`ctrFrameDriver`, `discReadOwner`) are namespace functions in the same namespace.
 
-| Subsystem | Responsibility | Current / target location | Entry point | Placement rule |
-|---|---|---|---|---|
-| Player composition | Parse asset-independent help, construct title/framework services, map the authenticated image, and step the only gameplay executor | `game/app/command_line.*`, `game/app/main.cpp`, `game/core/runtime_composition.*` | `main`, `ctr::installRuntimeOwners` | Product composition wires owners; it does not implement them or expose an engine selector |
-| Framework-facing runtime | Own CTR identity, title policy, native-owner registration, and executor composition | `game/core/ctr_runtime.*` | `ctr::CtrRuntime` | CPU translation, Core synchronization, original-call dispatch, typed exits, and invalidation stay in psxport |
-| Lightrec executor | Translate non-native retail code from authenticated runtime images and return typed bounded exits | `external/psxport/runtime/cpu/lightrec_executor.*` | `Core::lightrecExecutor`, `psx::cpu::dispatchGuest` | Lightrec owns cache/executable memory and its bounded refusal fallback; psxport owns state and device integration; CTR supplies title policy and never selects an interpreter |
-| Frame/service exit owner | Record exact CTR wait/service/frame continuations, request typed executor exits, and finish one field after normal executor return | `game/core/frame_driver.*`, `game/core/native_ownership.h` | `CtrFrameDriver::stepFrame` | Never throw or `longjmp` through JIT frames |
-| Typed field-exit protocol | Decide whether a field is finished (title request OR framework typed exit), refuse any other pending reason, consume the exit, and count the field and its presentation fence | `game/core/field_boundary.*` | `FieldBoundary::request`, `FieldBoundary::pending`, `FieldBoundary::finishField` | The two routes to "finished" cannot disagree; a non-frame pending exit is a defect, never a completed field |
-| Per-field native override window | Install the field's image-scoped overrides and remove exactly those on scope exit; each row states whether it is debug-only | `game/core/field_override_scope.*`; the row table lives in `CtrFrameDriver::stepFrame` | `FieldOverrideScope` | Which rows a non-observing field drops is a property of the rows, never of their order; an install or remove failure is a refusal |
-| VSync omission | Preserve the retail callee, omit only its guest VSync call, restore the measured post-call `ra`/`a0`, and resume the continuation | `game/core/vsync_bridge.*` | `runVsyncBridge` | One measured return address identifies a callsite; the result must be a frame boundary |
-| Retail return identity | Refuse a bridge reached from any return address the title has no identity for, naming both the expected and the actual | `game/core/retail_return.*` | `refuseUnexpectedRetailReturn` | Stated once for every bridge rather than re-spelled per owner |
-| State-zero startup resource load | Transcribe the fifth-argument -1 branch of `0x80031FDC`, keep its three retail helpers executing, and own the suffix plus the field the omitted `VSync(2)` owed | `game/core/startup_resource_load.*` | `StartupResourceLoad::begin`, `resume`, `consumeWaitedField` | The caller's fifth argument selects the branch; any other argument runs retail's own body and owns nothing |
-| State-zero startup resource pump | Own the phase of the two non-returning `0x8002DD24` polls so a false poll yields one host field and resumes the same loop | `game/core/startup_resource_pump.*` | `StartupResourcePump::begin`, `resume`, `phase` | The retail stage functions stay authoritative; owed SPU work is delivered before the generic IRQ path |
-| State-zero startup audio wait | Preserve the retail XA service call, yield one host audio field per wait, and resume the retail poll | `game/core/startup_audio_wait.*` | `StartupAudioWait::service`, `resumeLoop`, `resume` | Only the one measured callsite's service call is owned; the wait is owed only while the XA task runs |
-| Frame-timing bridge and frame suffix | Run the timing leaf retail wrote, omit only the conditional debug `VSync(0)`, and decide when the retail suffix may run | `game/core/frame_suffix.*` | `FrameSuffix::completeFieldTiming`, `resume`; `frameSuffixStillWaiting` | The wait predicate is a pure function of three named guest words, so a test reaches it without a Core |
-| Disc completion | Keep each guest drive's owed callback in its game frame driver, run the shared native transfer, and deliver the measured retail completion at CTR's per-field seam | `game/core/async_disc_owner.*`, `game/core/frame_driver.*` | `discReadOwner(Core&)`, `DiscReadOwner::deliverPending` | Retail callback owns effects; timing and state lifetime remain title-owned |
-| BIGFILE image publication | Match exact archive entry reads and raw content, retire overwritten generations, then publish the relocated byte extent after the retail callback | `game/core/overlay_image_owner.*`, generated identity facts from `titles/ctr/overlays.json` | `OverlayImageOwner::observeCompletedRead`, `publishAfterCallback` | Image identity is per-Core and bounded by exact archive byte size; Lightrec invalidation and dispatch stay in psxport |
-| SPU DMA completion | Deliver owed channel-4 completion with measured DICR/BIOS/CPU ordering | `game/core/dma_callback_owner.*` | `DmaCallbackOwner::serviceSpu` | Safe seam remains after B0:17 unwind at `0x8003C94C` |
-| Platform HLE facts | Supply authenticated libgte, libcd, libgpu, and fatal VSync addresses/windows | `game/core/platform_hle_plan.*` | `ctr::platformHlePlan` | Shared hardware semantics stay in psxport; title facts stay here |
-| Projection publication | Capture pre-GTE view facts, compare the retail publication via an executor original call, and count every publication per source against a field denominator | `game/video/projection_owner.*` | `ProjectionOwner::publish`, `ProjectionOwner::reportCensus` | Evidence plumbing is not widescreen or camera ownership; a run that never publishes reports zero OF N FIELDS, never silence |
-| Widescreen decision | Answer the framework's guest-aspect question and resolve the projection plan from the extent the GUEST's own publication carried | `game/video/widescreen_owner.*` | `CtrWidescreen::presentationAspect`, `CtrWidescreen::planFor` | A null `guestWidescreenProjection()` IS the defect; the plan's native extent is never a constant and never a boot-time display register. The "nothing reads `H` back" safety argument was MEASURED FALSE (4 `cfc2 rX,$26` sites) and is corrected in that header |
-| Geometry projection | Apply the SAME owned plan at the measured instant the GTE consumes the projection triple, so the guest's ten geometry submitters stop overwriting the widening | `game/video/geometry_projection_owner.*` | `CtrGeometryProjectionOwner::observe`, `ScopedGteProjectionObservation` | The `ctc2 $26` sites are interior labels and are NEVER override keys; the ten entries are `jal`-reachable but the guest writes CR24/25/26 inside the body, so the seam is the GTE op observer. The plan is READ from `ProjectionOwner`, never latched twice; a missing plan owner is a counted wiring refusal, not a silent no-op |
-| Presentation fence | Rotate one field fence and commit only captured retail/native work | `game/video/presentation_owner.*` | `PresentationOwner::finishField` | Called after a validated executor exit, never from guest VSync |
-| Input/media provisioning | Resolve user media, verify `SCUS_944.26` and `BIGFILE.BIG`, and generate non-executable image identity facts | `tools/provision.py`, `tools/extract_overlays.py` | provisioning CLIs | Runtime publication belongs to the title image owner; provisioning never emits guest code |
-| Title identity facts | Record the selected retail revision and its measured executable/load facts | `titles/` | `titles/ctr/README.md` | Game bytes remain untracked; title policy consumes verified facts |
-| Differential evidence | Compare deterministic executor state/device/memory with an independent emulator | separate diagnostic target; recorded evidence in `docs/re-frontier.md` and `titles/ctr/README.md` | separate diagnostic target | An interpreter-only oracle is separately built and absent from gameplay; backend refusal fallback remains executor-owned |
-| Reverse-engineering status | Which areas of the executable are grounded in bytes, how far, and what is next | `docs/re-frontier.md` | `docs/re-frontier.md` | A step's status moves only with new evidence from the image or a run; a measured fact is never dropped when its tool is retired |
-| Product verification | Exercise shipping runtime owners, exit results, link composition, and negative controls | `tests/`, `tools/verify.py` | `tools/verify.py` over PSXPort's shared `port.consumer_verify` | Tests call production seams and do not duplicate instruction or exit semantics |
-| Native simulation | Own authoritative ticks and current camera/object transforms | future cohesive modules under `game/` | target `Simulation` | Simulation state is independent of presentation interpolation |
-| Native producers | Convert pre-GTE camera/object/material state into typed primitive commands | future producer modules under `game/video/` | target producer interfaces | Never consume GTE/OT/GP0/framebuffer output as product source |
-| Native renderer | Own primitive lifetime, ordering/depth, materials, viewport/projection, and presentation | future renderer modules under `game/video/` | target queue/renderer interfaces | Widescreen is applied at owned projection/viewport/culling boundaries |
-| Temporal presentation | Interpolate previous/current native transforms without mutating simulation | future presentation decorator | target temporal interface | Alpha endpoints reproduce exact simulation snapshots |
-| Field cadence | Two fields per game frame (30 fps), paced by a vblank-drained countdown rather than the image's single boot-time `VSync(2)`; it decides whether an interpolated 60 fps path is in scope | `game/core/frame_callback_owner.*` | measured in `AGENTS.md` | Overlays are not provisioned, so an overlay-armed rate change would not be visible |
-| Build and launcher policy | Frozen Python setup, native/Lightrec product build, checks, and final player environment | `run.sh`, `bootstrap.py`, `tools/run.py`, `CMakeLists.txt`, `pyproject.toml`, `uv.lock` | `run.sh` | No offline translator, generated corpus, interpreter selector, or alternate engine mode |
+## Directories
+
+| Directory | Namespace | What it owns |
+|---|---|---|
+| `game/app/` | `ctr` | The process entry point and its argument policy. Composition only; it implements no subsystem. |
+| `game/core/` | `ctr`, `ctr::native` | The title's runtime-facing owners: the frame turn, the continuation owners a field can owe, the CD/DMA completions the guest is waiting on, and the measured guest addresses they are keyed by. |
+| `game/video/` | `ctr` | Presentation-facing owners: the projection publication, the widescreen decision, and the presentation fence. |
+| `tests/` | — | Focused tests that drive the production seams above; they never restate a rule the owner implements. |
+| `tools/` | — | Provisioning and launcher Python. No C++ owner lives here. |
+| `titles/ctr/` | — | Measured title facts (revision, executable facts) and generated non-executable image identity. |
+
+## `game/app/` — the process entry
+
+| Class / function | Responsibility |
+|---|---|
+| `main` (`main.cpp`) | Parse arguments, refuse a missing executable, construct `Game`, install the title's owners, then step fields forever. It composes; it implements nothing. |
+| `ctr::CommandLineAction`, `ctr::parseCommandLine`, `ctr::printUsage` (`command_line.*`) | The argument policy: run, `--help`, or a named refusal. |
+
+## `game/core/` — runtime-facing owners
+
+| Class / function | Responsibility |
+|---|---|
+| `ctr::CtrRuntime` (`ctr_runtime.*`) | The title's `GameRuntime`: identity facts, platform HLE facts, override install/remove, and every guest dispatch (one field, one continuation, one original call). It dispatches; it does not decide what runs next. |
+| `ctr::CtrFrameDriver`, `ctr::ctrFrameDriver` (`frame_driver.*`) | One finite CTR field: arm the field's overrides and GTE observation, run the host's per-field work, serve the owed continuation, dispatch the field, and finish it. `ctrFrameDriver(Core&)` is the single Core-to-driver resolver every bare guest override uses. |
+| `ctr::FieldBoundary` (`field_boundary.*`) | When a field ends: the title's own request OR the framework's typed exit, and the commit that consumes it, runs the debug teardown and the presentation fence, and counts the field. |
+| `ctr::FieldOverrideScope` (`field_override_scope.*`) | Installs the field's guest-address overrides on entry and removes exactly those on exit; which rows a non-observing field drops is a property of each row. |
+| `ctr::StartupResourceLoad` (`startup_resource_load.*`) | The fifth-argument −1 branch of `0x80031FDC`: the retail setup and commit, the two fields its omitted `VSync(2)` owed, and the caller frame it resumes. |
+| `ctr::StartupResourcePump` (`startup_resource_pump.*`) | The phase of the two non-returning `0x8002DD24` polls, yielding one host field per false poll and delivering owed SPU work before the generic IRQ path. |
+| `ctr::StartupAudioWait` (`startup_audio_wait.*`) | The post-archive XA wait at `0x8008D708`: the retail service call, one host audio field per wait, and the continuation it resumes. |
+| `ctr::FrameSuffix` / `ctr::FrameSuffixWait` / `ctr::frameSuffixStillWaiting` (`frame_suffix.*`) | The three guest words the retail suffix waits on, the pure predicate over them, and when the suffix may run and end the field. |
+| `ctr::FrameCallbackOwner` (`frame_callback_owner.*`) | The retail callbacks the direct runtime does not generate: vblank registration and per-field DrawSync/VSync delivery, each preserving the interrupted register context. |
+| `ctr::DmaCallbackOwner`, `ctr::DmaCompletionBackend` (`dma_callback_owner.*`) | Delivers the measured SPU channel-4 completion from the guest's own callback table, at the finite host boundary before the generic IRQ path can consume it. |
+| `ctr::DiscReadOwner`, `ctr::discReadOwner`, `ctr::cdReadWithCompletionCallback` (`async_disc_owner.*`) | The owed libcd completion: when it is delivered, and the retail callback that owns its effects. `cdReadWithCompletionCallback` is the PlatformHle binding for the stock `CdRead` leaf. |
+| `ctr::OverlayImageOwner`, `ctr::CompletedDiscRead` (`overlay_image_owner.*`) | A BIGFILE transfer as an image candidate, and the publication of its relocated RAM extent after the retail callback returns. |
+| `ctr::CtrWidescreen` (`game/video/widescreen_owner.*`) | The one widening decision: the aspect answer, and the plan resolved from the extent the guest's own publication carried. |
+| `ctr::ProjectionOwner` (`game/video/projection_owner.*`) | The measured pre-GTE publication: capture the view input, compare the retail libgte state, then apply the plan. Also the per-source publication census. |
+| `ctr::CtrGeometryProjectionOwner`, `ctr::ScopedGteProjectionObservation` (`game/video/geometry_projection_owner.*`) | The second application point: the same plan, applied at the GTE op that consumes the triple, armed for exactly one field. |
+| `ctr::PresentationOwner` (`game/video/presentation_owner.*`) | The framework presentation fence at a field boundary: commit a captured frame, or record the field as explicitly unpresented. |
+| `ctr::RenderListBoundaryDiagnostic` (`render_list_boundary_diagnostic.*`) | Debug-only observation of the `0x8003B43C` list publication; it never supplies list contents or changes control flow. |
+| `ctr::platformHlePlan` (`platform_hle_plan.*`) | The authenticated libgte/libcd/libgpu addresses and windows, plus the six bindings installed for a direct runtime. |
+| `ctr::runVsyncBridge`, `ctr::VsyncBridge`, `ctr::refuseUnexpectedRetailReturn` (`vsync_bridge.*`, `retail_return.*`) | One extracted VSync callsite as data, the bridge that omits only that call, and the shared refusal for a return address the title has no identity for. |
+| `ctr::installRuntimeOwners` (`runtime_composition.*`) | The composition step between `Game` construction and boot: the disc media key and the render path. |
+| `ctr::native` constants (`native_ownership.h`) | Every measured guest address and game-state offset the owners above are keyed by. Facts only; no behaviour. |
+
+## Who owns it
+
+One chain per turn, hop by hop, naming the class and method at every hop. A hop that is not in the
+owner's file is the defect to look for first. Framework hops are marked *(framework)*.
+
+### The frame turn
+
+| Hop | Owner | What it decides |
+|---|---|---|
+| Field iteration | `main` → `FrameLoopShell::step` *(framework)* | One host iteration; the framework owns iteration, the title owns the finite step. |
+| Field entry | `CtrFrameDriver::stepFrame` | Opens the field's census, arms `ScopedGteProjectionObservation` and `FieldOverrideScope`, and clears the previous field's request. |
+| Host work | `Timing::frameTick` *(framework)*, `FrameCallbackOwner::deliverField`, `Pad::serviceFrame` *(framework)*, `SpuAudio::frame` *(framework)*, `DiscReadOwner::deliverPending`, `DmaCallbackOwner::serviceSpu` | Everything owed at the field seam, in that order: guest callbacks, input, audio, then the CD and DMA completions the guest is blocked on. |
+| Owed continuation | `CtrFrameDriver::resumeOwedContinuation` | One ladder, one owner at a time: `FrameSuffix::resume` → `StartupAudioWait::resume` → `StartupResourcePump::resume` → `StartupResourceLoad::consumeWaitedField`. |
+| Guest execution | `CtrFrameDriver::dispatchField` → `CtrRuntime::dispatch` → `psx::cpu::dispatchGuestUntilExit` *(framework)* → Lightrec *(framework)* | Runs the field from `kFrameLoopResume` (or the boot target), resuming a budget exit at the same PC and refusing one that consumed nothing. |
+| Guest override | a `CtrFrameDriver::on*` entry point → `ctrFrameDriver(Core&)` | Each bare guest override names one operation and hands the Core to the owner that owns it. |
+| Original call | `CtrRuntime::callOriginalToReturn` → `psx::cpu::callOriginal` *(framework)* | Runs the retail body a native owner replaced, and requires it to return. |
+| Field end | `FieldBoundary::pending` → `FieldBoundary::finishField` | The only two routes to "finished" cannot disagree; a non-frame pending exit is refused. |
+| Presentation | `PresentationOwner::finishField` → `Game::presentation.commit` / `commitUnpresented` *(framework)* | Exactly one fence per field, advanced or explicitly skipped. |
+| Refusal | `CtrFrameDriver::refuseUnfinishedField` | A field that cannot finish reports the projection censuses and stops. Never an exception or a `longjmp`. |
+
+**While a movie plays or a load waits.** CTR owns no movie player: an FMV is retail code executing
+inside `dispatchField`, so the field turn above owns it and keeps pumping input each field. The
+startup resource load, resource pump and XA wait are the only owners that end a field from the host
+side, and each resumes from `resumeOwedContinuation` — that ladder is the frame turn's only other
+entry, and `FieldBoundary` is the only thing that ends a field.
+
+### Host input → `Pad` → guest pad buffer
+
+| Hop | Owner | What it decides |
+|---|---|---|
+| Field service | `CtrFrameDriver::stepFrame` → `core.game->pad.serviceFrame()` | CTR's only input call, at the field seam before guest execution. |
+| Host pump | `Pad::serviceFrame` → `Pad::pollHostInput` → `psx::input::HostInput::poll(bool)` *(framework)* | The ONE host-input owner (`psx::input::HostInput`, header `host_input.h`) and the ONE SDL drain; it returns the active-low mask for this turn. `pollHostInput` is called from inside `serviceFrame`, so a title that calls only `serviceFrame` still pumps. |
+| Pad frame | `Pad::serviceFrame` *(framework)* | force/hold → REPL drive → suppression → record/replay, then the digital packet. |
+| Guest | `Pad::fillBuffer` → the registered slot buffers *(framework)* | The 4-byte per-VBlank packet the guest reads. |
+| Movie skip | `Fmv::playToEnd` → `Pad::pollHostInput` *(framework)* | A movie turn is a served host frame, so the skip reads the pad owner's serviced mask. CTR never calls the blocking movie entry point. |
+| Debug channel | `HostInput::takePauseRequest` / `takeFrameStepRequest` → `DbgServer::togglePause` / `addStep` *(framework)* | The P/`.` edges are detected by the input owner and acted on by the debug channel. |
+| Window availability | `gpu_vk_windowed()` *(framework, declared in `gpu_vk.h`)* | The window-answer every pump passes explicitly; the renderer no longer owns a `gpu_windowed()`. |
+
+### Guest draw → presentation
+
+| Hop | Owner | What it decides |
+|---|---|---|
+| Projection publication | `CtrFrameDriver::onProjectionProducer` → `ProjectionOwner::publish` | Captures the guest's pre-GTE view facts, runs the retail producer as an original call, compares the published libgte state, then applies the plan. |
+| Widening decision | `CtrWidescreen::planFor` → `gpu_vk_latch_guest_projection` *(framework)* | Resolves the plan from the extent the guest's own publication carried, once, on the first publication. |
+| GTE application | `CtrGeometryProjectionOwner::observe` → `ScopedGteProjectionObservation::onGteOp` *(framework observer)* | Applies the same plan at the op that consumes the triple, covering the ten submitters the descriptor route never reaches. |
+| Guest draw | guest GP0/OT → `RenderQueue` / `GpuState` *(framework)* | The title supplies no primitives: the guest's own GTE and ordering table are rasterized by the framework. |
+| Fence | `FieldBoundary::finishField` → `PresentationOwner::finishField` → `Game::presentation.commit` *(framework)* | One presented or explicitly unpresented field. |
+| 60 fps in-between | `CtrRuntime::renderCapabilities` | Declares `temporalInterpolation = false`, so no in-between exists while CTR has no native producers. |
+| Widescreen extent | `Game::presentation` / `GpuWindow` *(framework)* | The window and margin the plan asked for; the title never touches host pixels. |
+
+### CD / streaming
+
+| Hop | Owner | What it decides |
+|---|---|---|
+| Stock `CdRead` | `cdReadWithCompletionCallback` (bound by `platformHlePlan`) | Delivers any owed completion, runs the shared synchronous transfer, then records the new one. |
+| Completion owed | `DiscReadOwner::noteTransferComplete` | Whether a callback is registered (owed) or the caller polls `CdReadSync` (counted). |
+| Delivery | `DiscReadOwner::deliverPending` → `CtrRuntime::dispatchToReturn` | Runs the retail completion callback with the interrupted context intact, at a seam where the issuing call has unwound. |
+| Image publication | `OverlayImageOwner::observeCompletedRead` / `publishAfterCallback` | Identity for an exact archive entry read, then the relocated extent published after the callback. |
+| Sector transfer | `cd_read_stock_sync` *(framework)* | The transfer itself; the title never moves sectors. |
+
+### Audio
+
+| Hop | Owner | What it decides |
+|---|---|---|
+| Field mix | `SpuAudio::frame` *(framework)* | Advances one host audio field, which the startup XA wait depends on. |
+| Startup wait | `StartupAudioWait::resumeLoop` / `service` | The retail service call, then one field yielded while the task runs. |
+| SPU completion | `DmaCallbackOwner::serviceSpu` → `DmaCompletionBackend` *(framework DMA state)* | Delivers the guest's channel-4 callback before the generic IRQ path can consume it. |
+
+### Debug / control channel
+
+| Hop | Owner | What it decides |
+|---|---|---|
+| Live endpoint | `DbgServer::start` *(framework)*, enabled by `PSXPORT_DEBUG_SERVER` | The loopback control channel: state, memory, input injection, pause/step. |
+| Title boot | `main` | **CTR's product never starts it**: the title has its own entry point rather than `native_boot`, so `PSXPORT_DEBUG_SERVER` opens nothing and a headless run cannot be driven. Recorded as a finding, not as a design choice. |
+| Render-list observation | `RenderListBoundaryDiagnostic` (installed by `FieldOverrideScope` only when `PSXPORT_DEBUG=ctr-render-list`) | The title's only in-product diagnostic channel. |
 
 ## Where does it go?
 
-- R3000A translation, Core synchronization, typed exits, or invalidation: psxport's Lightrec executor.
-- CTR native override or original call: the smallest title owner, registered by image generation and address.
-- Frame, host-work, interrupt, or service suspension: title continuation state plus a typed executor exit.
-- Disc/overlay identity and runtime mapping: provisioning tools plus title runtime policy.
-- Native camera/transforms: simulation owner; native primitives/order/depth: video owners.
-- Capability, migration order, RE status, or atomic work: `docs/project-state.md`,
-  `docs/migration.md`, `docs/re-frontier.md`, or `docs/issues/` respectively.
+- A guest address or game-state offset: `game/core/native_ownership.h`.
+- A per-field decision about what runs next: the smallest owner named in the ladder, composed by
+  `CtrFrameDriver`.
+- Anything that must survive a field boundary: the owner that holds it, as a resumable method pair
+  consumed by `resumeOwedContinuation`.
+- Projection, widening or the presentation fence: `game/video/`, one owner per decision.
+- A dispatch, an original call or an override install: `CtrRuntime`; never a call site.
+- R3000 translation, Core synchronization, typed exits, invalidation, input, audio, disc transfer,
+  rendering or the host loop: psxport.
+- Capability state, migration order, RE status or atomic work: `docs/project-state.md`,
+  `docs/migration.md`, `docs/re-frontier.md`, `docs/issues/`.

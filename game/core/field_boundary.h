@@ -11,13 +11,11 @@ namespace ctr {
 
 // When one CTR field ends, and how an ended field is accounted.
 //
-// A field ends for exactly one reason: the guest asked to leave, either through the typed psxport
-// executor exit or through a title owner that knows the field is finished without running guest code
-// again. This owner owns both halves of that statement so they cannot disagree — `pending()` reads
-// the title's own request flag OR the framework's typed exit, and `finishField()` consumes whichever
-// one arrived, finishes the field's presentation fence, and counts the field. The two were one
-// `CtrFrameDriver` method pair before this extraction; splitting them from the frame ladder is what
-// lets the boot and audio owners ask for a boundary without owning the ladder that serves it.
+// A field ends for exactly one reason: the guest asked to leave, through the typed psxport executor
+// exit or through a title owner that knows the field is finished without running guest code again.
+// This owner owns both halves so they cannot disagree — `pending()` reads the title's own request flag
+// OR the framework's typed exit, and `finishField()` consumes whichever arrived, finishes the field's
+// presentation fence, and counts the field.
 class FieldBoundary final {
 public:
   FieldBoundary(RenderListBoundaryDiagnostic &renderListDiagnostic, PresentationOwner &presentation);

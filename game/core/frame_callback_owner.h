@@ -16,8 +16,6 @@ public:
   void observeVblankRegistration(Core &core, const CtrRuntime &runtime);
   void deliverField(Core &core, const CtrRuntime &runtime) const;
 
-  [[nodiscard]] uint32_t vblankCallback() const;
-
 private:
   void dispatchPreservingContext(Core &core, const CtrRuntime &runtime, uint32_t callback, const char *kind) const;
 

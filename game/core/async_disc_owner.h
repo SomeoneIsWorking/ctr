@@ -17,10 +17,6 @@ class CtrRuntime;
 // never happens, and a caller which waits for the callback instead of polling CdReadSync waits
 // forever.
 //
-// MEASURED on SCUS_944.26: the resource loader at 0x800321B4 registers 0x80032110 and the slot is
-// never written again, so its busy flag at gp+0x138 stays 1, the screen loader at 0x80033610 keeps
-// returning stage 2 unchanged, the ordering table stays empty, and every presented field is black.
-//
 // WHEN the callback runs is as much a part of the contract as whether it runs. Retail cannot deliver
 // it inside CdRead, and the loader depends on that: FUN_80031E00 stores the allocated buffer into
 // its queue entry AFTER FUN_800321B4 returns, and the completion chain reads that same field. So the
@@ -56,8 +52,9 @@ private:
   uint32_t polledReads_ = 0;
 };
 
-// Resolve the completion owner for this Core's game. The PlatformHle binding and the frame driver
-// must use the same per-game state without sharing an owed callback with another Core.
+// Resolve the completion owner for this Core's game. The platform binding and the frame driver
+// reach the same per-Core state through `ctrFrameDriver`, so neither can owe a callback the other
+// does not know about.
 DiscReadOwner &discReadOwner(Core &core);
 
 // PlatformHle binding for the measured stock libcd CdRead leaf: the shared synchronous transfer,

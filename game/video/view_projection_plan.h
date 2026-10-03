@@ -31,13 +31,9 @@ struct GuestViewProjection {
 
 // The widened triple for one host presentation extent.
 //
-// WHY H IS LEFT ALONE. The GTE maps a world point to sx = H*X/Z + OFX, so the horizontal FIELD
-// is fixed by H and the horizontal EXTENT only decides how many pixels that field is spread
-// across. Widening the extent alone would therefore stretch the picture, which is banned.
-// Widening H is the only way to add horizontal field, and the measured reason it is safe in
-// this title is on `CtrWidescreen`: CTR's geometry cull compares object Z against a scratchpad
-// near plane that is a literal 0 or 2 (0x8006E5D0, 0x8006F04C), NOT against H, so raising H
-// cannot cull near geometry the way it could in a title that uses H as the bound.
+// `H` IS WHAT CARRIES THE HORIZONTAL FIELD (see `CtrWidescreen`), so `distanceScale` is that
+// widening factor expressed as a fraction: the caller owns WHY it is that value, and this type stays
+// a projection rule with no policy in it.
 struct WidenedViewProjection {
   GteProjection retail{};
   GteProjection published{};
@@ -48,10 +44,8 @@ struct WidenedViewProjection {
 
 // Compute the published triple from the guest's own view facts and a host presentation plan.
 //
-// `plan` must already carry the requested aspect; a 4:3 plan reproduces the retail triple
-// exactly, so the shipping default changes nothing. `distanceScale` is the widening factor
-// applied to H, expressed as a fraction so the caller owns WHY it is that value and this
-// function stays a projection rule with no policy in it.
+// `plan` must already carry the requested aspect; a 4:3 plan reproduces the retail triple exactly,
+// so the shipping default changes nothing.
 [[nodiscard]] WidenedViewProjection widenViewProjection(const GuestViewProjection &view,
                                                         const GuestProjectionPlan &plan,
                                                         int32_t distanceScaleNumerator = 1,

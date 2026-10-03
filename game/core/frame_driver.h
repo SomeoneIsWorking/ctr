@@ -40,12 +40,10 @@ public:
   [[nodiscard]] uint32_t completedFrames() const;
   [[nodiscard]] uint64_t budgetExitsForLastField() const;
   [[nodiscard]] const ProjectionOwner &projection() const;
-  // The second projection application point: the guest's own geometry submitters publish
-  // the same triple at ten measured sites the descriptor publication never reaches.
-  [[nodiscard]] const CtrGeometryProjectionOwner &geometryProjection() const;
   [[nodiscard]] const CtrWidescreen &widescreen() const;
   [[nodiscard]] const PresentationOwner &presentation() const;
   [[nodiscard]] DiscReadOwner &discReadOwner();
+  [[nodiscard]] RenderListBoundaryDiagnostic &renderListDiagnostic();
 
 private:
   // The frame's guest overrides are plain function pointers with no user data, so each callsite
@@ -73,8 +71,6 @@ private:
   [[nodiscard]] static ProjectionOwner::Source classifyProjectionSource(uint32_t returnAddress);
   void observePublishedRenderList(Core &core);
 
-  static CtrFrameDriver *active_;
-
   CtrRuntime &runtime_;
   DiscReadOwner discReadOwner_;
   DmaCallbackOwner dmaCallbacks_;
@@ -92,5 +88,10 @@ private:
   uint64_t budgetExitsThisField_ = 0;
   bool bootEntered_ = false;
 };
+
+// The driver that owns `core`'s field. Every guest override is a bare `void (*)(Core *)` with no
+// user data, so this is how one reaches the owner for the Core it was handed: the driver's lifetime
+// is the Core's, and a Core with no driver, or another title's driver, is refused by name.
+[[nodiscard]] CtrFrameDriver &ctrFrameDriver(Core &core);
 
 } // namespace ctr

@@ -15,11 +15,9 @@ public:
 
   [[nodiscard]] bool hasPresentableCapture(const Core &core) const;
   [[nodiscard]] uint64_t completedFences() const;
-  [[nodiscard]] uint64_t presentedFences() const;
 
 private:
   uint64_t completedFences_ = 0;
-  uint64_t presentedFences_ = 0;
 };
 
 } // namespace ctr

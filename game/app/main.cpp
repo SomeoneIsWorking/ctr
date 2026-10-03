@@ -43,7 +43,7 @@ int main(int argc, char **argv) {
     return 2;
   }
 
-  static ctr::CtrRuntime runtime(ctr::native::kExecutableEntry);
+  ctr::CtrRuntime runtime(ctr::native::kExecutableEntry);
   psxport_install_game(runtime);
 
   auto game = std::make_unique<Game>();

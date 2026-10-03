@@ -61,10 +61,6 @@ void FrameCallbackOwner::deliverField(Core &core, const CtrRuntime &runtime) con
   dispatchPreservingContext(core, runtime, vblankCallback_, "VSyncCallback");
 }
 
-uint32_t FrameCallbackOwner::vblankCallback() const {
-  return vblankCallback_;
-}
-
 void FrameCallbackOwner::dispatchPreservingContext(Core &core,
                                                    const CtrRuntime &runtime,
                                                    uint32_t callback,

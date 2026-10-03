@@ -58,11 +58,9 @@ GuestProjectionPlan CtrWidescreen::planFor(Core &core, const GuestViewProjection
     std::abort();
   }
   // The framework's ONE implementation of "resolve the plan from configuration and the live sink",
-  // driven by the extent the GUEST's own publication just carried — its view descriptor's width at
-  // +0x20 and height at +0x22, the same two words `0x80042910` reads. Latching on a display-mode
-  // register instead is what made the first version of this owner wrong: `s_disp_w` read 320 on the
-  // field the plan was latched and 512 on the first present, and a 428-wide plan against a 512-wide
-  // picture is NARROWER than the native extent, so the presenter refused to call it a widening.
+  // driven by the extent the GUEST's own publication just carried: its view descriptor's width at
+  // +0x20 and height at +0x22, the same two words `0x80042910` reads. A display-mode register would
+  // read 320 against a 512-dot picture, and a plan built on it is narrower than what it widens.
   const GuestProjectionPlan plan = gpu_vk_latch_guest_projection(&core,
                                                                  GuestProjectionGeometry{
                                                                      .extent = {view.width, view.height},

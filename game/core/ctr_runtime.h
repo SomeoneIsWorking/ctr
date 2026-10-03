@@ -30,9 +30,9 @@ public:
   const PlatformHlePlan *platformHlePlan() const override;
   bool guestVramIsPicture(const Game &game) const override;
 
-  // CTR's own answer to the framework's widescreen question. Returning the base nullptr made every
-  // plan 4:3 whatever the settings file said, so this override is the measured root cause of CTR not
-  // widening rather than a hook left for completeness.
+  // CTR's own answer to the framework's widescreen question, and the only thing standing between the
+  // configured aspect and a plan: returning the base nullptr resolves every plan to 4:3 whatever the
+  // settings file says.
   const GuestWidescreenProjection *guestWidescreenProjection() const override;
   [[nodiscard]] CtrWidescreen &widescreen();
 
@@ -45,7 +45,9 @@ public:
   void propagateFrameBoundary(Core &core, const psx::cpu::ExecutionResult &result, std::string_view owner) const;
 
 private:
-  static const GuestProgramImage programImage_;
+  // The measured KSEG0 executable extent of SCUS_944.26, in the physical addresses
+  // `GuestProgramImage` stores.
+  static constexpr GuestProgramImage programImage_{.residentText = {0x00010000u, 0x0008D800u}};
   const uint32_t bootTarget_;
   CtrWidescreen widescreen_{};
 };

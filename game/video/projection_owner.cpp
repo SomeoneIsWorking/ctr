@@ -148,12 +148,6 @@ void ProjectionOwner::beginField() {
   ++census_.fields;
 }
 
-void ProjectionOwner::endField() {
-  // Nothing to do per field; the census is a running total and is REPORTED, not reset. A per-field
-  // reset would make "0 publications this field" unanswerable in aggregate, which is the number
-  // S004 asks for.
-}
-
 const ProjectionOwner::PublicationCensus &ProjectionOwner::census() const {
   return census_;
 }
@@ -166,8 +160,7 @@ void ProjectionOwner::reportCensus() const {
   lucent::info("ctr-projection",
                "publication census over {} host field(s): {} descriptor publication(s) at 0x{:08X} "
                "(lens-flare {} = 0x{:08X}, state-zero {} = 0x{:08X}, overlay {} = 0x{:08X}), {} "
-               "widened, {} literal startup publication(s) at 0x{:08X}. Fields with NO publication "
-               "are counted, not assumed.",
+               "widened. Fields with NO publication are counted, not assumed.",
                census_.fields,
                census_.publications,
                native::kProjectionProducer,
@@ -177,9 +170,7 @@ void ProjectionOwner::reportCensus() const {
                native::kProjectionReturnState,
                census_.fromOverlay,
                native::kProjectionReturnOverlay,
-               census_.widenedPublications,
-               census_.literalStartPublications,
-               native::kStartupLiteralPublication);
+               census_.widenedPublications);
   // The boot's own GTE triple, and the verdict on the literal site, in the same breath. A run that
   // never sampled says so; a run that sampled a non-(256,120,320) triple says the literal site did
   // NOT run and names what was there instead.
@@ -219,59 +210,6 @@ uint32_t ProjectionOwner::sourceReturnAddress(Source source) {
     return native::kProjectionReturnOverlay;
   }
   return 0u;
-}
-
-void ProjectionOwner::noteLiteralStartupPublication(Core &core) {
-  ++census_.literalStartPublications;
-  // Retail's literals, read from the image: `0x8003C84C addiu a0,zero,256` (OFX), `0x8003C854
-  // addiu a1,zero,120` (OFY), `0x8003C85C addiu a0,zero,320` (H). The native SetGeomOffset leaf
-  // derives OFY from its own second argument and both leaves only move GTE control registers, so
-  // the GTE ends up holding exactly the triple the plan widens. Publishing it through the same
-  // libgte path the descriptor route uses is what keeps one projection implementation.
-  const auto &published = core.rsub.projParams;
-  if (!published.geomValid() || static_cast<int32_t>(published.geomOfx()) != native::kStartupProjectionOfx ||
-      static_cast<int32_t>(published.geomOfy()) != native::kStartupProjectionOfy ||
-      static_cast<int32_t>(published.geomH()) != native::kStartupProjectionH) {
-    lucent::error("ctr-projection",
-                  "state-zero literal publication disagreed with the image: expected ({},{},H={}), got "
-                  "({},{},H={})",
-                  native::kStartupProjectionOfx,
-                  native::kStartupProjectionOfy,
-                  native::kStartupProjectionH,
-                  published.geomOfx(),
-                  published.geomOfy(),
-                  published.geomH());
-    std::abort();
-  }
-  widened_ = false;
-  if (!planLatched_) {
-    published_ = GteProjection{
-        .centerX = native::kStartupProjectionOfx,
-        .centerY = native::kStartupProjectionOfy,
-        .distance = native::kStartupProjectionH,
-    };
-    return;
-  }
-  const WidenedViewProjection widened =
-      widenViewProjection(GuestViewProjection{.width = native::kStartupProjectionOfx * 2,
-                                              .height = native::kStartupProjectionOfy * 2,
-                                              .distance = native::kStartupProjectionH},
-                          plan_,
-                          distanceScaleNumerator_,
-                          distanceScaleDenominator_);
-  if (!widened.widened) {
-    published_ = GteProjection{
-        .centerX = native::kStartupProjectionOfx,
-        .centerY = native::kStartupProjectionOfy,
-        .distance = native::kStartupProjectionH,
-    };
-    return;
-  }
-  libgte_set_geom_offset(&core, widened.published.centerX, widened.published.centerY);
-  libgte_set_geom_screen(&core, widened.published.distance);
-  published_ = widened.published;
-  widened_ = true;
-  ++census_.widenedPublications;
 }
 
 const ProjectionPublication &ProjectionOwner::previous() const {

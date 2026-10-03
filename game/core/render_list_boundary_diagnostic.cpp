@@ -2,14 +2,13 @@
 
 #include "cfg.h"
 #include "core.h"
+#include "frame_driver.h"
 
 #include <array>
 #include <cstdlib>
 #include <lucent/log.h>
 
 namespace ctr {
-
-RenderListBoundaryDiagnostic *RenderListBoundaryDiagnostic::active_ = nullptr;
 
 RenderListBoundaryDiagnostic::RenderListBoundaryDiagnostic(bool enabled) : enabled_(enabled) {}
 
@@ -114,14 +113,9 @@ void RenderListBoundaryDiagnostic::armPairWatch(Core &core) {
     latest_.pairWatchBusy = true;
     return;
   }
-  if (active_ && active_ != this) {
-    latest_.pairWatchBusy = true;
-    return;
-  }
 
-  active_ = this;
   watchCore_ = &core;
-  core.storeWatchCb = recordPairStore;
+  core.storeWatchCb = onPairStore;
   core.wwatch_arm(latest_.list, latest_.list + kPairBytes);
   latest_.pairWatchArmed = true;
 }
@@ -130,30 +124,33 @@ void RenderListBoundaryDiagnostic::disarmPairWatch(Core &core) {
   if (!latest_.pairWatchArmed) {
     return;
   }
-  if (&core != watchCore_ || core.storeWatchCb != recordPairStore || active_ != this) {
+  if (&core != watchCore_ || core.storeWatchCb != onPairStore) {
     lucent::error("ctr-render-list", "pair watch ownership changed before the diagnostic field ended");
     std::abort();
   }
   core.storeWatchCb = nullptr;
   core.wwatch_arm(0u, 0u);
-  active_ = nullptr;
   watchCore_ = nullptr;
   latest_.pairWatchArmed = false;
 }
 
-void RenderListBoundaryDiagnostic::recordPairStore(Core *core, uint32_t address, uint32_t value, uint32_t width) {
-  if (!active_ || core != active_->watchCore_) {
+void RenderListBoundaryDiagnostic::onPairStore(Core *core, uint32_t address, uint32_t value, uint32_t width) {
+  ctrFrameDriver(*core).renderListDiagnostic().recordPairStore(*core, address, value, width);
+}
+
+void RenderListBoundaryDiagnostic::recordPairStore(Core &core, uint32_t address, uint32_t value, uint32_t width) {
+  if (&core != watchCore_) {
     return;
   }
-  RenderListObservation &observation = active_->latest_;
+  RenderListObservation &observation = latest_;
   ++observation.pairStores;
   if (!observation.firstWriter.seen) {
     observation.firstWriter = {
         .address = address,
         .value = value,
         .width = width,
-        .pc = core->pc,
-        .returnAddress = core->r[31],
+        .pc = core.pc,
+        .returnAddress = core.r[31],
         .seen = true,
     };
   }

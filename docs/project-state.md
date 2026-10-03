@@ -33,8 +33,9 @@ CTR touch/setup ownership are not complete.
 
 Known gaps tracked as issues: 0023 (corrupt GTE descriptor pair), 0024 (Lightrec + typed exits),
 0027 (projection census reported from one of thirteen refusal sites), 0028 (frame-timing bridge
-dereferences an unchecked game-state pointer), 0029 (override entry points select their instance
-through a process global), 0032 (2D primitives bound the widened margin).
+dereferences an unchecked game-state pointer), 0032 (2D primitives bound the widened margin).
+Issue 0029 (overrides selecting their instance through a process global) is resolved title-side: each
+override now resolves its owner from the `Core` it was handed.
 
 Not covered: `game/video/projection_owner.cpp` refuses a publication disagreement with
 `std::abort()`, and no portable death-test facility exists, so that branch has no automated

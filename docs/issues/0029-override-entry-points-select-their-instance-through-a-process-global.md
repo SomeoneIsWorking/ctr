@@ -1,7 +1,12 @@
 # 0029 — the field driver's override entry points select their instance through a process global
 
-Found while extracting the field owners out of `game/core/frame_driver.cpp`. **Not fixed here**: the
-fix is a framework signature change, and `psxport/` is owned by another arm.
+**Resolved title-side** (structural pass, behaviour-preserving). `CtrFrameDriver::active_` and
+`ScopedActiveDriver` are gone: every guest override resolves its owner from the `Core` it was handed,
+through the single `ctrFrameDriver(Core&)` in `game/core/frame_driver.{h,cpp}`, which reaches
+`core.game->frameDriver`. `RenderListBoundaryDiagnostic::active_` went the same way — its store-watch
+callback now reaches the observer for that exact `Core`. `discReadOwner(Core&)` uses the same
+resolver instead of repeating the downcast. The section "What a fix would be" below is the original
+analysis, kept because option 2 turned out to be title-local after all; see "What actually fixed it".
 
 ## What the code does
 
@@ -57,3 +62,15 @@ The seam is `psx::cpu::NativeFunction`. Options, in increasing cost:
    the lookup would have to be keyed by something the callback does not receive.
 
 Recommended: (1), owned by the framework arm, with this issue as the consumer that asked for it.
+
+## What actually fixed it
+
+Option (2) was available without a framework change, and this issue's own premise about it was wrong.
+`Core::game` and `Game::frameDriver` are already public and are already how `discReadOwner(Core&)`
+resolved its owner before this pass, so a bare `void (*)(Core *)` override can reach the driver for
+exactly the machine it was invoked on. The per-`Core` lookup removes the implicit instance selection
+the rule prohibits, without a framework signature change.
+
+What (1) would still add, and remains a framework-arm item: the owner pointer travelling with the
+registration instead of being recovered through the `Game` back-pointer, which is shorter than a
+`dynamic_cast` on a hot override path and does not depend on the driver being reachable from `Core`.

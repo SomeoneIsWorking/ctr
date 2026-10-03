@@ -68,15 +68,18 @@ private:
   static constexpr uint32_t kPairBytes = 8u;
   static constexpr uint32_t kNodeLimit = 128u;
 
-  static void recordPairStore(Core *core, uint32_t address, uint32_t value, uint32_t width);
+  // The framework's store-watch callback is a bare function pointer with no user data, so it
+  // reaches this Core's observer through the Core it is handed; a store on another Core is that
+  // Core's own observation and is never recorded here.
+  static void onPairStore(Core *core, uint32_t address, uint32_t value, uint32_t width);
+
+  void recordPairStore(Core &core, uint32_t address, uint32_t value, uint32_t width);
 
   [[nodiscard]] static bool readableRam(uint32_t address, uint32_t bytes);
   [[nodiscard]] static RenderListNodeChain scanNodeChain(Core &core, uint32_t head);
   void armPairWatch(Core &core);
   void disarmPairWatch(Core &core);
   void report(uint32_t field, const char *reason) const;
-
-  static RenderListBoundaryDiagnostic *active_;
 
   bool enabled_ = false;
   bool reportedNoPublication_ = false;

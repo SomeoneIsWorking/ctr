@@ -53,17 +53,10 @@ public:
   //
   // The plan's native extent must be the extent the GUEST actually projects into, and that is not
   // knowable before the guest says so: CTR's display mode arrives as GP1(08) during boot, and the
-  // first version of the widescreen owner latched on the first field where `s_disp_w` was non-zero
-  // and read 320, while the first PRESENT reported 512 for the same field counter. A plan latched
-  // from 320 is 428 wide against a 512-wide picture — NARROWER than the thing it was meant to widen —
-  // and `present_display_width` then declines to call that a widening, for a reason that has nothing
-  // to do with widening.
-  //
-  // The descriptor the publication ALREADY reads is the authoritative native extent: the measured
-  // rule is OFX = width / 2, and the boot literal OFX=256 pins the descriptor at 512 wide, which
-  // agrees with GP1(08)=0x08000002 (`mode & 3 == 2` -> 512 dots). So the plan is derived from the
-  // guest's own view on every publication, and the ordering problem disappears: there is no window in
-  // which the plan can be derived from a stale extent, and no first frame that escapes it.
+  // first present reported 512 dots where a boot-time latch had read `s_disp_w` as 320. The
+  // descriptor this publication already reads is authoritative — the measured rule is OFX = width/2,
+  // and the boot literal OFX=256 pins it at 512 wide — so deriving the plan from the guest's own view
+  // on every publication leaves no window in which it can come from a stale extent.
   using PlanSource = std::function<GuestProjectionPlan(Core &, const GuestViewProjection &)>;
   void setPlanSource(PlanSource source);
 
@@ -76,15 +69,9 @@ public:
   [[nodiscard]] const GteProjection &publishedProjection() const;
   [[nodiscard]] bool widenedLastPublication() const;
 
-  // THE RESOLVED PLAN AND ITS SCALE, for the second application point.
-  //
-  // `ProjectionOwner` listens at ONE publication (0x80042910, the descriptor route). The guest's ten
-  // geometry submitters publish the same triple themselves, from the same view descriptor, at ten
-  // measured sites the owner never sees — so the plan has to reach those too, and a second copy of
-  // it would be two answers to one question. The plan and its scale therefore live here and are
-  // READ by `CtrGeometryProjectionOwner`, which applies the same `widenViewProjection` rule at the
-  // measured moment the GTE consumes the triple. Exposed as a read-only pair so the second owner
-  // cannot re-latch a different plan behind the first's back.
+  // THE RESOLVED PLAN AND ITS SCALE, for the second application point. `CtrGeometryProjectionOwner`
+  // reads them rather than latching a copy, so the plan has one home. Exposed as a read-only triple
+  // so the second owner cannot re-latch a different plan behind the first's back.
   [[nodiscard]] bool planLatched() const {
     return planLatched_;
   }
@@ -99,22 +86,21 @@ public:
   }
 
   // THE PUBLICATION CENSUS, and the reason it exists. `publish()` speaks only on a DISAGREEMENT,
-  // because that is the only event a projection owner must fail loud on. A run in which the owner
-  // never fired therefore prints NOTHING, and "no ctr-projection line" is indistinguishable from
-  // "the owner was never reached" — which is the exact question S004 and S006 both depend on. These
-  // counters make the absent case a number, and `beginField`/`endField` give it a DENOMINATOR, so a
-  // run with zero publications reports zero OF N FIELDS rather than an unquantified silence.
+  // which is the only event a projection owner must fail loud on, so a run in which the owner never
+  // fired would otherwise print nothing — and "no ctr-projection line" is indistinguishable from "the
+  // owner was never reached". These counters make the absent case a number, and `beginField` gives
+  // it a DENOMINATOR, so a run with zero publications reports zero OF N FIELDS rather than an
+  // unquantified silence.
   //
-  // Per-source counts are kept apart because the three callers are not interchangeable: the
-  // lens-flare path is the only one that runs inside a rendered frame, so "0 from the lens-flare
-  // path" is a statement about the frame loop while "0 from state zero" is a statement about boot.
+  // Per-source counts are kept apart because the three callers are not interchangeable: the lens-flare
+  // path is the only one that runs inside a rendered frame, so "0 from the lens-flare path" is a
+  // statement about the frame loop while "0 from state zero" is a statement about boot.
   struct PublicationCensus {
     uint64_t fields = 0;       // host fields the owner was live for
     uint64_t publications = 0; // descriptor-driven publications at 0x80042910
     uint64_t fromLensFlare = 0;
     uint64_t fromStateZero = 0;
     uint64_t fromOverlay = 0;
-    uint64_t literalStartPublications = 0; // the 0x8003C84C leaf-pair publication
     uint64_t widenedPublications = 0;
     // The GTE triple the BOOT left behind, sampled at the first descriptor publication before the
     // retail body ran. `bootGteTripleSampled` says whether the sample was taken at all, so an
@@ -125,16 +111,11 @@ public:
   };
 
   // One host field begins. Counts the denominator the per-source tallies are a fraction of.
+  // Nothing resets the census: it is a running total reported at run end, so "0 publications"
+  // stays answerable in aggregate.
   void beginField();
-  // One host field ends, and the census is reported. `reportCensus` is separate so a test can read
-  // the counters without depending on the logger.
-  void endField();
-  [[nodiscard]] const PublicationCensus &census() const;
   void reportCensus() const;
-
-  // Record the state-zero literal publication (0x8003C84C -> SetGeomOffset/SetGeomScreen with
-  // OFX=256, OFY=120, H=320). It bypasses the descriptor entirely, so it can only be observed here.
-  void noteLiteralStartupPublication(Core &core);
+  [[nodiscard]] const PublicationCensus &census() const;
 
 private:
   // Republish the GTE triple for the latched plan. Called only after the retail comparison has

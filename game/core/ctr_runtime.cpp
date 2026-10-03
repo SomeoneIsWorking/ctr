@@ -14,12 +14,6 @@
 
 namespace ctr {
 
-const GuestProgramImage CtrRuntime::programImage_{
-    // GuestProgramImage stores physical addresses; CTR-01 measured the corresponding KSEG0
-    // executable extent as [0x80010000,0x8008D800).
-    .residentText = {0x00010000u, 0x0008D800u},
-};
-
 CtrRuntime::CtrRuntime(uint32_t bootTarget) : bootTarget_(bootTarget) {
   if (bootTarget_ == 0) {
     lucent::error("ctr-runtime", "runtime requires a nonzero independently validated boot target");

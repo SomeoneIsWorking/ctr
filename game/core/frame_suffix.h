@@ -11,10 +11,10 @@ class FieldBoundary;
 
 // The three guest words the retail frame suffix waits on, read once and named.
 //
-// The suffix at 0x80037880 is retail code and stays retail code. What the host owns is WHEN to let
-// it run: it must not run while the draw the field just published is still being flushed, nor while
-// the VSync callback's two-field countdown is running. Those are three guest words, and a reader
-// should be able to see the predicate's inputs without redoing the `gp`-relative arithmetic.
+// The suffix at 0x80037880 is retail code and stays retail code. What the host owns is WHEN to let it
+// run: it must not run while the draw the field just published is still being flushed, nor while the
+// VSync callback's two-field countdown is running. Those are three guest words, and a reader should be
+// able to see the predicate's inputs without redoing the `gp`-relative arithmetic.
 struct FrameSuffixWait {
   // The game-state descriptor the guest's own code passes around. Zero means the guest has not
   // published one, and a zero descriptor is not a pending draw.

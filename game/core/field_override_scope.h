@@ -28,11 +28,10 @@ struct FieldOverrideBinding {
 // Installs the field's native overrides on construction and removes every one of them on scope exit.
 //
 // The window is the dynamic extent of exactly one `CtrFrameDriver::stepFrame`. An override left
-// installed past that point would answer guest calls the driver no longer owns, and one removed
-// early would let a translated block reach the guest body a native owner had replaced, so the two
-// halves are bound to the same lifetime instead of to a sequence the caller must remember. A
-// failure to install or remove is refused rather than reported: a field running with the wrong set
-// of overrides is not a degraded field, it is a different program.
+// installed past that point would answer guest calls the driver no longer owns, and one removed early
+// would let a translated block reach the guest body a native owner had replaced, so the two halves are
+// bound to the same lifetime. A failure to install or remove is refused rather than reported: a field
+// running with the wrong set of overrides is not a degraded field, it is a different program.
 class FieldOverrideScope final {
 public:
   FieldOverrideScope(CtrRuntime &runtime,

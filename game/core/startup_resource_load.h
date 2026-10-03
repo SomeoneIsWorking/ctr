@@ -11,16 +11,15 @@ class FieldBoundary;
 
 // State zero's startup resource load, with the one guest VSync inside it removed.
 //
-// `0x80031FDC` is reached in two ways. Its fifth argument selects the branch: any other value runs
+// `0x80031FDC` is reached in two ways and its fifth argument selects the branch: any other value runs
 // ordinary retail code, and -1 selects a path that performs its setup and then calls VSync(2). The
 // title owns the timing, so it may not make that call, but everything the call follows is the game's
-// — the resource setup at 0x800321B4, the commit at 0x80031EE4, and the exact caller frame both
-// read from. This owner transcribes that frame, keeps the retail helpers executing through
-// Lightrec, waits the field the call owed, and resumes at the post-call instruction.
+// — the resource setup at 0x800321B4, the commit at 0x80031EE4, and the exact caller frame both read
+// from. This owner transcribes that frame, keeps the retail helpers executing through Lightrec, waits
+// the field the call owed, and resumes at the post-call instruction.
 //
-// It also owns the "am I mid-load" question. `ownsSuffix()` and `consumeWaitedField()` are how the
-// frame driver asks, and they are the only two decisions the load makes, so they are the only two
-// a test needs to reach.
+// It also owns the "am I mid-load" question: `ownsSuffix()` and `consumeWaitedField()` are the only
+// two decisions the load makes, and so the only two a test needs to reach.
 class StartupResourceLoad final {
 public:
   StartupResourceLoad(CtrRuntime &runtime, FieldBoundary &field);

@@ -19,7 +19,6 @@ void PresentationOwner::finishField(Core &core) {
     // The native loop owns one host display field per step. No temporal decorator is admitted until
     // CTR has native producers and measured previous/current transform sources.
     core.game->presentation.commit(&core, 1);
-    ++presentedFences_;
   } else {
     core.game->presentation.commitUnpresented(&core);
   }
@@ -36,10 +35,6 @@ bool PresentationOwner::hasPresentableCapture(const Core &core) const {
 
 uint64_t PresentationOwner::completedFences() const {
   return completedFences_;
-}
-
-uint64_t PresentationOwner::presentedFences() const {
-  return presentedFences_;
 }
 
 } // namespace ctr

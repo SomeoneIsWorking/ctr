@@ -10,44 +10,25 @@ namespace ctr {
 
 class ProjectionOwner;
 
-// CTR's SECOND projection application point, and it exists because the first one was measured to
-// cover 1 of 18 sites.
+// CTR's SECOND projection application point, and it exists because the first covers 1 of 18 writers
+// of the GTE projection distance: the guest writes H (control register 26) from sixteen raw `ctc2`
+// words plus two `jal SetGeomScreen` calls, and `ProjectionOwner` listens at only the descriptor
+// publication (0x80042910). Ten of the raw writers are interior labels inside the geometry
+// submitters, each reading the same view descriptor and republishing the triple itself before its own
+// transforms.
 //
-// WHAT WAS MEASURED, and the arithmetic is the whole argument. Every count below is re-derivable
-// from the identity-verified executable:
+// THE SEAM IS THE PROJECTION OP, NOT THOSE LABELS. An interior label is never an override key — the
+// override would return to an `r31` the tail never set — and an entry-level override cannot help
+// either, because the guest writes CR24/25/26 inside the body and then transforms. The framework's
+// per-Core GTE pre-op observer fires immediately before every guest COP2 op and Lightrec exports the
+// registers afterwards, so a value written there is the one the transform consumes. Keying on that
+// instant covers all 18 writers by construction rather than by a list a new submitter could slip
+// past. The owner identity travels in the framework's own per-Core observer `void*`; there is no
+// process-global registry and no way for one Core's owner to answer for another.
 //
-//   * the guest writes the GTE projection distance H (control register 26) from 16 raw `ctc2 rX,$26`
-//     words plus 2 `jal SetGeomScreen` calls — 18 writers in 128,512 words;
-//   * `ProjectionOwner` listens at 0x80042910, reached by 2 of those calls plus the state-zero
-//     literal. It is a correct owner of that publication and it widens all 176 of them;
-//   * TEN of the raw writers are INTERIOR LABELS inside the guest's geometry-submission functions
-//     (0x80069FFC, 0x8006AAA8, 0x8006DC30, 0x8006E26C, 0x8006E588, 0x8006F004, 0x8006F9A8,
-//     0x8006FE70, 0x80070388, 0x80070950). Each reads the SAME view descriptor (+0x18 distance,
-//     +0x20 OFX, +0x22 OFY) and republishes the triple itself, immediately before its own GTE
-//     perspective transforms. All ten carry the same five-instruction tail verbatim.
-//
-// So a widening applied only at 0x80042910 is overwritten by the guest before any 3D geometry is
-// projected. That is why the canvas widened (512 -> 684) and the picture did not.
-//
-// WHY THE SEAM IS THE PROJECTION OP AND NOT THE TEN FUNCTION ENTRIES. Each `ctc2 rX,$26` is an
-// interior label inside a function body, and a label reached by straight-line fall-through can never
-// be an override key: the override would return to an `r31` the tail never set. The enclosing
-// entries ARE valid keys (each has >= 1 direct `jal` caller and 0 `j` targets), but an entry-level
-// override cannot help either, because the guest writes CR24/25/26 *inside* the body and then
-// transforms — so by the time an override regains control the widened value is already gone.
-//
-// The framework's per-Core GTE op observer fires immediately BEFORE `GTE_Instruction` for every guest
-// COP2 op (lightrec_executor.cpp `cop2Operation` -> `gte_op_at` -> `GtePreOpObserver::observeAround`),
-// and Lightrec exports the GTE registers back after the op, so a value written in the pre-op callback
-// is the value the transform actually consumes. That is the measured instant at which the triple is
-// used, and keying on it covers all 18 writers by construction instead of by an enumerated list a new
-// submitter could slip past. The owner identity travels in the framework's own per-Core observer
-// `void*`; there is no process-global registry and no way for one Core's owner to answer for another.
-//
-// WHAT IT DOES NOT DO. It writes GTE control registers only, through the framework's own
-// `libgte_set_geom_*` path; no guest byte is touched. Retail's triple is re-read from the live
-// registers on every projection rather than accumulated, so a 4:3 run republishes retail's values
-// exactly and the owner is inert.
+// It writes GTE control registers only, through the framework's `libgte_set_geom_*` path, and retail's
+// triple is re-read from the live registers on every projection, so a 4:3 run republishes retail's
+// values exactly and the owner is inert.
 class CtrGeometryProjectionOwner final {
 public:
   // A retired GTE op, as it stands at the moment the perspective transform is about to consume it.
@@ -60,19 +41,18 @@ public:
     uint32_t distance = 0;
   };
 
-  // THE CENSUS, and the reason it exists. This owner only ever speaks when it changes something, so
-  // "0 projections" and "the observer never fired" would otherwise be the same silence. `gteOpsSeen`
-  // is the denominator: every GTE op the framework offered while the owner was armed, whether or not
-  // it was a perspective transform. A run in which the observer never fired reports 0 of 0 FIELDS,
+  // The census, and the reason it exists: this owner speaks only when it changes something, so "0
+  // projections" and "the observer never fired" would otherwise be one silence. `gteOpsSeen` is the
+  // denominator — every GTE op the framework offered while the owner was armed, whether or not it was
+  // a perspective transform — so a run in which the observer never fired reports 0 of 0 FIELDS,
   // which cannot be read as "widened nothing".
   struct Census {
     uint64_t fields = 0;      // host fields this owner was armed for
     uint64_t gteOpsSeen = 0;  // GTE ops offered while armed — the denominator
     uint64_t projections = 0; // of those, the perspective transforms that consume H
     uint64_t widenedProjections = 0;
-    // Every remaining outcome, kept apart because they mean different things, and together EXHAUSTIVE
-    // so the five sum to `projections`. An earlier revision reported only "not widened", which made
-    // 911 of 110,553 read as an unexplained remainder rather than as 109,642 idempotence skips.
+    // Every remaining outcome, kept apart because they mean different things and together are
+    // EXHAUSTIVE, so the five sum to `projections`.
     uint64_t alreadyOwned = 0;          // the registers already held this owner's widened H
     uint64_t leftAtRetail = 0;          // the plan is 4:3, or does not widen this view
     uint64_t projectionsBeforePlan = 0; // seen before the first descriptor publication resolved it
@@ -82,16 +62,15 @@ public:
   };
 
   // A field the owner was live for is counted by the arming scope, not by a call the driver has to
-  // remember: `ProjectionOwner` has an `endField()` that nothing calls, so this owner deliberately
-  // has no lifecycle method that can be forgotten. `ScopedGteProjectionObservation` is the only way
-  // to arm, and it counts the field on both paths.
+  // remember: `ScopedGteProjectionObservation` is the only way to arm, and it counts the field on both
+  // paths.
 
   [[nodiscard]] const Census &census() const;
   void reportCensus() const;
 
   // The plan this owner applies. It is READ from the projection owner rather than latched here, so
-  // the resolved plan and its scale have exactly one home; a second copy would be a second answer to
-  // one question and could disagree with the first owner's without either noticing.
+  // the resolved plan and its scale have exactly one home; a second copy could disagree with the
+  // first owner's without either noticing.
   void setProjectionOwner(const ProjectionOwner *owner) {
     projectionOwner_ = owner;
   }
@@ -104,8 +83,7 @@ public:
   [[nodiscard]] static RetailTriple readLiveTriple();
 
   // What one perspective transform did with the triple it found. Exhaustive on purpose: a boolean
-  // return made "already owned this frame's widened H" indistinguishable from "declined to widen", and
-  // those are the two numbers a reader most needs apart.
+  // return made "already owned this frame's widened H" indistinguishable from "declined to widen".
   enum class Outcome : uint8_t {
     Widened,         // a guest republication was widened
     AlreadyOwned,    // the registers already held this owner's published H; nothing to do
@@ -135,13 +113,9 @@ private:
 };
 
 // Arms the framework's per-Core GTE op observer for exactly one host field and disarms it on scope
-// exit.
-//
-// The two halves are bound to the same lifetime on purpose, and the reason is the same one
-// `FieldOverrideScope` gives: an observer left armed past the field would be answering for a field
-// the driver no longer owns, and one disarmed early would let a translated block reach the GTE
-// unwatched. A method pair the caller must remember is exactly what went wrong next door, so this
-// type exists instead of a pair.
+// exit. Both halves are bound to the same lifetime: an observer left armed past the field would
+// answer for a field the driver no longer owns, and one disarmed early would let a translated block
+// reach the GTE unwatched.
 class ScopedGteProjectionObservation final {
 public:
   ScopedGteProjectionObservation(Core &core, CtrGeometryProjectionOwner &owner);
