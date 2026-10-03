@@ -45,7 +45,7 @@ translation workflow.
   a forced `gp` mismatch produced 33/34. Binary/runtime investigation later grounded resident main
   `0x8003C58C`, state-3 frame owner `0x80035E70`, timing return `0x8003785C`, post-VSync suffix
   `0x80037880`, and frame-loop resume `0x8003CEB4`.
-- where: `game/core/native_ownership.h`, current native owner modules, and issues 0023 and 0024
+- where: `game/title/native_ownership.h`, current native owner modules, and issues 0023 and 0024
 - gap: Reproduce the complete observed boundary through the native/Lightrec product. New comparison
   evidence comes from Lightrec plus an independent emulator/hardware oracle or direct binary
   analysis.
@@ -82,7 +82,7 @@ translation workflow.
   view offsets `+0x20/+0x22/+0x18` and is called at `0x80024CCC`, `0x8003BD2C`, and
   `0x8003F5C0`. Ghidra independently identified `[0x80024C4C,0x80025138)` as a lens-flare
   primitive producer and `0x80025138` as its callback registrar.
-- where: `game/core/platform_hle_plan.*`, `game/video/projection_owner.*`, `game/video/geometry_projection_owner.*`,
+- where: `game/execution/platform_hle_plan.*`, `game/video/projection_owner.*`, `game/video/geometry_projection_owner.*`,
   and the recorded binary evidence in this entry
 - gap: Follow the view object to simulation-owned camera/transforms, and attribute the 2D layers
   that bound the drawn band (see below). The ten geometry submitters are attributed; their packet-build
@@ -147,7 +147,7 @@ translation workflow.
   DMA, frame, projection, and presentation owners are composed around them. An earlier observed run
   initialized the Vulkan GTE presenter and submitted a 960x720 image, but pixels and sustained cadence
   were not verified. The CdRead completion ordering measured at
-  `game/core/async_disc_owner.cpp` unblocked the state-3 loader.
+  `game/disc/async_disc_owner.cpp` unblocked the state-3 loader.
 - where: current frame/service owners; future camera, transform, render queue, and native renderer
   modules under `game/`
 - gap: CTR-JIT-02 must reproduce the preserved boundary through Lightrec. Then a live capture must
@@ -166,7 +166,7 @@ translation workflow.
   complete typed result through the production propagation seam. Exact BF0225/BF0226/BF0233 reads
   were authenticated against the verified archive and published after their retail callbacks in a
   current Lightrec run, which crossed the former `0x800B0B38` image-identity stop.
-- where: `external/psxport/runtime/cpu/`, `game/core/{ctr_runtime,frame_driver,native_ownership}.*`,
+- where: `external/psxport/runtime/cpu/`, `game/{entry/ctr_runtime,frame/frame_driver,title/native_ownership}.*`,
   `tests/ctr_execution_exit.cpp`
 - gap: The `0x8006A57C` `budget-exhausted` exit was diagnosed as a finite guest quantum (110,766
   cycles, 5,215 blocks, 56,904 instructions from the synchronized exit PC to a typed

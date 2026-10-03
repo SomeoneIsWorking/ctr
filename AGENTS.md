@@ -21,7 +21,7 @@ workspace rules in `../AGENTS.md` and framework-consumer rules in `external/psxp
 
 ## Explicit executor exits
 
-`game/core/frame_driver.cpp` uses a typed psxport executor-exit request: the native callback records its exact title
+`game/frame/frame_driver.cpp` uses a typed psxport executor-exit request: the native callback records its exact title
 continuation/state and asks the executor to stop; Lightrec returns normally at a safe dispatcher
 boundary; `CtrFrameDriver::stepFrame` handles the result, unwinds its scoped driver/override ownership,
 finishes one field/presentation fence, and updates counters. Unexpected normal return or an
