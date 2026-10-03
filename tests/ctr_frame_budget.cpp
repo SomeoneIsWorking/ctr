@@ -5,6 +5,7 @@
 #include "game.h"
 #include "image_identity.h"
 #include "lightrec_executor.h"
+#include "native_dispatch.h"
 #include "native_ownership.h"
 
 #include <cstdint>
@@ -80,7 +81,7 @@ int runFinite(Core &core, ctr::CtrFrameDriver &driver) {
 
 int runStalled(Core &core, ctr::CtrFrameDriver &driver, ctr::CtrRuntime &runtime) {
   core.r[31] = kEntry;
-  if (!runtime.installOverride(core, kEntry, "zero-cycle return-to-entry", returnToEntry)) {
+  if (!psx::cpu::tryInstallNativeOverride(core, kEntry, "zero-cycle return-to-entry", returnToEntry).has_value()) {
     std::puts("FAIL: zero-cycle host loop override was not installed");
     return 1;
   }

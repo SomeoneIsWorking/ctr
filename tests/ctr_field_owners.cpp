@@ -169,7 +169,7 @@ int main() {
         "the synthetic image does not own the field override addresses");
   if (image && diagnosticImage) {
     {
-      const ctr::FieldOverrideScope observing(runtime, core, bindings, true);
+      const ctr::FieldOverrideScope observing(core, bindings, true);
       check(observing.installedCount() == 2u, "an observing field did not install every row");
       check(core.nativeDispatcher().isInstalled({*image, ctr::native::kFrameTiming}),
             "the field's own override was not installed");
@@ -181,7 +181,7 @@ int main() {
           "an observing field's overrides outlived their scope");
 
     {
-      const ctr::FieldOverrideScope plain(runtime, core, bindings, false);
+      const ctr::FieldOverrideScope plain(core, bindings, false);
       check(plain.installedCount() == 1u, "a non-observing field did not drop exactly the debug-only row");
       check(core.nativeDispatcher().isInstalled({*image, ctr::native::kFrameTiming}),
             "a non-observing field dropped the field's own override instead of the debug-only row");
@@ -214,8 +214,10 @@ int main() {
   // Its decision: the retail callee runs to its own return, and execution resumes at the
   // continuation with ra and a0 exactly as the omitted call would have left them.
   installReturnSetting(core, ctr::native::kStartupGpuInit, kMarkS0Five);
-  check(runtime.installOverride(core, ctr::native::kAfterFirstStartupVSync, "vsync continuation", endTheField),
-        "could not install the VSync continuation owner");
+  check(
+      psx::cpu::tryInstallNativeOverride(core, ctr::native::kAfterFirstStartupVSync, "vsync continuation", endTheField)
+          .has_value(),
+      "could not install the VSync continuation owner");
   core.r[16] = 0u;
   core.r[31] = ctr::native::kStartupGpuInitReturn;
   continuationsReached = 0;
@@ -229,7 +231,7 @@ int main() {
   check(continuationsReached == 1u, "the VSync bridge did not resume exactly once at its continuation");
   check(pendingIsFrameBoundary(core), "the VSync bridge's continuation did not end the field");
   clearPending(core);
-  check(runtime.removeOverride(core, ctr::native::kAfterFirstStartupVSync), "could not remove the VSync owner");
+  check(psx::cpu::removeNativeOverride(core, ctr::native::kAfterFirstStartupVSync), "could not remove the VSync owner");
 
   // ------------------------------------------------------------ StartupResourceLoad
   // Its decision: the caller's fifth argument chooses the branch, and only the -1 branch is owned.
@@ -239,7 +241,9 @@ int main() {
   installReturnSetting(core, ctr::native::kBootResourceSetup, kSetV0One);
   installReturnSetting(core, ctr::native::kBootResourceCommit, kSetV0One);
   installReturnTo(core, ctr::native::kBootResourceWaitReturn, ctr::native::kBootResourceWaitFirstCaller);
-  check(runtime.installOverride(core, ctr::native::kBootResourceWaitFirstCaller, "load continuation", endTheField),
+  check(psx::cpu::tryInstallNativeOverride(
+            core, ctr::native::kBootResourceWaitFirstCaller, "load continuation", endTheField)
+            .has_value(),
         "could not install the resource-load continuation owner");
 
   core.r[29] = kStack;
@@ -275,7 +279,7 @@ int main() {
   check(pendingIsFrameBoundary(core), "the resource-load suffix did not end the field");
   check(!load.ownsSuffix(), "the resource-load suffix kept its continuation after running it");
   clearPending(core);
-  check(runtime.removeOverride(core, ctr::native::kBootResourceWaitFirstCaller),
+  check(psx::cpu::removeNativeOverride(core, ctr::native::kBootResourceWaitFirstCaller),
         "could not remove the resource-load continuation owner");
 
   // ------------------------------------------------------------ StartupResourcePump
@@ -285,7 +289,8 @@ int main() {
   field.beginField();
   check(!pump.isActive() && pump.phase() == ctr::StartupResourcePump::Phase::Inactive,
         "a fresh resource pump claimed a phase");
-  check(runtime.installOverride(core, ctr::native::kBootResourcePumpReturn, "pump continuation", endTheField),
+  check(psx::cpu::tryInstallNativeOverride(core, ctr::native::kBootResourcePumpReturn, "pump continuation", endTheField)
+            .has_value(),
         "could not install the resource-pump continuation owner");
   installReturnSetting(core, ctr::native::kBootResourcePumpBegin, kClearV0);
   installReturnSetting(core, ctr::native::kBootResourcePumpCommit, kClearV0);
@@ -317,7 +322,7 @@ int main() {
   check(continuationsReached == 1u, "the finished resource pump did not resume its continuation exactly once");
   check(pendingIsFrameBoundary(core), "the finished resource pump did not end the field");
   clearPending(core);
-  check(runtime.removeOverride(core, ctr::native::kBootResourcePumpReturn),
+  check(psx::cpu::removeNativeOverride(core, ctr::native::kBootResourcePumpReturn),
         "could not remove the resource-pump continuation owner");
 
   // ------------------------------------------------------------ StartupAudioWait
@@ -326,14 +331,15 @@ int main() {
   ctr::StartupAudioWait audio(runtime, dmaCallbacks, field);
   field.beginField();
   installReturnSetting(core, ctr::native::kStartupAudioService, kSetV0One);
-  check(runtime.installOverride(core, ctr::native::kStartupAudioLoop, "audio continuation", endTheField),
+  check(psx::cpu::tryInstallNativeOverride(core, ctr::native::kStartupAudioLoop, "audio continuation", endTheField)
+            .has_value(),
         "could not install the startup-audio continuation owner");
   // The loop's own body is retail. `callOriginalUntilExit` enters it with the owner's own override
   // SUPPRESSED, so the body has to reach the field boundary by itself; it reaches it the way retail
   // does, by calling the frame-timing owner.
   core.mem_w32(ctr::native::kStartupAudioLoop, jump(ctr::native::kFrameTiming));
   core.mem_w32(ctr::native::kStartupAudioLoop + 4u, 0u);
-  check(runtime.installOverride(core, ctr::native::kFrameTiming, "timing boundary", endTheField),
+  check(psx::cpu::tryInstallNativeOverride(core, ctr::native::kFrameTiming, "timing boundary", endTheField).has_value(),
         "could not install the frame-timing boundary owner");
   core.mem_w32(ctr::native::kStartupAudioWaitState, 1u);
 
@@ -366,8 +372,8 @@ int main() {
   check(continuationsReached == 1u, "the startup audio loop did not run its retail body through to a field boundary");
   check(pendingIsFrameBoundary(core), "the startup audio loop did not end the field");
   clearPending(core);
-  check(runtime.removeOverride(core, ctr::native::kFrameTiming), "could not remove the timing owner");
-  check(runtime.removeOverride(core, ctr::native::kStartupAudioLoop), "could not remove the audio owner");
+  check(psx::cpu::removeNativeOverride(core, ctr::native::kFrameTiming), "could not remove the timing owner");
+  check(psx::cpu::removeNativeOverride(core, ctr::native::kStartupAudioLoop), "could not remove the audio owner");
 
   std::printf("CTR field owners: %s\n", failures == 0 ? "PASS" : "FAIL");
   return failures == 0 ? 0 : 1;

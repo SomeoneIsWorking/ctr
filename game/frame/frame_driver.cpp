@@ -76,7 +76,7 @@ void CtrFrameDriver::stepFrame(Core &core, uint32_t frame) {
       {native::kProjectionProducer, "projection owner", onProjectionProducer},
       {native::kRenderListPublisher, "render-list observer", onRenderListPublisher, true},
   }};
-  const FieldOverrideScope overrides(runtime_, core, fieldOverrides, renderListDiagnostic_.enabled());
+  const FieldOverrideScope overrides(core, fieldOverrides, renderListDiagnostic_.enabled());
   field_.beginField();
 
   core.game->timing.logicFrame = frame;
@@ -153,16 +153,18 @@ void CtrFrameDriver::refuseUnfinishedField(Core &core,
   // number most is the one that dies.
   projection_.reportCensus();
   geometryProjection_.reportCensus();
+  core.guestCallCensus().log("after CTR field refusal");
   std::abort();
 }
 
 psx::cpu::ExecutionResult CtrFrameDriver::dispatchField(Core &core, uint32_t frame, uint32_t entry) {
   auto result = runtime_.dispatch(core, entry);
   while (result.reason == psx::cpu::ExecutionExitReason::BudgetExhausted) {
-    // An ordinary budget exit resumes at the same PC it stopped on and consumed cycles, so it is a
-    // finite quantity of one field rather than a new field. An exit at a different PC, or one that
-    // consumed nothing, is not that: it would spin the host with no progress, so it is refused here
-    // instead of being given a turn ceiling a long finite render list could trip.
+    // THIS IS NOT A GUEST CALL and does not enter `psx::cpu::ResumableGuestCall`: a field has no
+    // return boundary to latch into `r[31]`, and its terminal exit is the typed frame boundary rather
+    // than a guest return. What is borrowed from the shared contract is the progress rule: a budget
+    // exit that resumed at the same PC and consumed cycles is the same field's finite quantity, while
+    // one that consumed nothing made no progress and is refused here instead of being spun on.
     if (result.guestPc != core.pc || result.cycles == 0) {
       lucent::error("ctr-frame",
                     "frame {} cannot resume budget exit {} at 0x{:08X}: Core PC=0x{:08X}, cycles={}",

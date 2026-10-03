@@ -56,7 +56,7 @@ void DiscReadOwner::deliverPending(Core &core, const CtrRuntime &runtime) {
   const R3000 interrupted = static_cast<const R3000 &>(core);
   core.r[4] = native::kCdlComplete;
   core.r[5] = 0u; // libcd passes its result bytes; neither measured CTR callback reads them
-  runtime.dispatchToReturn(core, callback, "CTR libcd completion callback");
+  runtime.callToReturn(core, callback, "CTR libcd completion callback");
   overlayImages_.publishAfterCallback(core, imageCandidate);
   static_cast<R3000 &>(core) = interrupted;
   ++deliveredCallbacks_;

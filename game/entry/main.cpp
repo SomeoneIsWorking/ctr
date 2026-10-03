@@ -1,11 +1,11 @@
 // CTR's shipping process entry composes the title runtime with psxport's machine services.
+#include "c_subsys.h"
 #include "command_line.h"
 #include "core.h"
 #include "ctr_runtime.h"
-#include "frame_loop_shell.h"
 #include "game.h"
-#include "hw_bind.h"
 #include "lightrec_executor.h"
+#include "machine.h"
 #include "native_ownership.h"
 #include "psx_exe_image.h"
 #include "runtime_composition.h"
@@ -14,12 +14,6 @@
 #include <iostream>
 #include <lucent/log.h>
 #include <memory>
-
-extern "C" {
-void mdec_init();
-void spu_init();
-void watchdog_init();
-}
 
 namespace {
 
@@ -55,23 +49,13 @@ int main(int argc, char **argv) {
     return 2;
   }
 
-  gte_init();
-  mdec_init();
-  spu_init();
-  gte_bind(core);
-  core->rsub.projprim.bind(core);
-  spu_bind(core);
-  mdec_bind(core);
-  xa_bind(core);
-  game->spu_audio.init();
-  game->gpu.gpu_native_init();
-  game->pad.overridesInit();
+  psx::Machine machine(*game);
+  machine.bindDevices();
   ctr::installRuntimeOwners(*game);
+  machine.prepare();
 
   lucent::info("boot", "entering CTR at measured executable entry 0x{:08X}", ctr::native::kExecutableEntry);
-  FrameLoopShell shell;
-  shell.prepareProduct(*game);
-  for (uint32_t frame = 0;; ++frame) {
-    shell.step(*core, frame);
-  }
+  machine.attachControlChannel(0);
+  machine.run();
+  return 0;
 }

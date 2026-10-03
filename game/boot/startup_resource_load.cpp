@@ -134,7 +134,7 @@ void StartupResourceLoad::begin(Core &core) {
   if (core.r[20] == 0) {
     core.r[31] = kPreWaitHelperReturn;
     psx::cpu::accountGuestInstructions(core, kOmittedCallInstructionCount);
-    runtime_.dispatchToReturn(core, kPreWaitHelperCall, "CTR pre-resource-wait helper");
+    runtime_.callToReturn(core, kPreWaitHelperCall, "CTR pre-resource-wait helper");
   }
 
   core.r[2] = kFirstLoadedValue;
@@ -153,7 +153,7 @@ void StartupResourceLoad::begin(Core &core) {
   core.r[31] = kResourceSetupReturn;
   storeWord(kUnattributedZeroedWordSlot, 0u);
   psx::cpu::accountGuestInstructions(core, kSetupCallInstructionCount);
-  runtime_.dispatchToReturn(core, kResourceSetupCall, "CTR resource setup");
+  runtime_.callToReturn(core, kResourceSetupCall, "CTR resource setup");
 
   storeWord(kBlockWord3SetupResultSlot, core.r[2]);
   core.r[2] = core.mem_r32(core.r[19]);
@@ -162,7 +162,7 @@ void StartupResourceLoad::begin(Core &core) {
   core.r[31] = kResourceCommitReturn;
   storeWord(kBlockWord4Slot, core.r[2]);
   psx::cpu::accountGuestInstructions(core, kCommitCallInstructionCount);
-  runtime_.dispatchToReturn(core, kResourceCommitCall, "CTR resource commit");
+  runtime_.callToReturn(core, kResourceCommitCall, "CTR resource commit");
 
   // The omitted VSync(2).
   core.r[31] = native::kBootResourceWaitReturn;
@@ -183,17 +183,14 @@ void StartupResourceLoad::resume(Core &core) {
       caller != native::kBootResourceWaitRaceCaller) {
     refuseUnexpectedRetailReturn("state-zero resource wait", native::kBootResourceWaitFirstCaller, caller);
   }
-  if (!psx::cpu::requireGuestReturn(runtime_.dispatchToContinuation(core, suffix, caller),
-                                    "CTR resource-wait suffix")) {
-    std::abort();
-  }
+  runtime_.callToContinuation(core, suffix, caller, "CTR resource-wait suffix");
   if (caller != native::kBootResourceWaitRaceCaller) {
     runtime_.propagateFrameBoundary(core, runtime_.dispatch(core, caller), "CTR resource continuation");
     return;
   }
   // The race/menu caller is an interior suffix of 0x80033610: it restores that function's saved
   // frame and returns to its sole direct caller, so the resume is a second, nested hop.
-  const auto raceCaller = runtime_.dispatchToContinuation(core, caller, native::kBootResourceWaitRaceResume);
+  const auto raceCaller = runtime_.dispatchHop(core, caller, native::kBootResourceWaitRaceResume);
   if (!raceCaller.returned()) {
     runtime_.propagateFrameBoundary(core, raceCaller, "CTR race resource caller");
     return;

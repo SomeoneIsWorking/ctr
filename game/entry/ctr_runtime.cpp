@@ -7,6 +7,7 @@
 #include "lightrec_executor.h"
 #include "native_dispatch.h"
 #include "platform_hle_plan.h"
+#include "resumable_guest_call.h"
 
 #include <lucent/log.h>
 
@@ -77,41 +78,27 @@ bool CtrRuntime::guestVramIsPicture(const Game &) const {
   return false;
 }
 
-bool CtrRuntime::installOverride(Core &core,
-                                 uint32_t address,
-                                 std::string_view name,
-                                 psx::cpu::NativeFunction function) const {
-  const auto image = core.currentImageIdentity(address);
-  if (!image) {
-    lucent::error("ctr-runtime", "override '{}' has no unambiguous active image at 0x{:08X}", name, address);
-    return false;
-  }
-  return core.nativeDispatcher().install({{*image, address}, name, function});
-}
-
-bool CtrRuntime::removeOverride(Core &core, uint32_t address) const {
-  const auto image = core.currentImageIdentity(address);
-  return image && core.nativeDispatcher().remove({*image, address});
-}
-
 psx::cpu::ExecutionResult CtrRuntime::dispatch(Core &core, uint32_t address) const {
   return psx::cpu::dispatchGuestUntilExit(core, address, psx::cpu::ExecutionBudget::currentTurn(core));
 }
 
-void CtrRuntime::dispatchToReturn(Core &core, uint32_t address, std::string_view owner) const {
-  psx::cpu::dispatchGuestToReturn(core, address, psx::cpu::ExecutionBudget::currentTurn(core), owner);
+uint32_t CtrRuntime::callToContinuation(Core &core, uint32_t address, uint32_t returnPc, std::string_view owner) const {
+  // A state-zero body may legitimately outlive a display field, so the cap is stated by the CALLER
+  // (kUnboundedCallTurns) rather than guessed here.
+  return psx::cpu::callGuestToReturnResuming(
+      core, owner, address, returnPc, std::nullopt, psx::cpu::kUnboundedCallTurns);
 }
 
-psx::cpu::ExecutionResult
-CtrRuntime::dispatchToContinuation(Core &core, uint32_t address, uint32_t continuation) const {
-  return core.lightrecExecutor().executeFunction(address, continuation, psx::cpu::ExecutionBudget::currentTurn(core));
+psx::cpu::ExecutionResult CtrRuntime::dispatchHop(Core &core, uint32_t address, uint32_t returnPc) const {
+  return core.lightrecExecutor().executeFunction(address, returnPc, psx::cpu::ExecutionBudget::currentTurn(core));
+}
+
+void CtrRuntime::callToReturn(Core &core, uint32_t address, std::string_view owner) const {
+  psx::cpu::callGuestToReturnResuming(core, owner, address, core.r[31], std::nullopt, psx::cpu::kDefaultCallTurns);
 }
 
 void CtrRuntime::callOriginalToReturn(Core &core, uint32_t address, std::string_view owner) const {
-  if (!psx::cpu::requireGuestReturn(psx::cpu::callOriginal(core, address, psx::cpu::ExecutionBudget::currentTurn(core)),
-                                    owner)) {
-    std::abort();
-  }
+  psx::cpu::callOriginalResumingToReturn(core, owner, address, core.r[31], psx::cpu::kDefaultCallTurns);
 }
 
 void CtrRuntime::propagateFrameBoundary(Core &core,

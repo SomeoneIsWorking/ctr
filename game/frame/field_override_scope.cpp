@@ -2,22 +2,22 @@
 
 #include "core.h"
 #include "ctr_runtime.h"
+#include "native_dispatch.h"
 
 #include <cstdlib>
 #include <lucent/log.h>
 
 namespace ctr {
 
-FieldOverrideScope::FieldOverrideScope(CtrRuntime &runtime,
-                                       Core &core,
+FieldOverrideScope::FieldOverrideScope(Core &core,
                                        std::span<const FieldOverrideBinding> bindings,
                                        bool diagnosticsEnabled)
-    : runtime_(runtime), core_(core), bindings_(bindings), diagnosticsEnabled_(diagnosticsEnabled) {
+    : core_(core), bindings_(bindings), diagnosticsEnabled_(diagnosticsEnabled) {
   for (const FieldOverrideBinding &binding : bindings_) {
     if (!installs(binding)) {
       continue;
     }
-    if (!runtime_.installOverride(core_, binding.address, binding.name, binding.function)) {
+    if (!psx::cpu::tryInstallNativeOverride(core_, binding.address, binding.name, binding.function).has_value()) {
       lucent::error("ctr-frame", "could not install '{}' at 0x{:08X}", binding.name, binding.address);
       std::abort();
     }
@@ -33,7 +33,7 @@ FieldOverrideScope::~FieldOverrideScope() {
     if (!installs(binding)) {
       continue;
     }
-    if (!runtime_.removeOverride(core_, binding.address)) {
+    if (!psx::cpu::removeNativeOverride(core_, binding.address)) {
       lucent::error("ctr-frame", "could not remove '{}' at 0x{:08X}", binding.name, binding.address);
       std::abort();
     }

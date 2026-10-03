@@ -92,10 +92,7 @@ void FrameSuffix::resume(Core &core) {
     field_.request(core);
     return;
   }
-  if (!psx::cpu::requireGuestReturn(
-          runtime_.dispatchToContinuation(core, native::kFrameSuffix, native::kFrameLoopResume), "CTR frame suffix")) {
-    std::abort();
-  }
+  runtime_.callToContinuation(core, native::kFrameSuffix, native::kFrameLoopResume, "CTR frame suffix");
   if (core.r[31] != native::kFrameLoopResume) {
     refuseUnexpectedRetailReturn("frame suffix", native::kFrameLoopResume, core.r[31]);
   }

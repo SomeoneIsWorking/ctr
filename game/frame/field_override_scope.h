@@ -10,8 +10,6 @@ class Core;
 
 namespace ctr {
 
-class CtrRuntime;
-
 // One guest address the frame driver takes ownership of for the length of a field, with the name it
 // is installed under. The name reaches the framework's override lookup diagnostics, so it is the
 // first thing a reader of an execution trace sees for that address.
@@ -34,10 +32,7 @@ struct FieldOverrideBinding {
 // running with the wrong set of overrides is not a degraded field, it is a different program.
 class FieldOverrideScope final {
 public:
-  FieldOverrideScope(CtrRuntime &runtime,
-                     Core &core,
-                     std::span<const FieldOverrideBinding> bindings,
-                     bool diagnosticsEnabled);
+  FieldOverrideScope(Core &core, std::span<const FieldOverrideBinding> bindings, bool diagnosticsEnabled);
   ~FieldOverrideScope();
 
   FieldOverrideScope(const FieldOverrideScope &) = delete;
@@ -51,7 +46,6 @@ private:
   // The one rule both halves of the scope use to decide whether a row belongs to this field.
   [[nodiscard]] bool installs(const FieldOverrideBinding &binding) const;
 
-  CtrRuntime &runtime_;
   Core &core_;
   std::span<const FieldOverrideBinding> bindings_;
   std::size_t installedCount_ = 0;

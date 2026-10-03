@@ -36,11 +36,17 @@ public:
   const GuestWidescreenProjection *guestWidescreenProjection() const override;
   [[nodiscard]] CtrWidescreen &widescreen();
 
-  bool installOverride(Core &core, uint32_t address, std::string_view name, psx::cpu::NativeFunction function) const;
-  bool removeOverride(Core &core, uint32_t address) const;
+  // The field turn itself: run guest code until it is not still this field's finite quantity. It is
+  // NOT a guest call — it has no return boundary and its terminal exit is the typed frame boundary —
+  // so it does not enter `psx::cpu::ResumableGuestCall`.
   psx::cpu::ExecutionResult dispatch(Core &core, uint32_t address) const;
-  void dispatchToReturn(Core &core, uint32_t address, std::string_view owner) const;
-  psx::cpu::ExecutionResult dispatchToContinuation(Core &core, uint32_t address, uint32_t continuation) const;
+  // One guest call bounded by `returnPc`, resumable across host turns, capped by `turnCap`.
+  uint32_t callToContinuation(Core &core, uint32_t address, uint32_t returnPc, std::string_view owner) const;
+  // The ONE nested hop whose terminal exit may be a typed frame boundary rather than a return, so it
+  // keeps the exit in the caller's hands instead of being wrapped in a call-to-return (which refuses
+  // anything but a guest return). Everything else on that path is a shared call.
+  psx::cpu::ExecutionResult dispatchHop(Core &core, uint32_t address, uint32_t returnPc) const;
+  void callToReturn(Core &core, uint32_t address, std::string_view owner) const;
   void callOriginalToReturn(Core &core, uint32_t address, std::string_view owner) const;
   void propagateFrameBoundary(Core &core, const psx::cpu::ExecutionResult &result, std::string_view owner) const;
 

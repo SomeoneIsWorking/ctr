@@ -77,7 +77,7 @@ void FrameCallbackOwner::dispatchPreservingContext(Core &core,
   const R3000 saved = static_cast<R3000 &>(core);
   {
     IrqDeliveryGuard delivering(core);
-    runtime.dispatchToReturn(core, callback, kind);
+    runtime.callToReturn(core, callback, kind);
   }
   static_cast<R3000 &>(core) = saved;
 }

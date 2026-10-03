@@ -77,7 +77,7 @@ void StartupResourcePump::begin(Core &core) {
   core.r[31] = kBeginReturn;
   core.r[5] = frame + kBeginBlockSlot;
   psx::cpu::accountGuestInstructions(core, kBeginCallInstructionCount);
-  runtime_.dispatchToReturn(core, native::kBootResourcePumpBegin, "CTR resource-pump begin");
+  runtime_.callToReturn(core, native::kBootResourcePumpBegin, "CTR resource-pump begin");
   phase_ = Phase::ResourcePoll;
   resume(core);
 }
@@ -110,7 +110,7 @@ void StartupResourcePump::pollResources(Core &core) {
   }
   core.r[31] = kResourcePollReturn;
   psx::cpu::accountGuestInstructions(core, kOmittedCallInstructionCount);
-  runtime_.dispatchToReturn(core, native::kBootResourcePumpPoll, "CTR resource-pump poll");
+  runtime_.callToReturn(core, native::kBootResourcePumpPoll, "CTR resource-pump poll");
   psx::cpu::accountGuestInstructions(core, kOmittedCallInstructionCount);
   if (core.r[2] == 0u) {
     field_.request(core);
@@ -119,14 +119,14 @@ void StartupResourcePump::pollResources(Core &core) {
   core.r[31] = kCommitReturn;
   core.r[4] = kUnattributedCommitFirstArgument;
   psx::cpu::accountGuestInstructions(core, kOmittedCallInstructionCount);
-  runtime_.dispatchToReturn(core, native::kBootResourcePumpCommit, "CTR resource-pump commit");
+  runtime_.callToReturn(core, native::kBootResourcePumpCommit, "CTR resource-pump commit");
   phase_ = Phase::CommitPoll;
 }
 
 void StartupResourcePump::pollCommit(Core &core) {
   core.r[31] = kCommitPollReturn;
   psx::cpu::accountGuestInstructions(core, kOmittedCallInstructionCount);
-  runtime_.dispatchToReturn(core, native::kBootResourcePumpCommitPoll, "CTR resource-pump commit poll");
+  runtime_.callToReturn(core, native::kBootResourcePumpCommitPoll, "CTR resource-pump commit poll");
   psx::cpu::accountGuestInstructions(core, kOmittedCallInstructionCount);
 }
 
