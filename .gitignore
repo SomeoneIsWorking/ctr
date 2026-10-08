@@ -1,0 +1,14 @@
+build/
+scratch/
+__pycache__/
+.env
+*.bin
+*.chd
+*.cue
+*.iso
+*.img
+*.pbp
+
+# The framework. Not tracked: either a relative symlink to the workspace's live psxport checkout
+# (local) or a clone of its main (fresh machine). Managed by tools/psxport_fetch.py.
+/external/psxport
