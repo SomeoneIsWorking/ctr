@@ -15,9 +15,9 @@ snapshot taken at batch start, so a textured draw reading written tiles got the 
 got its cached or in-draw one. With the cache bypassed in the offline replay the device still differed from the record
 (self-overlap), so the order is intrinsic, not a missing cache model alone.
 
-Fix at the owner (`gpu/gp0_record_tap.cpp: settleLast`, `gpu/texture_feedback.*`): the tap tracks which 64x32 VRAM tiles
-draws and fills wrote since the last cache invalidation (GP0 01, copy, upload, read, soft reset, and `SetTPage` changes
-of page, 4bpp-or-not or TexDisable, seen on E1 and on every textured polygon's texpage word); a textured primitive whose texture page overlaps a written tile
+Fix at the owner (`gpu/gp0_record_tap.cpp: settleLast`, `gpu/texture_feedback.*`): the tap tracks which VRAM pixels
+draws (their bounds) and fills wrote since the last cache invalidation (GP0 01, copy, upload, read, soft reset, and `SetTPage` changes
+of page, 4bpp-or-not or TexDisable, seen on E1 and on every textured polygon's texpage word); a textured primitive whose sampled texels overlap a written pixel
 is recorded as a `VramUpload` of the device's pixels over the primitive's draw bounds, so the replay ends on the device's
 picture. Cost: such a primitive is no longer a primitive (not interpolated, not widened, upload-resolution at ires > 1).
 
@@ -33,7 +33,9 @@ Tests added for the invalidation points: `a_texpage_change_invalidates_the_cache
 Primitives resolved to device pixels (CTR route, fps60 off, 21k frames): 355,020 without texpage invalidation, 97,443
 with it. Spyro 2 route: 0 either way.
 
-Open: a resolved primitive does not widen or interpolate, and 97k are still resolved on the CTR route (all after seq 12,000,
-the races). `TextureFeedback::overlapsPage` tests the primitive's whole texture page; narrowing it to the UV rectangle the
-primitive samples (through the texture window) is the next step, then tile size. A draw area wrapped past row 511 is not
-tracked.
+Narrowed from 64x32 tiles over the whole texture page to written pixels against the texels the primitive samples (the
+whole-page test turned an ordinary sprite in `psxport/tests/test_gp0_primitive_decode.cpp: a_textured_sprite` into an
+upload). Same route afterwards: fps60 off 21,554 and fps60 on 21,404 recordcheck lines, 0 mismatched.
+
+Open: a resolved primitive does not widen or interpolate; how many the narrowed model still resolves on the CTR route is
+not measured. A draw area wrapped past row 511 is not tracked.
