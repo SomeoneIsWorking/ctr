@@ -18,7 +18,7 @@ PlayStation emulator; every row below is a user-visible delta from it.
 | S009 | Native/Lightrec product reaches the preserved frontier without an interpreter mode or generated code | verified | MEASURED 2026-10-08: with BF0229/BF0230/BF0231 measured and the issue 0033 fixes, boot loads every overlay, presents frames (`frame` > 0) and reaches the intro, demo races and main menu. |
 | S010 | Frame/service suspension uses explicit typed executor exits | partial | `frame_driver.cpp` requests `FrameBoundary` and returns normally; asset-free focused coverage preserves reason, PC, cycles, detail, and refuses a zero-cycle host loop; real-game nested and repeated exits beyond the `0x8006AA80` fault are unproven |
 | S011 | Load operations complete without loading-only waits or presentation | missing | no load issuer, wait, or presentation has been censused for CTR; logos still need a cancellation route |
-| S012 | CTR picture is the guest's GP0 work replayed on the Record path, oracle-exact at 4:3 | partial | MEASURED 2026-10-08, 1x 4:3 through intro, demo races and menu: 21,041 present lines at fps60 off with 170 mismatched, 19,490 at fps60 on with 170 mismatched (same seqs). Mismatches are +-1 per channel in 12-130 pixel clusters from seq 11086, 3D frames only; cause not pinned (issue 0033). Shots in `scratch/record/`. |
+| S012 | CTR picture is the guest's GP0 work replayed on the Record path, oracle-exact at 4:3 | partial | MEASURED 2026-10-08, 1x 4:3 through intro, demo races and menu: 21,202 present lines at fps60 off and 27,549 at fps60 on, 0 mismatched in both. The 170 earlier mismatches were textured draws sampling VRAM written since gpu.c's texture cache was invalidated (screen-feedback effects); the tap now records such a primitive as the device's pixels (issue 0034). Shots in `scratch/record/`. |
 
 Current focus: S009 — MEASURED 2026-10-04: `0x200` is I_STAT bit 9, the SPU line (`IRQ_BIT_SPU`), not
 the DMA line (bit 3), and "no SysEnq element claimed it" was a diagnostic, not the stall: the guest's
@@ -28,7 +28,7 @@ one element declines it and its custom exception exit services it (the guest ack
 slot `0x8008C41C` (`0x8001C7A4`, code 2) instead of its DATA-READY slot `0x8008C420` (`0x8001C7FC`,
 code 1), and the controller skipped the XA audio sectors. The slot declaration is fixed. The wait on `[0x8008D708]` is fixed (issue 0033: a filter-rejected XA sector is dropped as on Beetle, the
 CD callback runs in the BIOS handler context, the SPU DMA callback is registered). The overlays are measured and CTR now presents.
-Current focus: S012's 170 recordcheck mismatch lines (issue 0033).
+Current focus: S012 beyond 1x 4:3.
 
 Hosted CI is asset-free: the Linux x86_64 job builds the native/Lightrec product, runs its focused
 tests, and inspects the linked executable for forbidden static or standalone-interpreter ownership.
