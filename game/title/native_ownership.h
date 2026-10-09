@@ -80,6 +80,8 @@ inline constexpr uint32_t kProjectionReturnOverlay = 0x8003F5C8u;
 
 inline constexpr uint32_t kVSync = 0x80075350u;
 inline constexpr uint32_t kVSyncEnd = 0x80075560u;
+// libetc's vblank count, returned by VSync(-1) and advanced by the handler at 0x8007C8D8.
+inline constexpr uint32_t kVSyncQueryCounter = 0x8008C754u;
 // libgpu's DMA-queue timeout pair uses VSync(-1) as a field clock; the title binding keeps the two timeout globals.
 inline constexpr uint32_t kGpuTimeoutArm = 0x800750A8u;
 inline constexpr uint32_t kGpuTimeoutCheck = 0x800750DCu;

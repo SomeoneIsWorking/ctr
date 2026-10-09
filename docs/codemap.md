@@ -25,6 +25,7 @@ introduced where a concept needs one.
 | `game/execution/` | `ctr` | The boundary where the guest's own calls enter the host: the SPU DMA completion and the platform HLE plan (libgte, libcd, libgpu addresses and bindings). |
 | `game/title/` | `ctr::native` | The measured `SCUS_944.26` addresses and game-state offsets every owner is keyed by. Facts only. |
 | `game/video/` | `ctr` | Presentation-facing owners: the projection publication, the widescreen decision, and the presentation fence. |
+| `replays/` | — | Phase-keyed pad recordings replayed with `PSXPORT_PAD_REPLAY`; `replays/README.md` says what each one reaches. |
 | `tests/` | — | Focused tests that drive the production seams above; they never restate a rule the owner implements. |
 | `tools/` | — | Provisioning and launcher Python. No C++ owner lives here. |
 | `titles/ctr/` | — | Measured title facts (revision, executable facts) and generated non-executable image identity. |
@@ -59,6 +60,7 @@ introduced where a concept needs one.
 | `ctr::SceneCut`, `ctr::SceneIdentity` (`game/video/scene_cut.*`) | The cut source for the Record path: the guest scene identity (main-loop state `[gp+0x188]`, level id and loading bit of the tracker `[gp+0x340]`) and whether it changed since the previous committed field. `CtrRuntime::sealedFrameIsCut` answers from it. |
 | `ctr::platformHlePlan` (`game/execution/platform_hle_plan.*`) | The authenticated libgte/libcd/libgpu addresses and windows, plus the six bindings installed for a direct runtime. |
 | `ctr::runVsyncBridge`, `ctr::VsyncBridge`, `ctr::refuseUnexpectedRetailReturn` (`game/frame/vsync_bridge.*`, `retail_return.*`) | One extracted VSync callsite as data, the bridge that omits only that call, and the shared refusal for a return address the title has no identity for. |
+| `ctr::native::kVSyncQueryCounter` (`game/title/native_ownership.h`, declared by `platformHlePlan`) | libetc's vblank count at `0x8008C754`, the word framework `PlatformHle::vsync` answers `VSync(-1)` from; `tests/ctr_platform_hle_plan.cpp` binds the plan and asks. |
 | `ctr::native` constants (`game/title/native_ownership.h`) | Every measured guest address and game-state offset the owners above are keyed by. Facts only; no behaviour. |
 
 ## Who owns it

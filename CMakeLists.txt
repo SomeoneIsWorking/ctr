@@ -126,6 +126,12 @@ if(BUILD_TESTING)
   add_test(NAME ctr_field_owners COMMAND ctr_field_owners_test)
   set_tests_properties(ctr_field_owners PROPERTIES TIMEOUT 20)
 
+  add_executable(ctr_platform_hle_plan_test tests/ctr_platform_hle_plan.cpp)
+  target_compile_features(ctr_platform_hle_plan_test PRIVATE cxx_std_20)
+  target_link_libraries(ctr_platform_hle_plan_test PRIVATE ctr_runtime)
+  add_test(NAME ctr_platform_hle_plan COMMAND ctr_platform_hle_plan_test)
+  set_tests_properties(ctr_platform_hle_plan PROPERTIES TIMEOUT 20)
+
   add_executable(ctr_frame_budget_test tests/ctr_frame_budget.cpp)
   target_compile_features(ctr_frame_budget_test PRIVATE cxx_std_20)
   target_link_libraries(ctr_frame_budget_test PRIVATE ctr_runtime)

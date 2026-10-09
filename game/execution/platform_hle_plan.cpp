@@ -71,6 +71,7 @@ const PlatformHlePlan kPlatformHlePlan{
     .setGeomOffset = native::kSetGeomOffset,
     .setGeomScreen = native::kSetGeomScreen,
     .vsyncAddress = native::kVSync,
+    .vsyncQueryCounterAddress = native::kVSyncQueryCounter,
     .bindings = {{native::kGpuTimeoutArm, gpuTimeoutArm},
                  {native::kGpuTimeoutCheck, gpuTimeoutCheck},
                  {native::kCdRead, cdReadWithCompletionCallback},
