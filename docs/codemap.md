@@ -20,7 +20,7 @@ introduced where a concept needs one.
 |---|---|---|
 | `game/entry/` | `ctr` | The process entry point, its argument policy, and the title's `GameRuntime`: composition only. |
 | `game/boot/` | `ctr` | The state-zero owners a boot cannot finish without: the startup resource load, its poll pump, and the post-archive XA wait. |
-| `game/frame/` | `ctr` | The frame turn itself and the field-exit protocol around it: the driver, the field boundary, the per-field override window, the vblank/DrawSync callbacks, the retail frame suffix, and the VSync bridges. |
+| `game/frame/` | `ctr` | The frame turn itself and the field-exit protocol around it: the driver, the field boundary, the per-field override window, the DrawSync callback and the field-seam vblank poll, the retail frame suffix, and the VSync bridges. |
 | `game/disc/` | `ctr` | What the guest is blocked on when the host completes a disc transfer: the owed libcd completion and the BIGFILE image publication. |
 | `game/execution/` | `ctr` | The boundary where the guest's own calls enter the host: the SPU DMA completion and the platform HLE plan (libgte, libcd, libgpu addresses and bindings). |
 | `game/title/` | `ctr::native` | The measured `SCUS_944.26` addresses and game-state offsets every owner is keyed by. Facts only. |
@@ -49,7 +49,7 @@ introduced where a concept needs one.
 | `ctr::StartupResourcePump` (`game/boot/startup_resource_pump.*`) | The phase of the two non-returning `0x8002DD24` polls, yielding one host field per false poll and delivering owed SPU work before the generic IRQ path. |
 | `ctr::StartupAudioWait` (`game/boot/startup_audio_wait.*`) | The post-archive XA wait at `0x8008D708`: the retail service call, one host audio field per wait, and the continuation it resumes. |
 | `ctr::FrameSuffix` / `ctr::FrameSuffixWait` / `ctr::frameSuffixStillWaiting` (`game/frame/frame_suffix.*`) | The three guest words the retail suffix waits on, the pure predicate over them, and when the suffix may run and end the field. |
-| `ctr::FrameCallbackOwner` (`game/frame/frame_callback_owner.*`) | The retail callbacks the direct runtime does not generate: vblank registration and per-field DrawSync/VSync delivery, each preserving the interrupted register context. |
+| `ctr::FrameCallbackOwner` (`game/frame/frame_callback_owner.*`) | What the field seam owes the guest: the DrawSync callback (preserving the interrupted context) and a poll of the latched vblank edge (`Hle::irqPoll` *(framework)*), so libetc's own ISR runs the registered VSync callback once per field even when the suffix wait runs no guest code. `tests/ctr_frame_callback_owner.cpp`. |
 | `ctr::SpuDmaCallbackRegistration` (`game/execution/spu_dma_callback_registration.*`) | Runs the retail DMACallback at `0x8008044C` and publishes the guest's SPU channel-4 callback to the framework `DmaCallbackRegistry`, so the shared IRQ path delivers the completion. |
 | `ctr::DiscReadOwner`, `ctr::discReadOwner`, `ctr::cdReadWithCompletionCallback` (`game/disc/async_disc_owner.*`) | The owed libcd completion: when it is delivered, and the retail callback that owns its effects. `cdReadWithCompletionCallback` is the PlatformHle binding for the stock `CdRead` leaf. |
 | `ctr::OverlayImageOwner`, `ctr::CompletedDiscRead` (`game/disc/overlay_image_owner.*`) | A BIGFILE transfer as an image candidate, and the publication of its relocated RAM extent after the retail callback returns. |

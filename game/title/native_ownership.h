@@ -60,7 +60,6 @@ inline constexpr uint32_t kFrameTimingQueryReturn = 0x8004B438u;
 inline constexpr uint32_t kFrameSuffix = 0x80037880u;
 inline constexpr uint32_t kFrameLoopResume = 0x8003CEB4u;
 // The suffix waits on the DrawSync callback byte and the VSync callback's two-field countdown.
-inline constexpr uint32_t kVblankCallbackInstall = 0x80077254u;
 inline constexpr uint32_t kDrawSyncCallbackSlot = 0x8008AD8Cu;
 inline constexpr uint32_t kGameStateGpOffset = 832u;
 inline constexpr uint32_t kDrawSyncPendingOffset = 7472u;

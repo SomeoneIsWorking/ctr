@@ -53,14 +53,13 @@ void CtrFrameDriver::stepFrame(Core &core, uint32_t frame) {
   // Rebound every field so a null owner is refused instead of silently widening nothing.
   geometryProjection_.setProjectionOwner(&projection_);
 
-  const std::array<FieldOverrideBinding, 10> fieldOverrides{{
+  const std::array<FieldOverrideBinding, 9> fieldOverrides{{
       {native::kStartupGpuInit, "startup GPU VSync owner", onStartupGpuVSync},
       {native::kStartupDisplayInit, "startup display VSync owner", onStartupDisplayVSync},
       {native::kBootResourceWait, "boot resource wait owner", onBootResourceWait},
       {native::kBootResourcePump, "boot resource pump owner", onBootResourcePump},
       {native::kStartupAudioService, "startup audio wait owner", onStartupAudioService},
       {native::kShutdownDisplay, "shutdown VSync owner", onShutdownVSync},
-      {native::kVblankCallbackInstall, "vblank callback owner", onVblankCallback},
       {native::kFrameTiming, "frame timing owner", onFrameTiming},
       {native::kProjectionProducer, "projection owner", onProjectionProducer},
       {native::kDmaCallback, "DMA callback registration owner", onDmaCallbackRegistration},
@@ -221,11 +220,6 @@ void CtrFrameDriver::onStartupAudioService(Core *core) {
 
 void CtrFrameDriver::onDmaCallbackRegistration(Core *core) {
   ctrFrameDriver(*core).spuDmaRegistration_.service(*core);
-}
-
-void CtrFrameDriver::onVblankCallback(Core *core) {
-  CtrFrameDriver &driver = ctrFrameDriver(*core);
-  driver.frameCallbacks_.observeVblankRegistration(*core, driver.runtime_);
 }
 
 void CtrFrameDriver::onFrameTiming(Core *core) {

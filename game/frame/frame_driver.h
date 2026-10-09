@@ -44,7 +44,6 @@ private:
   static void onBootResourcePump(Core *core);
   static void onStartupAudioService(Core *core);
   static void onShutdownVSync(Core *core);
-  static void onVblankCallback(Core *core);
   static void onFrameTiming(Core *core);
   static void onProjectionProducer(Core *core);
   static void onDmaCallbackRegistration(Core *core);

@@ -35,13 +35,6 @@ private:
 
 } // namespace
 
-void FrameCallbackOwner::observeVblankRegistration(Core &core, const CtrRuntime &runtime) {
-  const uint32_t callback = core.r[4];
-  runtime.callOriginalToReturn(core, native::kVblankCallbackInstall, "CTR VSyncCallback registration");
-  vblankCallback_ = callback;
-  lucent::debug("ctr-field", "VSyncCallback(0x{:08X}) registered for native field delivery", callback);
-}
-
 void FrameCallbackOwner::deliverField(Core &core, const CtrRuntime &runtime) const {
   if (!core.game) {
     lucent::error("ctr-field", "native field callback delivery requires a bound Game");
@@ -57,7 +50,10 @@ void FrameCallbackOwner::deliverField(Core &core, const CtrRuntime &runtime) con
   if (gameState != 0u && core.mem_r8(gameState + native::kDrawSyncPendingOffset) == 1u) {
     dispatchPreservingContext(core, runtime, core.mem_r32(native::kDrawSyncCallbackSlot), "DrawSyncCallback");
   }
-  dispatchPreservingContext(core, runtime, vblankCallback_, "VSyncCallback");
+  // A suffix wait runs no guest code, so no function entry polls the vblank edge for libetc's ISR.
+  if ((core.pending_work & Core::PW_IRQ) != 0u) {
+    core.game->hle.irqPoll(&core);
+  }
 }
 
 void FrameCallbackOwner::dispatchPreservingContext(Core &core,

@@ -242,9 +242,8 @@ translation workflow.
 - evidence: 2026-10-09: title Start, Arcade, Single, 1P, Easy, Crash, Crash Cove reaches a race and the kart moves under pad
   input. Driver array at `gGT+0x24EC` (`gGT = 0x80096B20`, the pointer at `gp+0x340`); `driver+0x2D4/0x2D8/0x2DC` are x/y/z in
   1/256 units. The race clock `gGT+0x1D10` is in 1/960 s and `gGT+0x1D04` is the frame's dt. `FUN_80034D54` derives dt from
-  `FUN_8004B41C` (root counter 1 through `FUN_80034AA4`, `gp+0xA1C`); the retail VSync callback `FUN_80034AA4` also runs from libetc's ISR
-  `FUN_8007C8D8`, which counts at `0x8008C754`. Issues 0035, 0036.
+  `FUN_8004B41C` (root counter 1 through `FUN_80034AA4`, `gp+0xA1C`); the retail VSync callback `FUN_80034AA4` is the vblank callback libetc's ISR
+  `FUN_8007C8D8` runs (it counts at `0x8008C754`); `[gp+0x348]` is its two-field countdown. Issues 0035, 0036, 0037.
 - where: `replays/gameplay/arcade-crash-cove-drive.pad`, `game/execution/platform_hle_plan.cpp`, psxport `Timing::hSyncCounterWrite`
-- gap: the callback is delivered twice per field (issue 0037), so a game frame is one field at dt 16 where retail is two fields at dt
-  32; audio, a lap, and a deterministic-boundary comparison against an independent oracle are open.
+- gap: audio, a lap, and a deterministic-boundary comparison against an independent oracle are open.
 - notes: Boot, an FMV, a submitted frame, or a fallback-dominated run does not satisfy this gate.
