@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
   machine.prepare();
 
   lucent::info("boot", "entering CTR at measured executable entry 0x{:08X}", ctr::native::kExecutableEntry);
-  machine.attachControlChannel(0);
+  machine.attachControlChannel();
   machine.run();
   return 0;
 }
