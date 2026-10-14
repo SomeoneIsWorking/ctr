@@ -1,12 +1,12 @@
 #include "runtime_composition.h"
 
-#include "game.h"
+#include "machine.h"
+#include "title_identity.h"
 
 namespace ctr {
 
 void installRuntimeOwners(Game &game) {
-  // Direct runtimes have no GameConfig, so the disc backend gets CTR's media key here.
-  game.disc.env_key = "PSXPORT_CTR_DISC";
+  psx::Machine{game}.insertDisc(kTitleIdentity);
 }
 
 } // namespace ctr

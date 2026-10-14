@@ -8,16 +8,13 @@
 #include "native_ownership.h"
 #include "psx_exe_image.h"
 #include "runtime_composition.h"
+#include "title_identity.h"
 
 #include <filesystem>
 #include <iostream>
 #include <lucent/log.h>
 #include <memory>
-
-namespace {
-
-constexpr const char *kDefaultExecutable = "scratch/raw/ctr/SCUS_944.26";
-} // namespace
+#include <string>
 
 int main(int argc, char **argv) {
   const ctr::CommandLineAction action = ctr::parseCommandLine(argc, argv);
@@ -30,7 +27,7 @@ int main(int argc, char **argv) {
     ctr::printUsage(std::cout, argv[0]);
     return 2;
   }
-  const char *executable = kDefaultExecutable;
+  const std::string executable = ctr::kTitleIdentity.defaultExecutable(ctr::kProvisioningRoot).string();
   if (!std::filesystem::is_regular_file(executable)) {
     lucent::error("boot", "{} is absent; provision the verified CTR USA executable first", executable);
     return 2;
@@ -42,7 +39,7 @@ int main(int argc, char **argv) {
   auto game = std::make_unique<Game>();
   Core *core = &game->core;
   watchdog_init();
-  load_exe(executable, core);
+  load_exe(executable.c_str(), core);
   if (!core->lightrecExecutor().available()) {
     lucent::error("boot", "psxport was built without its Lightrec dynarec backend");
     return 2;

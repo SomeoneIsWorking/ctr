@@ -35,6 +35,8 @@ introduced where a concept needs one.
 | Class / function | Responsibility |
 |---|---|
 | `main` (`main.cpp`) | Parse arguments, refuse a missing executable, construct `Game`, install the title's owners, then step fields forever. It composes; it implements nothing. |
+| `ctr::kTitleIdentity`, `ctr::kProvisioningRoot` (`title_identity.h`) | The executable's serial, its disc key and disc path, and where it is provisioned. |
+| `ctr::installRuntimeOwners` (`runtime_composition.*`) | Hands the title's disc to the framework (`psx::Machine::insertDisc`). |
 | `ctr::CommandLineAction`, `ctr::parseCommandLine`, `ctr::printUsage` (`command_line.*`) | The argument policy: run, `--help`, or a named refusal. |
 | `ctr::CtrRuntime` (`ctr_runtime.*`) | The title's `GameRuntime` (default render path `Record`, no producers): identity facts, platform HLE facts, override install/remove, and every guest dispatch (one field, one continuation, one original call). It dispatches; it does not decide what runs next. |
 
