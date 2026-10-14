@@ -16,9 +16,9 @@ same dynarec-first execution path and the same typed exit/fallback accounting as
 parity is not yet proven, this remains a blocked milestone with explicit criteria before release.
 
 psxport owns the per-`Core` Lightrec instance, architectural-state synchronization, device/HLE
-callbacks, image-aware override table, original calls, bounded exits, and invalidation. CTR owns its
-identity, overlay policy, native CD/DMA/frame/projection/presentation owners, title continuations,
-and product composition. Lightrec owns its code cache and executable memory.
+callbacks, image-aware override table, original calls, bounded exits, invalidation, and the product
+loop (`ProductHost`, `TitleSession`). CTR owns its identity, overlay policy, native
+CD/DMA/frame/projection/presentation owners and title continuations. Lightrec owns its code cache and executable memory.
 
 ## Typed executor exit
 

@@ -101,8 +101,10 @@ int main() {
   core.r[31] = ctr::native::kFrameTimingReturn;
   auto &driver = static_cast<ctr::CtrFrameDriver &>(*game->frameDriver);
 
+  // TitleSession numbers its fields from 1; the driver keys nothing on the base.
+  constexpr std::uint32_t kFirstHostFrame = 1u;
   for (std::uint32_t field = 0; field != 3u; ++field) {
-    driver.stepFrame(core, field);
+    driver.stepFrame(core, kFirstHostFrame + field);
     check(driver.completedFrames() == field + 1u, "one field did not complete exactly once");
     check(driver.presentation().completedFences() == field + 1u, "presentation fence diverged from field count");
     check(core.r[23] == field, "driver skipped or executed the next-field continuation early");
@@ -119,14 +121,14 @@ int main() {
   }
 
   installAudioWaitProgram(core);
-  driver.stepFrame(core, 3u);
+  driver.stepFrame(core, kFirstHostFrame + 3u);
   std::printf("Audio field 3: service_calls=%u wait_state=%u pc=%08x\n",
               core.r[21],
               core.mem_r32(ctr::native::kStartupAudioWaitState),
               core.pc);
   check(core.r[21] == 1u && core.mem_r32(ctr::native::kStartupAudioWaitState) == 1u,
         "audio service did not yield after its first original call");
-  driver.stepFrame(core, 4u);
+  driver.stepFrame(core, kFirstHostFrame + 4u);
   std::printf("Audio field 4: service_calls=%u wait_state=%u pc=%08x\n",
               core.r[21],
               core.mem_r32(ctr::native::kStartupAudioWaitState),

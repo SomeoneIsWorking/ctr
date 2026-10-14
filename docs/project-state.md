@@ -47,9 +47,9 @@ Not covered: `game/video/projection_owner.cpp` refuses a publication disagreemen
 `std::abort()`, and no portable death-test facility exists, so that branch has no automated
 coverage. The offsets the owner reads are pinned against its own source, not against the retail
 image.
-Frame boot and control channel: `verified` against psxport `897726f2` — `game/entry/main.cpp` is
-now six steps on `psx::Machine` (`bindDevices`, `prepare`, `attachControlChannel`, `run`), override
-install and removal both go through `psx::cpu::{tryInstallNativeOverride,removeNativeOverride}`, and
-the title owns no `(image identity, address)` keying. Headless boot log is unchanged except for the
-framework's own control-channel and loop-entry lines and the reordering of the platform-HLE
-registration log, which `Machine::bindDevices` performs before the entry line.
+Frame boot and control channel: `verified` 2026-10-14 — the product is a one-title catalog
+(`game/entry/ctr_catalog.cpp`) run by the framework main: `ProductHost` provisions and authenticates
+`SCUS_944.26`, `TitleSession` boots it (`bootEntry=DriverOwned`, binds, overrides, control channel,
+clear display) and runs the fields, and `PSXPORT_NATIVE_FRAMES` caps a run. Override install and
+removal both go through `psx::cpu::{tryInstallNativeOverride,removeNativeOverride}`, and the title
+owns no `(image identity, address)` keying.

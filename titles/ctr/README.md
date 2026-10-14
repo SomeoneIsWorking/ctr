@@ -13,6 +13,8 @@ The selected target is the North American disc whose `SYSTEM.CNF` names
 | Text extent | `[0x80010000,0x8008D800)` |
 | Header stack | `0x801FFFF0` |
 
+`executable.json` holds these identity facts for the build and `tools/provision.py`.
+
 Measured crt0 facts include BSS `[0x8008D668,0x8009F6FC)`, GP `0x8008CF6C`, stack top
 `0x807FFFF8`, heap base `0x8009F6FC`, heap size `0x007588FC`, and libc initializer `0x80080620`.
 The independent CPU reaches InitHeap after 92,378 instructions. Recorded comparison evidence then

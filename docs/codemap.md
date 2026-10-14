@@ -18,7 +18,7 @@ introduced where a concept needs one.
 
 | Directory | Namespace | What it owns |
 |---|---|---|
-| `game/entry/` | `ctr` | The process entry point, its argument policy, and the title's `GameRuntime`: composition only. |
+| `game/entry/` | `ctr` | The title's one-entry catalog and its `GameRuntime`: composition only. Entry is the framework main. |
 | `game/boot/` | `ctr` | The state-zero owners a boot cannot finish without: the startup resource load, its poll pump, and the post-archive XA wait. |
 | `game/frame/` | `ctr` | The frame turn itself and the field-exit protocol around it: the driver, the field boundary, the per-field override window, the DrawSync callback and the field-seam vblank poll, the retail frame suffix, and the VSync bridges. |
 | `game/disc/` | `ctr` | What the guest is blocked on when the host completes a disc transfer: the owed libcd completion and the BIGFILE image publication. |
@@ -34,11 +34,8 @@ introduced where a concept needs one.
 
 | Class / function | Responsibility |
 |---|---|
-| `main` (`main.cpp`) | Parse arguments, refuse a missing executable, construct `Game`, install the title's owners, then step fields forever. It composes; it implements nothing. |
-| `ctr::kTitleIdentity`, `ctr::kProvisioningRoot` (`title_identity.h`) | The executable's serial, its disc key and disc path, and where it is provisioned. |
-| `ctr::installRuntimeOwners` (`runtime_composition.*`) | Hands the title's disc to the framework (`psx::Machine::insertDisc`). |
-| `ctr::CommandLineAction`, `ctr::parseCommandLine`, `ctr::printUsage` (`command_line.*`) | The argument policy: run, `--help`, or a named refusal. |
-| `ctr::CtrRuntime` (`ctr_runtime.*`) | The title's `GameRuntime` (default render path `Record`, no producers): identity facts, platform HLE facts, override install/remove, and every guest dispatch (one field, one continuation, one original call). It dispatches; it does not decide what runs next. |
+| `ctr::createCatalog` (`ctr_catalog.*`) | The product's `SingleTitleCatalog`: the `SCUS_944.26` identity (size, SHA-256, header, disc key and path) generated from `titles/ctr/executable.json` into `executable_identity.h`, the `scratch/raw` provisioning root and the runtime. The framework main (`psxport_add_product`) owns the command line, provisioning and the field loop through `ProductHost` and `TitleSession` *(framework)*. |
+| `ctr::CtrRuntime` (`ctr_runtime.*`) | The title's `GameRuntime` (default render path `Record`, no producers, `bootEntry=DriverOwned`): identity facts, platform HLE facts, override install/remove, and every guest dispatch (one field, one continuation, one original call). It dispatches; it does not decide what runs next. |
 
 ## `game/boot/`, `game/frame/`, `game/disc/`, `game/execution/`, `game/title/` — runtime-facing owners
 
@@ -74,7 +71,7 @@ owner's file is the defect to look for first. Framework hops are marked *(framew
 
 | Hop | Owner | What it decides |
 |---|---|---|
-| Field iteration | `main` → `FrameLoopShell::step` *(framework)* | One host iteration; the framework owns iteration, the title owns the finite step. |
+| Field iteration | `TitleSession::step` *(framework)* → `FrameLoopShell::step` *(framework)* | One host iteration; the framework owns iteration, the title owns the finite step. |
 | Field entry | `CtrFrameDriver::stepFrame` | Arms `ScopedGteProjectionObservation` and `FieldOverrideScope`, and clears the previous field's request. |
 | Host work | `Timing::frameTick` *(framework)*, `FrameCallbackOwner::deliverField`, `Pad::serviceFrame` *(framework)*, `SpuAudio::frame` *(framework)*, `DiscReadOwner::deliverPending`, `SpuDmaCallbackRegistration::service` | Everything owed at the field seam, in that order: guest callbacks, input, audio, then the CD and DMA completions the guest is blocked on. |
 | Owed continuation | `CtrFrameDriver::resumeOwedContinuation` | One ladder, one owner at a time: `FrameSuffix::resume` → `StartupAudioWait::resume` → `StartupResourcePump::resume` → `StartupResourceLoad::consumeWaitedField`. |
@@ -138,11 +135,12 @@ entry, and `FieldBoundary` is the only thing that ends a field.
 | Hop | Owner | What it decides |
 |---|---|---|
 | Live endpoint | `DbgServer::start` *(framework)*, enabled by `PSXPORT_DEBUG_SERVER` | The loopback control channel: state, memory, input injection, pause/step. |
-| Title boot | `main` | **CTR's product never starts it**: the title has its own entry point rather than `native_boot`, so `PSXPORT_DEBUG_SERVER` opens nothing and a headless run cannot be driven. Recorded as a finding, not as a design choice. |
+| Title boot | `TitleSession::boot` → `DbgServer::start` *(framework)* | Opened before the first field on every run; `quit` ends the run through the one `RunEndReport`. |
 
 ## Where does it go?
 
 - A guest address or game-state offset: `game/title/native_ownership.h`.
+- An executable identity fact (size, SHA-256, header words): `titles/ctr/executable.json`, read by CMake and `tools/provision.py`.
 - A per-field decision about what runs next: the smallest owner named in the ladder, composed by
   `CtrFrameDriver`.
 - Anything that must survive a field boundary: the owner that holds it, as a resumable method pair

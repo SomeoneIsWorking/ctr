@@ -70,6 +70,8 @@ private:
   FrameSuffix frameSuffix_;
   uint64_t budgetExitsThisField_ = 0;
   bool bootEntered_ = false;
+  // The host loop's number for the previous field; the base is the loop's, consecutiveness is ours.
+  std::optional<uint32_t> lastFrame_;
 };
 
 // A missing or foreign driver is refused.

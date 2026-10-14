@@ -38,11 +38,11 @@ void CtrFrameDriver::stepFrame(Core &core, uint32_t frame) {
     lucent::error("ctr-frame", "frame {} has no bound Game", frame);
     std::abort();
   }
-  if (frame != field_.completedFields()) {
-    lucent::error(
-        "ctr-frame", "non-sequential frame {} requested after {} completed field(s)", frame, field_.completedFields());
+  if (lastFrame_ && frame != *lastFrame_ + 1u) {
+    lucent::error("ctr-frame", "non-sequential frame {} requested after frame {}", frame, *lastFrame_);
     std::abort();
   }
+  lastFrame_ = frame;
   budgetExitsThisField_ = 0;
   // Armed for the same window as the address overrides, since guest GTE ops only run inside a field.
   const ScopedGteProjectionObservation geometryObservation(core, geometryProjection_);

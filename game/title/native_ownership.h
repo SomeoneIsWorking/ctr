@@ -1,11 +1,13 @@
 #pragma once
 
+#include "executable_identity.h"
+
 #include <cstdint>
 
 namespace ctr::native {
 
 // SCUS_944.26 guest addresses, image offsets and game-state offsets the native owners key on.
-inline constexpr uint32_t kExecutableEntry = 0x8007793Cu;
+inline constexpr uint32_t kExecutableEntry = identity::kEntry;
 inline constexpr uint32_t kGuestMain = 0x8003C58Cu;
 inline constexpr uint32_t kLoopTop = 0x8003C5D0u;
 inline constexpr uint32_t kInitializerEvidenceFrontier = 0x800772E0u;

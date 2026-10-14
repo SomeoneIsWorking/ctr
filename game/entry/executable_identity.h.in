@@ -1,0 +1,20 @@
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+#include <string_view>
+
+// Generated from titles/ctr/executable.json.
+namespace ctr::identity {
+
+inline constexpr std::string_view kExecutableSha256 = "@CTR_EXECUTABLE_SHA256@";
+inline constexpr std::size_t kExecutableBytes = @CTR_EXECUTABLE_SIZE@u;
+inline constexpr std::string_view kDiscExecutablePath = "@CTR_DISC_EXECUTABLE@";
+inline constexpr std::uint32_t kEntry = @CTR_EXECUTABLE_ENTRY@u;
+inline constexpr std::uint32_t kGlobalPointer = @CTR_EXECUTABLE_GP@u;
+inline constexpr std::uint32_t kTextAddress = @CTR_EXECUTABLE_TEXT@u;
+inline constexpr std::uint32_t kTextBytes = @CTR_EXECUTABLE_TEXT_SIZE@u;
+inline constexpr std::uint32_t kStackAddress = @CTR_EXECUTABLE_STACK@u;
+inline constexpr std::uint32_t kStackOffset = @CTR_EXECUTABLE_STACK_OFFSET@u;
+
+} // namespace ctr::identity

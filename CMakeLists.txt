@@ -16,6 +16,19 @@ message(STATUS "psxport framework: ${PSXPORT_DIR}")
 set(PSXPORT_BUILD_SMOKE ON CACHE BOOL "Build the framework agnosticism smoke" FORCE)
 add_subdirectory("${PSXPORT_DIR}" psxport_build)
 
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/titles/ctr/executable.json" CTR_EXECUTABLE_MANIFEST)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/titles/ctr/executable.json")
+string(JSON CTR_EXECUTABLE_SHA256 GET "${CTR_EXECUTABLE_MANIFEST}" sha256)
+string(JSON CTR_EXECUTABLE_SIZE GET "${CTR_EXECUTABLE_MANIFEST}" file_size)
+string(JSON CTR_DISC_EXECUTABLE GET "${CTR_EXECUTABLE_MANIFEST}" disc_executable)
+string(JSON CTR_EXECUTABLE_ENTRY GET "${CTR_EXECUTABLE_MANIFEST}" header entry)
+string(JSON CTR_EXECUTABLE_GP GET "${CTR_EXECUTABLE_MANIFEST}" header gp)
+string(JSON CTR_EXECUTABLE_TEXT GET "${CTR_EXECUTABLE_MANIFEST}" header text_address)
+string(JSON CTR_EXECUTABLE_TEXT_SIZE GET "${CTR_EXECUTABLE_MANIFEST}" header text_size)
+string(JSON CTR_EXECUTABLE_STACK GET "${CTR_EXECUTABLE_MANIFEST}" header stack_address)
+string(JSON CTR_EXECUTABLE_STACK_OFFSET GET "${CTR_EXECUTABLE_MANIFEST}" header stack_offset)
+configure_file(game/entry/executable_identity.h.in identity/executable_identity.h @ONLY)
+
 set(CTR_OVERLAY_CATALOG "${CMAKE_CURRENT_BINARY_DIR}/identity/ctr_overlay_catalog.h")
 add_custom_command(
   OUTPUT "${CTR_OVERLAY_CATALOG}"
@@ -35,7 +48,6 @@ add_library(
   game/disc/async_disc_owner.cpp
   game/disc/overlay_image_owner.cpp
   game/entry/ctr_runtime.cpp
-  game/entry/runtime_composition.cpp
   game/execution/platform_hle_plan.cpp
   game/execution/spu_dma_callback_registration.cpp
   game/frame/field_boundary.cpp
@@ -67,22 +79,18 @@ target_include_directories(
 target_compile_features(ctr_runtime PUBLIC cxx_std_20)
 target_link_libraries(ctr_runtime PUBLIC psxport)
 
-add_library(ctr_command_line STATIC game/entry/command_line.cpp)
-target_include_directories(ctr_command_line PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/game/entry")
-target_compile_features(ctr_command_line PUBLIC cxx_std_20)
-
-add_executable(ctr_port game/entry/main.cpp)
+psxport_add_product(
+  ctr_port
+  CATALOG ctr::createCatalog
+  HEADER ctr_catalog.h
+  SOURCES game/entry/ctr_catalog.cpp
+  LIBRARIES ctr_runtime
+)
 target_compile_features(ctr_port PRIVATE cxx_std_20)
-target_link_libraries(ctr_port PRIVATE ctr_command_line ctr_runtime)
 set_target_properties(ctr_port PROPERTIES ENABLE_EXPORTS ON)
 add_dependencies(ctr_port gen_gpu_shaders)
 
 if(BUILD_TESTING)
-  add_executable(ctr_command_line_test tests/test_command_line.cpp)
-  target_compile_features(ctr_command_line_test PRIVATE cxx_std_20)
-  target_link_libraries(ctr_command_line_test PRIVATE ctr_command_line)
-  add_test(NAME ctr_command_line COMMAND ctr_command_line_test)
-
   add_executable(ctr_execution_exit_test tests/ctr_execution_exit.cpp)
   target_compile_features(ctr_execution_exit_test PRIVATE cxx_std_20)
   target_link_libraries(ctr_execution_exit_test PRIVATE ctr_runtime)
@@ -165,7 +173,7 @@ if(BUILD_TESTING)
   add_test(NAME ctr_short_help_without_assets COMMAND ctr_port -h)
   set_tests_properties(
     ctr_help_without_assets ctr_short_help_without_assets
-    PROPERTIES PASS_REGULAR_EXPRESSION "Usage: .*ctr_port \\[--help\\]"
+    PROPERTIES PASS_REGULAR_EXPRESSION "CTR: Crash Team Racing \\(SCUS_944\\.26\\)"
   )
   add_test(
     NAME ctr_execution_boundary
@@ -207,7 +215,6 @@ add_custom_target(
     cpp_policy
     provision_selftest
     overlay_extract_selftest
-    ctr_command_line_test
     ctr_execution_exit_test
     ctr_disc_ownership_test
     ctr_field_owners_test

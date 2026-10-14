@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import re
 import struct
@@ -17,10 +18,10 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+MANIFEST = ROOT / "titles" / "ctr" / "executable.json"
 OUTPUT_DIR = ROOT / "scratch" / "raw" / "ctr"
 DISC_ENV = "PSXPORT_CTR_DISC"
 GENERIC_DISC_ENV = "PSXPORT_DISC"
-EXE_ON_DISC = "SCUS_944.26"
 SYSTEM_CNF = "SYSTEM.CNF"
 
 
@@ -39,15 +40,22 @@ class ExecutableIdentity:
     stack: int
 
 
-CTR_USA = ExecutableIdentity(
-    name=EXE_ON_DISC,
-    file_size=0x7E000,
-    sha256="7b4aac0bf2f6310984e599295df17b457da5a23b270c20200cefef6079efb838",
-    entry=0x8007793C,
-    load_address=0x80010000,
-    text_size=0x0007D800,
-    stack=0x801FFFF0,
-)
+def load_identity(path: Path = MANIFEST) -> ExecutableIdentity:
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    header = manifest["header"]
+    return ExecutableIdentity(
+        name=manifest["disc_executable"],
+        file_size=int(manifest["file_size"]),
+        sha256=manifest["sha256"],
+        entry=int(header["entry"], 16),
+        load_address=int(header["text_address"], 16),
+        text_size=int(header["text_size"], 16),
+        stack=int(header["stack_address"], 16),
+    )
+
+
+CTR_USA = load_identity()
+EXE_ON_DISC = CTR_USA.name
 
 
 def dotenv_values(path: Path) -> dict[str, str]:
@@ -280,6 +288,24 @@ def selftest() -> None:
         fixture_path = root / "FIXTURE.EXE"
         fixture_path.write_bytes(fixture)
         expected = fixture_identity(fixture)
+        manifest = root / "executable.json"
+        manifest.write_text(
+            json.dumps(
+                {
+                    "disc_executable": expected.name,
+                    "file_size": expected.file_size,
+                    "sha256": expected.sha256,
+                    "header": {
+                        "entry": f"{expected.entry:#010x}",
+                        "text_address": f"{expected.load_address:#010x}",
+                        "text_size": f"{expected.text_size:#010x}",
+                        "stack_address": f"{expected.stack:#010x}",
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        assert load_identity(manifest) == expected, "the manifest did not load as the identity it records"
         verify_executable(fixture_path, expected)
         fixture[-1] ^= 1
         fixture_path.write_bytes(fixture)
@@ -301,6 +327,7 @@ def selftest() -> None:
             raise AssertionError("wrong SYSTEM.CNF target was accepted")
 
     print("[provision-selftest] PASS resolution precedence and invalid-explicit refusal")
+    print("[provision-selftest] PASS manifest identity load")
     print("[provision-selftest] PASS executable acceptance and one-byte-mutation rejection")
     print("[provision-selftest] PASS SYSTEM.CNF acceptance and wrong-target rejection")
 

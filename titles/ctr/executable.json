@@ -1,0 +1,17 @@
+{
+  "title": "CTR: Crash Team Racing",
+  "region": "USA",
+  "serial": "SCUS-94426",
+  "disc_executable": "SCUS_944.26",
+  "output_name": "SCUS_944.26",
+  "file_size": 516096,
+  "sha256": "7b4aac0bf2f6310984e599295df17b457da5a23b270c20200cefef6079efb838",
+  "header": {
+    "entry": "0x8007793C",
+    "gp": "0x00000000",
+    "text_address": "0x80010000",
+    "text_size": "0x0007D800",
+    "stack_address": "0x801FFFF0",
+    "stack_offset": "0x00000000"
+  }
+}

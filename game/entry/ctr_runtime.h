@@ -49,8 +49,12 @@ public:
   void propagateFrameBoundary(Core &core, const psx::cpu::ExecutionResult &result, std::string_view owner) const;
 
 private:
-  // KSEG0 executable extent of SCUS_944.26, in the physical addresses `GuestProgramImage` stores.
-  static constexpr GuestProgramImage programImage_{.residentText = {0x00010000u, 0x0008D800u}};
+  // KSEG0 executable extent of SCUS_944.26, in the physical addresses `GuestProgramImage` stores. CtrFrameDriver
+  // enters the executable at its entry, so the framework applies no crt0.
+  static constexpr GuestProgramImage programImage_{
+      .bootEntry = BootEntry::DriverOwned,
+      .residentText = {0x00010000u, 0x0008D800u},
+  };
   // The guest interrupt delivers CD data-ready: 0x8001C7FC walks [0x8008D708] 2 -> 3 -> 4 per audio sector,
   // and state zero waits on it at 0x8003C94C.
   static constexpr GuestCdStreamCallbackLayout cdStreamLayout_{
