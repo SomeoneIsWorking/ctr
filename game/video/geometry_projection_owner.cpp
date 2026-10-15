@@ -10,7 +10,7 @@
 namespace ctr {
 namespace {
 
-// GTE control registers, as written by the framework's `libgte_set_geom_*`.
+// GTE control registers, as written by the framework's `psx::gte::setGeom*`.
 constexpr uint32_t kGteCrOfx = 24;
 constexpr uint32_t kGteCrOfy = 25;
 constexpr uint32_t kGteCrH = 26;
@@ -29,12 +29,12 @@ bool isPerspectiveOp(uint32_t instruction) {
 ScopedGteProjectionObservation::ScopedGteProjectionObservation(Core &core, GeometryProjectionOwner &owner)
     : owner_(owner), core_(&core) {
   // The owner travels in the framework's per-Core observer slot.
-  core.rsub.gtePreOp.arm(GeometryProjectionOwner::onGteOp, nullptr, &owner_);
+  core.gte().observer().arm({.pre = GeometryProjectionOwner::onGteOp}, &owner_);
 }
 
 ScopedGteProjectionObservation::~ScopedGteProjectionObservation() {
   if (core_ != nullptr) {
-    (void)core_->rsub.gtePreOp.disarm();
+    (void)core_->gte().observer().disarm();
   }
 }
 
@@ -47,8 +47,7 @@ GeometryProjectionOwner::RetailTriple GeometryProjectionOwner::readLiveTriple(Co
   };
 }
 
-void GeometryProjectionOwner::onGteOp(
-    Core *core, uint64_t /*ordinal*/, uint32_t /*guestPc*/, uint32_t instruction, void *user) {
+void GeometryProjectionOwner::onGteOp(Core *core, const GteOp &op, void *user) {
   if (core == nullptr) {
     return;
   }
@@ -56,7 +55,7 @@ void GeometryProjectionOwner::onGteOp(
   if (owner == nullptr) {
     return;
   }
-  owner->observe(*core, instruction);
+  owner->observe(*core, op.instruction);
 }
 
 void GeometryProjectionOwner::observe(Core &core, uint32_t instruction) {
@@ -90,7 +89,7 @@ GeometryProjectionOwner::Outcome GeometryProjectionOwner::applyOwnedPlan(Core &c
     return Outcome::LeftAtRetail;
   }
   // Only H is written: the centre scale differs between the guest's call sites (see `readLiveTriple`).
-  libgte_set_geom_screen(&core, widened.published.distance);
+  psx::gte::setGeomScreen(core, widened.published.distance);
   lastPublishedDistance_ = widened.published.distance;
   publishedOnce_ = true;
   // Read back: a mismatch means the transform would consume retail's H.

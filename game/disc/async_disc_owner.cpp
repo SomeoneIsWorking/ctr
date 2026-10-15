@@ -36,7 +36,7 @@ void DiscReadOwner::noteTransferComplete(Core &core,
     return;
   }
   pending_ = true;
-  dueTicks_ = core.game->timing.emulatedCpuTicks() + uint64_t{sectors} * cd_drive_sector_period_cpu_ticks(mode);
+  dueTicks_ = core.game->timing.emulatedCpuTicks() + uint64_t{sectors} * psx::cd::driveSectorPeriodCpuTicks(mode);
 }
 
 void DiscReadOwner::deliverIfDue(Core &core) {

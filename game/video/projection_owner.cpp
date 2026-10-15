@@ -162,8 +162,8 @@ void ProjectionOwner::applyPresentationPlan(Core &core, const ProjectionPublicat
     return;
   }
   // Host state only; the guest's view descriptor keeps its retail values.
-  libgte_set_geom_offset(&core, widened.published.centerX, widened.published.centerY);
-  libgte_set_geom_screen(&core, widened.published.distance);
+  psx::gte::setGeomOffset(core, widened.published.centerX, widened.published.centerY);
+  psx::gte::setGeomScreen(core, widened.published.distance);
   published_ = widened.published;
   widened_ = true;
 }

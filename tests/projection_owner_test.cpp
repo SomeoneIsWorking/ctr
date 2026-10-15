@@ -125,15 +125,15 @@ void test_publication_requires_a_body_and_accepts_one() {
 }
 
 GuestProjectionPlan
-makePlan(int nativeWidth, int nativeHeight, GuestPresentationExtent sink, PresentationAspect aspect) {
+makePlan(int nativeWidth, int nativeHeight, psx::present::PixelSize sink, PresentationAspect aspect) {
   GuestProjectionInputs inputs{};
-  inputs.path = RenderPath::Gte;
+  inputs.path = RenderPath::Record;
   inputs.requested = aspect;
   inputs.nativePresentation = {nativeWidth, nativeHeight};
   inputs.nativeProjection.extent = {nativeWidth, nativeHeight};
   inputs.nativeProjection.drawWidth = nativeWidth;
   inputs.sink = sink;
-  return guest_projection_plan(inputs);
+  return psx::present::guestProjectionPlan(inputs);
 }
 
 void test_without_a_plan_publication_is_retail() {

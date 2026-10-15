@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gte_preop_observer.h"
 #include "video/view_projection_plan.h"
 
 #include <cstdint>
@@ -27,7 +28,7 @@ public:
   }
 
   // Plain function pointer for the framework observer; `user` is the owner.
-  static void onGteOp(Core *core, uint64_t /*ordinal*/, uint32_t /*guestPc*/, uint32_t instruction, void *user);
+  static void onGteOp(Core *core, const GteOp &op, void *user);
 
   [[nodiscard]] static RetailTriple readLiveTriple(Core &core);
 

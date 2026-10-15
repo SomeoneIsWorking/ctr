@@ -27,12 +27,6 @@ Title hops only. Each row is where CTR joins a psxport feature hop (`psxport F-X
 | 3 | psxport F-CD.1 | `game/runtime/runtime.cpp:Runtime` — stock `CD_cw` `0x8007BC38`; `game/execution/platform_leaves.cpp:cdSync` — `0x8007B6F0` |
 | 4 | psxport F-CD.3 | `game/disc/overlay_image_owner.cpp:OverlayImageOwner` — BIGFILE entries published as image generations after their callback |
 
-## F-RENDER
-
-| hop | joins | owner |
-|---|---|---|
-| 1 | psxport F-RENDER.1 | `game/runtime/runtime.cpp:Runtime::renderCapabilities` — Record, no producers |
-
 ## F-FPS60
 
 | hop | joins | owner |

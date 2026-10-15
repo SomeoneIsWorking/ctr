@@ -41,14 +41,13 @@ std::optional<uint32_t> OverlayImageOwner::locateArchive(Core &core) {
     lucent::error("ctr-overlay", "BIGFILE lookup has no bound Game disc");
     return std::nullopt;
   }
-  uint32_t lba = 0;
-  uint32_t bytes = 0;
-  if (!disc_find_file(&core.game->disc, "BIGFILE.BIG", &lba, &bytes) || bytes != kBigfileBytes) {
-    lucent::error("ctr-overlay", "BIGFILE.BIG is absent or has the wrong byte size (found {})", bytes);
+  const std::optional<psx::cd::DiscFile> file = core.game->disc.findFile("BIGFILE.BIG");
+  if (!file || file->size != kBigfileBytes) {
+    lucent::error("ctr-overlay", "BIGFILE.BIG is absent or has the wrong byte size (found {})", file ? file->size : 0u);
     return std::nullopt;
   }
-  archiveLba_ = lba;
-  lucent::info("ctr-overlay", "BIGFILE.BIG located at LBA {} ({} bytes)", lba, bytes);
+  archiveLba_ = file->lba;
+  lucent::info("ctr-overlay", "BIGFILE.BIG located at LBA {} ({} bytes)", file->lba, file->size);
   return archiveLba_;
 }
 

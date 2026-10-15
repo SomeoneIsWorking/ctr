@@ -93,7 +93,7 @@ int runFinite(Core &core, ctr::FrameDriver &driver) {
   driver.stepFrame(core, 0u);
   auto &counters = core.lightrecExecutor().counters();
   bool pass = driver.completedFrames() == 1u && driver.budgetExitsForLastField() > 0u &&
-              driver.presentation().completedFences() == 1u && core.game->gpu.gpu_frame_no() == 1 &&
+              driver.presentation().completedFences() == 1u && core.game->display.frame() == 1 &&
               core.game->timing.vblank == 1u && core.r[25] == 0u && !core.executionControl().pending() &&
               counters.executedBlocks > 0u && counters.executedInstructions > 0u && counters.fallback.calls == 0u;
   std::printf("CTR finite budget field: %s budget_exits=%llu executed_blocks=%llu executed_instructions=%llu "
@@ -120,7 +120,7 @@ int runCompletion(Core &core, ctr::FrameDriver &driver, std::uint32_t sectors, b
   core.mem_w32(kEntry + 4u, 0u);
   core.mem_w32(kEntry + 8u, 0x3C1F8003u);  // lui ra, 0x8003
   core.mem_w32(kEntry + 12u, 0x37FF785Cu); // ori ra, ra, 0x785c: kFrameTimingReturn, clobbered by the call
-  if (!writeSpinLoop(core, {.at = kEntry + 16u, .extraIterations = 4u * cd_drive_sector_period_cpu_ticks(0x80u)})) {
+  if (!writeSpinLoop(core, {.at = kEntry + 16u, .extraIterations = 4u * psx::cd::driveSectorPeriodCpuTicks(0x80u)})) {
     return 1;
   }
   core.mem_w32(kCompletionCallback, 0x3C088001u);       // lui t0, 0x8001

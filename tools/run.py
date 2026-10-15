@@ -18,6 +18,7 @@ from tools.provision import CTR_USA, OUTPUT_DIR
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD_ROOT = ROOT / "build" / "player"
+FRAMEWORK_FETCH = ["uv", "run", "--no-project", "https://raw.githubusercontent.com/SomeoneIsWorking/psxport/main/tools/psxport_fetch.py", "--auto"]
 EXECUTABLE = OUTPUT_DIR / CTR_USA.name
 
 PACKAGE_NAMES = {
@@ -255,8 +256,9 @@ def toolchain_build(cc: str, cxx: str) -> Path:
 
 
 def sync_framework() -> Path:
-    command([sys.executable, ROOT / "tools" / "psxport_fetch.py", "--auto"])
     configured = os.environ.get("PSXPORT_DIR")
+    if not configured and not (ROOT / "external/psxport/cmake/psxport.cmake").is_file():
+        command(FRAMEWORK_FETCH)
     psxport = Path(configured or ROOT / "external" / "psxport").resolve()
     if not (psxport / "cmake" / "psxport.cmake").is_file():
         raise Refusal(f"PSXPORT_DIR={psxport} is not a psxport checkout")

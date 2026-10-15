@@ -28,8 +28,6 @@ public:
   bool sealedFrameIsCut(Core &core) const override;
   // The base nullptr would resolve every plan to 4:3.
   const GuestWidescreenProjection *guestWidescreenProjection() const override;
-  RenderCapabilities renderCapabilities() const override;
-  bool guestVramIsPicture(const Game &game) const override;
 
   [[nodiscard]] const psx::cd::StockLibcd &libcd() const {
     return libcd_;

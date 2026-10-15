@@ -2,7 +2,6 @@
 
 #include "core.h"
 #include "game.h"
-#include "gpu_vk.h"
 #include "guest_widescreen_projection.h"
 #include "mods.h"
 #include "video/projection_owner.h"
@@ -27,11 +26,11 @@ GuestProjectionPlan WidescreenOwner::planFor(Core &core, const GuestViewProjecti
     std::abort();
   }
   // Driven by the extent the guest's own publication carried (view descriptor +0x20/+0x22), not a display register.
-  const GuestProjectionPlan plan = gpu_vk_latch_guest_projection(&core,
-                                                                 GuestProjectionGeometry{
-                                                                     .extent = {view.width, view.height},
-                                                                     .drawWidth = view.width,
-                                                                 });
+  const GuestProjectionPlan plan = psx::present::latchGuestProjection(core,
+                                                                      GuestProjectionGeometry{
+                                                                          .extent = {view.width, view.height},
+                                                                          .drawWidth = view.width,
+                                                                      });
   if (!plan_.nativeProjectionExtent.width) {
     plan_ = plan;
     distanceScaleNumerator_ = plan.projectionExtent.width;

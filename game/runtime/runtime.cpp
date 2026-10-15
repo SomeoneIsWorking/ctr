@@ -23,7 +23,7 @@ constexpr psx::cd::GuestInterruptLibcd::Completion kCdReadyCompletion{.status = 
 } // namespace
 
 Runtime::Runtime()
-    : vsync_(native::kVSync, native::kVSyncQueryCounter),
+    : vsync_({.entry = native::kVSync, .queryCounter = native::kVSyncQueryCounter}),
       libgte_({.setGeomOffset = native::kSetGeomOffset, .setGeomScreen = native::kSetGeomScreen}),
       libcd_(kLibcdEntries, {}, native::kCdReadyCallbackSlot, kCdReadyCompletion) {}
 
@@ -57,19 +57,6 @@ bool Runtime::sealedFrameIsCut(Core &core) const {
 
 const GuestWidescreenProjection *Runtime::guestWidescreenProjection() const {
   return &widescreen_;
-}
-
-RenderCapabilities Runtime::renderCapabilities() const {
-  // The guest GP0 record is the picture; no producers yet.
-  return {
-      .defaultPath = RenderPath::Record,
-      .nativeRenderPath = false,
-  };
-}
-
-bool Runtime::guestVramIsPicture(const Game &) const {
-  // The title driver does not present guest VRAM.
-  return false;
 }
 
 } // namespace ctr

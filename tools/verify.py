@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import subprocess
 import sys
 from pathlib import Path
 
@@ -12,13 +11,9 @@ PSXPORT = ROOT / "external" / "psxport"
 
 
 def main() -> int:
-    resolved = subprocess.run(
-        [sys.executable, ROOT / "tools" / "psxport_fetch.py", "--auto"],
-        cwd=ROOT,
-        check=False,
-    )
-    if resolved.returncode:
-        return resolved.returncode
+    if not (PSXPORT / "cmake" / "psxport.cmake").is_file():
+        print(f"[verify] REFUSED: no framework at {PSXPORT}; run `uv run --no-project https://raw.githubusercontent.com/SomeoneIsWorking/psxport/main/tools/psxport_fetch.py --auto`", file=sys.stderr)
+        return 2
     sys.path.insert(0, str(PSXPORT / "tools"))
     from port.consumer_verify import ConsumerVerifyConfig, run_consumer_verification
 

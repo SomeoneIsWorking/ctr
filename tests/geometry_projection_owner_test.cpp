@@ -38,20 +38,20 @@ int main() {
   Core &core = game->core;
 
   std::printf("[ctr-geometry-projection] THE REGISTER NUMBERS, against the framework's own writer\n");
-  libgte_set_geom_offset(&core, 300, 120);
-  libgte_set_geom_screen(&core, 455);
+  psx::gte::setGeomOffset(core, 300, 120);
+  psx::gte::setGeomScreen(core, 455);
   {
     const auto live = GeometryProjectionOwner::readLiveTriple(core);
     check(live.centerX == 300 << 16 && live.centerY == 120 << 16,
           "the centres read back as the raw 16.16 control-register words the framework wrote");
-    check(live.distance == 455, "H round trips through libgte_set_geom_screen unshifted");
+    check(live.distance == 455, "H round trips through psx::gte::setGeomScreen unshifted");
   }
-  libgte_set_geom_screen(&core, 455);
+  psx::gte::setGeomScreen(core, 455);
   {
     const auto live = GeometryProjectionOwner::readLiveTriple(core);
     check(live.distance == 455, "re-publishing the same H reads the same H (no state carried in the read)");
   }
-  libgte_set_geom_screen(&core, 320);
+  psx::gte::setGeomScreen(core, 320);
   {
     const auto live = GeometryProjectionOwner::readLiveTriple(core);
     check(live.distance == 320, "a DIFFERENT H reads back as the different H");
@@ -73,8 +73,8 @@ int main() {
     inert.latchPlan(plan, 1, 1);
     GeometryProjectionOwner fourThree;
     fourThree.setProjectionOwner(&inert);
-    libgte_set_geom_offset(&core, 256, 120);
-    libgte_set_geom_screen(&core, 320);
+    psx::gte::setGeomOffset(core, 256, 120);
+    psx::gte::setGeomScreen(core, 320);
     const auto outcome = fourThree.applyOwnedPlan(core, GeometryProjectionOwner::readLiveTriple(core));
     const auto live = GeometryProjectionOwner::readLiveTriple(core);
     check(outcome == GeometryProjectionOwner::Outcome::LeftAtRetail,
@@ -96,8 +96,8 @@ int main() {
     GeometryProjectionOwner ownerWide;
     ownerWide.setProjectionOwner(&wide);
 
-    libgte_set_geom_offset(&core, 256, 120);
-    libgte_set_geom_screen(&core, 320);
+    psx::gte::setGeomOffset(core, 256, 120);
+    psx::gte::setGeomScreen(core, 320);
     {
       const ScopedGteProjectionObservation observation(core, ownerWide);
       ownerWide.observe(core, kVectorOp);
@@ -116,8 +116,8 @@ int main() {
     check(afterSecond.distance == afterFirst.distance,
           "the second perspective transform did NOT compound the widening");
 
-    libgte_set_geom_offset(&core, 256, 120);
-    libgte_set_geom_screen(&core, 320);
+    psx::gte::setGeomOffset(core, 256, 120);
+    psx::gte::setGeomScreen(core, 320);
     {
       const ScopedGteProjectionObservation observation(core, ownerWide);
       ownerWide.observe(core, kRtps);
