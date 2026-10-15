@@ -6,7 +6,6 @@ class Core;
 
 namespace ctr {
 
-class CtrRuntime;
 class FieldBoundary;
 
 // State zero's resource continuation at 0x8002DD24, whose two retail do/while poll loops are split
@@ -19,7 +18,7 @@ public:
     CommitPoll,
   };
 
-  StartupResourcePump(CtrRuntime &runtime, FieldBoundary &field);
+  StartupResourcePump(FieldBoundary &field);
 
   [[nodiscard]] bool isActive() const;
   [[nodiscard]] Phase phase() const;
@@ -34,7 +33,6 @@ private:
   void pollCommit(Core &core);
   void finish(Core &core);
 
-  CtrRuntime &runtime_;
   FieldBoundary &field_;
   Phase phase_ = Phase::Inactive;
 };

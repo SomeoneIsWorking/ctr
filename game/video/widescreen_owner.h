@@ -1,7 +1,7 @@
 #pragma once
 
 #include "guest_widescreen_projection.h"
-#include "view_projection_plan.h"
+#include "video/view_projection_plan.h"
 
 #include <cstdint>
 
@@ -13,7 +13,7 @@ class ProjectionOwner;
 
 // Widening reaches H (GTE CR26), not the extent alone, because sx = H*X/Z + OFX; four
 // `cfc2 rX,$26` sites derive 2H, 4H and H/2, so the guest's viewport math moves with it.
-class CtrWidescreen final : public GuestWidescreenProjection {
+class WidescreenOwner final {
 public:
   struct LatchResult {
     bool widens = false;

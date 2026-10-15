@@ -1,12 +1,12 @@
-#include "startup_resource_pump.h"
+#include "boot/startup_resource_pump.h"
 
 #include "core.h"
-#include "ctr_runtime.h"
+#include "execution/guest_turns.h"
 #include "execution_services.h"
-#include "field_boundary.h"
-#include "native_ownership.h"
-#include "retail_return.h"
-#include "vsync_bridge.h"
+#include "frame/field_boundary.h"
+#include "frame/retail_return.h"
+#include "frame/vsync_bridge.h"
+#include "title/native_ownership.h"
 
 #include <cstdlib>
 #include <lucent/log.h>
@@ -40,8 +40,7 @@ inline constexpr uint32_t kSuffixInstructionCount = 4u;
 
 } // namespace
 
-StartupResourcePump::StartupResourcePump(CtrRuntime &runtime, FieldBoundary &field)
-    : runtime_(runtime), field_(field) {}
+StartupResourcePump::StartupResourcePump(FieldBoundary &field) : field_(field) {}
 
 bool StartupResourcePump::isActive() const {
   return phase_ != Phase::Inactive;
@@ -69,7 +68,7 @@ void StartupResourcePump::begin(Core &core) {
   core.r[31] = kBeginReturn;
   core.r[5] = frame + kBeginBlockSlot;
   psx::cpu::accountGuestInstructions(core, kBeginCallInstructionCount);
-  runtime_.callToReturn(core, native::kBootResourcePumpBegin, "CTR resource-pump begin");
+  guest::callToReturn(core, native::kBootResourcePumpBegin, "CTR resource-pump begin");
   phase_ = Phase::ResourcePoll;
   resume(core);
 }
@@ -102,7 +101,7 @@ void StartupResourcePump::pollResources(Core &core) {
   }
   core.r[31] = kResourcePollReturn;
   psx::cpu::accountGuestInstructions(core, kOmittedCallInstructionCount);
-  runtime_.callToReturn(core, native::kBootResourcePumpPoll, "CTR resource-pump poll");
+  guest::callToReturn(core, native::kBootResourcePumpPoll, "CTR resource-pump poll");
   psx::cpu::accountGuestInstructions(core, kOmittedCallInstructionCount);
   if (core.r[2] == 0u) {
     field_.request(core);
@@ -111,14 +110,14 @@ void StartupResourcePump::pollResources(Core &core) {
   core.r[31] = kCommitReturn;
   core.r[4] = kUnattributedCommitFirstArgument;
   psx::cpu::accountGuestInstructions(core, kOmittedCallInstructionCount);
-  runtime_.callToReturn(core, native::kBootResourcePumpCommit, "CTR resource-pump commit");
+  guest::callToReturn(core, native::kBootResourcePumpCommit, "CTR resource-pump commit");
   phase_ = Phase::CommitPoll;
 }
 
 void StartupResourcePump::pollCommit(Core &core) {
   core.r[31] = kCommitPollReturn;
   psx::cpu::accountGuestInstructions(core, kOmittedCallInstructionCount);
-  runtime_.callToReturn(core, native::kBootResourcePumpCommitPoll, "CTR resource-pump commit poll");
+  guest::callToReturn(core, native::kBootResourcePumpCommitPoll, "CTR resource-pump commit poll");
   psx::cpu::accountGuestInstructions(core, kOmittedCallInstructionCount);
 }
 
@@ -131,7 +130,7 @@ void StartupResourcePump::finish(Core &core) {
   if (continuation != native::kBootResourcePumpReturn) {
     refuseUnexpectedRetailReturn("state-zero resource-pump suffix", native::kBootResourcePumpReturn, continuation);
   }
-  runtime_.propagateFrameBoundary(core, runtime_.dispatch(core, continuation), "CTR resource-pump continuation");
+  guest::propagateFrameBoundary(core, guest::dispatch(core, continuation), "CTR resource-pump continuation");
 }
 
 bool StartupResourcePump::serviceOwedWork(Core &core) {

@@ -1,12 +1,12 @@
-#include "frame_suffix.h"
+#include "frame/frame_suffix.h"
 
 #include "core.h"
-#include "ctr_runtime.h"
+#include "execution/guest_turns.h"
 #include "execution_exit.h"
 #include "execution_services.h"
-#include "field_boundary.h"
-#include "native_ownership.h"
-#include "retail_return.h"
+#include "frame/field_boundary.h"
+#include "frame/retail_return.h"
+#include "title/native_ownership.h"
 
 #include <cstdlib>
 #include <lucent/log.h>
@@ -41,7 +41,7 @@ bool frameSuffixStillWaiting(const FrameSuffixWait &wait) {
   return (wait.drawSyncPending || wait.vblankFieldsPending) && wait.registeredCallbacks < kRegisteredCallbackWaitLimit;
 }
 
-FrameSuffix::FrameSuffix(CtrRuntime &runtime, FieldBoundary &field) : runtime_(runtime), field_(field) {}
+FrameSuffix::FrameSuffix(FieldBoundary &field) : field_(field) {}
 
 bool FrameSuffix::isPending() const {
   return pending_;
@@ -52,7 +52,7 @@ void FrameSuffix::completeFieldTiming(Core &core) {
     refuseUnexpectedRetailReturn("frame timing super", native::kFrameTimingReturn, core.r[31]);
   }
 
-  runtime_.callOriginalToReturn(core, native::kFrameTiming, "CTR frame timing");
+  guest::callOriginalToReturn(core, native::kFrameTiming, "CTR frame timing");
 
   // 0x8003785C..0x80037880: the conditional VSync(0) is omitted, its register effects kept.
   core.r[3] = core.mem_r32(core.r[28] + native::kGameStateGpOffset);
@@ -81,7 +81,7 @@ void FrameSuffix::resume(Core &core) {
     field_.request(core);
     return;
   }
-  runtime_.callToContinuation(core, native::kFrameSuffix, native::kFrameLoopResume, "CTR frame suffix");
+  guest::callToContinuation(core, native::kFrameSuffix, native::kFrameLoopResume, "CTR frame suffix");
   if (core.r[31] != native::kFrameLoopResume) {
     refuseUnexpectedRetailReturn("frame suffix", native::kFrameLoopResume, core.r[31]);
   }

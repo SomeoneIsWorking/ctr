@@ -1,17 +1,24 @@
 // Field execution through Lightrec against hand-assembled guest code.
 
 #include "core.h"
-#include "ctr_runtime.h"
 #include "execution_control.h"
-#include "frame_driver.h"
+#include "frame/frame_driver.h"
 #include "game.h"
 #include "image_identity.h"
 #include "lightrec_executor.h"
-#include "native_ownership.h"
+#include "native_dispatch.h"
+#include "runtime/runtime.h"
+#include "title/native_ownership.h"
 
+#include <algorithm>
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <memory>
+#include <span>
+#include <string_view>
+#include <vector>
 
 namespace {
 
@@ -33,7 +40,7 @@ constexpr std::uint32_t jump(std::uint32_t address) {
 }
 
 void installFrameProgram(Core &core, std::uint32_t entry) {
-  core.imageCatalog().activate("ctr-frame-contract", {0x00010000u, 0x0008d800u}, 1u);
+  core.imageCatalog().activate("ctr-frame-contract", ctr::native::kResidentText, 1u);
   core.mem_w32(entry, jump(ctr::native::kFrameTiming));
   core.mem_w32(entry + 4u, 0u);
   core.mem_w32(ctr::native::kFrameTiming, 0x2402002au);      // addiu v0, zero, 42
@@ -50,6 +57,27 @@ void installFrameProgram(Core &core, std::uint32_t entry) {
   core.mem_w32(ctr::native::kFrameLoopResume + 8u, 0x37ff785cu); // ori ra, ra, 0x785c
   core.mem_w32(ctr::native::kFrameLoopResume + 12u, jump(ctr::native::kFrameTiming));
   core.mem_w32(ctr::native::kFrameLoopResume + 16u, 0u);
+}
+
+// A PS-X EXE whose text starts with a break and whose header entry is the jump into the frame program.
+std::vector<std::uint8_t> bootExecutable(std::uint32_t textAddress) {
+  constexpr std::size_t kHeaderBytes = 0x800u;
+  const std::array<std::uint32_t, 4> text{0x0000000Du, 0u, jump(ctr::native::kFrameTiming), 0u};
+  std::vector<std::uint8_t> bytes(kHeaderBytes + (4u * text.size()));
+  const auto put = [&bytes](std::size_t offset, std::uint32_t word) {
+    for (std::size_t i = 0; i != 4u; ++i) {
+      bytes[offset + i] = static_cast<std::uint8_t>(word >> (8u * i));
+    }
+  };
+  constexpr std::string_view kMagic = "PS-X EXE";
+  std::copy(kMagic.begin(), kMagic.end(), bytes.begin());
+  put(0x10u, textAddress + 8u);
+  put(0x18u, textAddress);
+  put(0x1Cu, static_cast<std::uint32_t>(4u * text.size()));
+  for (std::size_t word = 0; word != text.size(); ++word) {
+    put(kHeaderBytes + (4u * word), text[word]);
+  }
+  return bytes;
 }
 
 void installAudioWaitProgram(Core &core) {
@@ -87,19 +115,21 @@ void installAudioWaitProgram(Core &core) {
 
 int main() {
   constexpr std::uint32_t kEntry = 0x80010000u;
-  ctr::CtrRuntime runtime(kEntry);
-  psxport_install_game(runtime);
-  auto game = std::make_unique<Game>();
+  ctr::Runtime runtime;
+  auto game = std::make_unique<Game>(runtime, psx::config::Config{});
   Core &core = game->core;
   installFrameProgram(core, kEntry);
   core.imageCatalog().activate("ctr-bf0233-field-contract", {kBf0233RamBegin, kBf0233RamEnd}, 2u);
   core.mem_w32(kBf0233PrologueWordAddress, kBf0233PrologueWord);
   check(core.mem_r32(kBf0233PrologueWordAddress) == kBf0233PrologueWord,
         "BF0233 code fixture was not visible before the first field");
+  const std::vector<std::uint8_t> executable = bootExecutable(kEntry);
+  check(static_cast<bool>(runtime.admitExecutable(core, std::span<const std::uint8_t>(executable))),
+        "the boot executable was refused");
   core.r[28] = 0x00120000u;
   core.r[20] = 0x00130000u;
   core.r[31] = ctr::native::kFrameTimingReturn;
-  auto &driver = static_cast<ctr::CtrFrameDriver &>(*game->frameDriver);
+  auto &driver = static_cast<ctr::FrameDriver &>(*game->frameDriver);
 
   // TitleSession numbers its fields from 1; the driver keys nothing on the base.
   constexpr std::uint32_t kFirstHostFrame = 1u;

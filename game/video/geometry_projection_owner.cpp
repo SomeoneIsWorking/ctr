@@ -1,8 +1,8 @@
-#include "geometry_projection_owner.h"
+#include "video/geometry_projection_owner.h"
 
 #include "core.h"
 #include "proj_params.h"
-#include "projection_owner.h"
+#include "video/projection_owner.h"
 
 #include <cstdlib>
 #include <lucent/log.h>
@@ -26,49 +26,47 @@ bool isPerspectiveOp(uint32_t instruction) {
 
 } // namespace
 
-ScopedGteProjectionObservation::ScopedGteProjectionObservation(Core &core, CtrGeometryProjectionOwner &owner)
+ScopedGteProjectionObservation::ScopedGteProjectionObservation(Core &core, GeometryProjectionOwner &owner)
     : owner_(owner), core_(&core) {
   // The owner travels in the framework's per-Core observer slot.
-  gte_op_observer_arm(&core, CtrGeometryProjectionOwner::onGteOp, nullptr, &owner_);
+  core.rsub.gtePreOp.arm(GeometryProjectionOwner::onGteOp, nullptr, &owner_);
 }
 
 ScopedGteProjectionObservation::~ScopedGteProjectionObservation() {
   if (core_ != nullptr) {
-    gte_preop_observer_disarm(core_);
+    (void)core_->rsub.gtePreOp.disarm();
   }
 }
 
-CtrGeometryProjectionOwner::RetailTriple CtrGeometryProjectionOwner::readLiveTriple() {
+GeometryProjectionOwner::RetailTriple GeometryProjectionOwner::readLiveTriple(Core &core) {
   // OFX/OFY stay raw 16.16: PsyQ SetGeomOffset (0x8007782C) shifts by 16 but the ten submitters shift by 15.
   return RetailTriple{
-      .centerX = static_cast<int32_t>(gte_read_ctrl(kGteCrOfx)),
-      .centerY = static_cast<int32_t>(gte_read_ctrl(kGteCrOfy)),
-      .distance = gte_read_ctrl(kGteCrH),
+      .centerX = static_cast<int32_t>(core.gte().readControl(kGteCrOfx)),
+      .centerY = static_cast<int32_t>(core.gte().readControl(kGteCrOfy)),
+      .distance = core.gte().readControl(kGteCrH),
   };
 }
 
-void CtrGeometryProjectionOwner::onGteOp(
-    Core *core, uint64_t ordinal, uint32_t guestPc, uint32_t instruction, void *user) {
-  (void)ordinal;
-  (void)guestPc;
+void GeometryProjectionOwner::onGteOp(
+    Core *core, uint64_t /*ordinal*/, uint32_t /*guestPc*/, uint32_t instruction, void *user) {
   if (core == nullptr) {
     return;
   }
-  auto *owner = static_cast<CtrGeometryProjectionOwner *>(user);
+  auto *owner = static_cast<GeometryProjectionOwner *>(user);
   if (owner == nullptr) {
     return;
   }
   owner->observe(*core, instruction);
 }
 
-void CtrGeometryProjectionOwner::observe(Core &core, uint32_t instruction) {
+void GeometryProjectionOwner::observe(Core &core, uint32_t instruction) {
   if (!isPerspectiveOp(instruction)) {
     return;
   }
-  applyOwnedPlan(core, readLiveTriple());
+  applyOwnedPlan(core, readLiveTriple(core));
 }
 
-CtrGeometryProjectionOwner::Outcome CtrGeometryProjectionOwner::applyOwnedPlan(Core &core, const RetailTriple &retail) {
+GeometryProjectionOwner::Outcome GeometryProjectionOwner::applyOwnedPlan(Core &core, const RetailTriple &retail) {
   if (projectionOwner_ == nullptr || !projectionOwner_->planLatched()) {
     // Before the first descriptor publication is ordinary; no plan owner at all is a wiring defect.
     return projectionOwner_ == nullptr ? Outcome::NoPlanOwner : Outcome::PlanNotResolved;
@@ -96,7 +94,7 @@ CtrGeometryProjectionOwner::Outcome CtrGeometryProjectionOwner::applyOwnedPlan(C
   lastPublishedDistance_ = widened.published.distance;
   publishedOnce_ = true;
   // Read back: a mismatch means the transform would consume retail's H.
-  const RetailTriple live = readLiveTriple();
+  const RetailTriple live = readLiveTriple(core);
   if (live.distance != widened.published.distance) {
     lucent::error("ctr-geometry-projection",
                   "published H {} did not reach the GTE: read back {}. The transform would then "

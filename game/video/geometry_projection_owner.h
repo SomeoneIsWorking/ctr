@@ -1,6 +1,6 @@
 #pragma once
 
-#include "view_projection_plan.h"
+#include "video/view_projection_plan.h"
 
 #include <cstdint>
 
@@ -12,7 +12,7 @@ class ProjectionOwner;
 
 // The guest writes H from 18 sites, so widening keys on the framework's per-Core pre-op GTE
 // observer instead of the descriptor publication (0x80042910). A 4:3 run is inert.
-class CtrGeometryProjectionOwner final {
+class GeometryProjectionOwner final {
 public:
   // Centres are the raw 16.16 control-register words; the guest's two publication sites scale them differently.
   struct RetailTriple {
@@ -27,9 +27,9 @@ public:
   }
 
   // Plain function pointer for the framework observer; `user` is the owner.
-  static void onGteOp(Core *core, uint64_t ordinal, uint32_t guestPc, uint32_t instruction, void *user);
+  static void onGteOp(Core *core, uint64_t /*ordinal*/, uint32_t /*guestPc*/, uint32_t instruction, void *user);
 
-  [[nodiscard]] static RetailTriple readLiveTriple();
+  [[nodiscard]] static RetailTriple readLiveTriple(Core &core);
 
   // What one perspective transform did with the triple it found.
   enum class Outcome : uint8_t {
@@ -56,14 +56,14 @@ private:
 
 class ScopedGteProjectionObservation final {
 public:
-  ScopedGteProjectionObservation(Core &core, CtrGeometryProjectionOwner &owner);
+  ScopedGteProjectionObservation(Core &core, GeometryProjectionOwner &owner);
   ~ScopedGteProjectionObservation();
 
   ScopedGteProjectionObservation(const ScopedGteProjectionObservation &) = delete;
   ScopedGteProjectionObservation &operator=(const ScopedGteProjectionObservation &) = delete;
 
 private:
-  CtrGeometryProjectionOwner &owner_;
+  GeometryProjectionOwner &owner_;
   Core *core_ = nullptr;
 };
 

@@ -1,4 +1,4 @@
-#include "view_projection_plan.h"
+#include "video/view_projection_plan.h"
 
 #include <cstdlib>
 #include <lucent/log.h>

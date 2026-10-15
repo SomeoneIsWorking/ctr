@@ -1,23 +1,23 @@
-// FieldBoundary, FieldOverrideScope and the other owners split out of CtrFrameDriver.
+// FieldBoundary, FieldOverrideScope and the other owners split out of FrameDriver.
 
+#include "boot/startup_audio_wait.h"
+#include "boot/startup_resource_load.h"
+#include "boot/startup_resource_pump.h"
 #include "core.h"
-#include "ctr_runtime.h"
+#include "execution/spu_dma_callback_registration.h"
 #include "execution_control.h"
 #include "execution_exit.h"
-#include "field_boundary.h"
-#include "field_override_scope.h"
-#include "frame_suffix.h"
+#include "frame/field_boundary.h"
+#include "frame/field_override_scope.h"
+#include "frame/frame_suffix.h"
+#include "frame/vsync_bridge.h"
 #include "game.h"
 #include "game_runtime.h"
 #include "image_identity.h"
 #include "native_dispatch.h"
-#include "native_ownership.h"
-#include "scene_cut.h"
-#include "spu_dma_callback_registration.h"
-#include "startup_audio_wait.h"
-#include "startup_resource_load.h"
-#include "startup_resource_pump.h"
-#include "vsync_bridge.h"
+#include "runtime/runtime.h"
+#include "title/native_ownership.h"
+#include "video/scene_cut.h"
 
 #include <array>
 #include <cstdint>
@@ -88,12 +88,10 @@ constexpr std::uint32_t kLoadSavedReturnSlot = 68u;
 } // namespace
 
 int main() {
-  constexpr std::uint32_t kEntry = 0x80010000u;
-  ctr::CtrRuntime runtime(kEntry);
-  psxport_install_game(runtime);
-  auto game = std::make_unique<Game>();
+  ctr::Runtime runtime;
+  auto game = std::make_unique<Game>(runtime, psx::config::Config{});
   Core &core = game->core;
-  core.imageCatalog().activate("ctr-field-owners", {0x00010000u, 0x0008d800u}, 1u);
+  core.imageCatalog().activate("ctr-field-owners", ctr::native::kResidentText, 1u);
   core.r[28] = kGlobalBlock;
   core.r[29] = kStack;
 
@@ -181,7 +179,7 @@ int main() {
   continuationsReached = 0;
   const ctr::VsyncBridge bridge{
       ctr::native::kStartupGpuInit, ctr::native::kStartupGpuInitReturn, ctr::native::kAfterFirstStartupVSync, 0u};
-  ctr::runVsyncBridge(core, runtime, bridge);
+  ctr::runVsyncBridge(core, bridge);
   check(core.r[16] == 5u, "the VSync bridge did not preserve the retail callee's own body");
   check(core.r[31] == ctr::native::kAfterFirstStartupVSync,
         "the VSync bridge did not restore the measured continuation into ra");
@@ -191,7 +189,7 @@ int main() {
   clearPending(core);
   check(psx::cpu::removeNativeOverride(core, ctr::native::kAfterFirstStartupVSync), "could not remove the VSync owner");
 
-  ctr::StartupResourceLoad load(runtime, field);
+  ctr::StartupResourceLoad load(field);
   installReturnSetting(core, ctr::native::kBootResourceWait, kSetV0One);
   installReturnSetting(core, ctr::native::kBootResourcePreWaitHelper, kSetV0One);
   installReturnSetting(core, ctr::native::kBootResourceSetup, kSetV0One);
@@ -237,7 +235,7 @@ int main() {
   check(psx::cpu::removeNativeOverride(core, ctr::native::kBootResourceWaitFirstCaller),
         "could not remove the resource-load continuation owner");
 
-  ctr::StartupResourcePump pump(runtime, field);
+  ctr::StartupResourcePump pump(field);
   field.beginField();
   check(!pump.isActive() && pump.phase() == ctr::StartupResourcePump::Phase::Inactive,
         "a fresh resource pump claimed a phase");
@@ -277,7 +275,7 @@ int main() {
   check(psx::cpu::removeNativeOverride(core, ctr::native::kBootResourcePumpReturn),
         "could not remove the resource-pump continuation owner");
 
-  ctr::StartupAudioWait audio(runtime, field);
+  ctr::StartupAudioWait audio(field);
   field.beginField();
   installReturnSetting(core, ctr::native::kStartupAudioService, kSetV0One);
   check(psx::cpu::tryInstallNativeOverride(core, ctr::native::kStartupAudioLoop, "audio continuation", endTheField)
@@ -330,7 +328,7 @@ int main() {
   for (std::size_t word = 0; word < std::size(kDmaCallbackProgram); ++word) {
     core.mem_w32(ctr::native::kDmaCallback + 4u * static_cast<std::uint32_t>(word), kDmaCallbackProgram[word]);
   }
-  const ctr::SpuDmaCallbackRegistration registration(runtime);
+  const ctr::SpuDmaCallbackRegistration registration;
   check(core.game->dmaCallbacks.current(DmaChannel::Spu) == 0u, "the SPU channel had a callback before registration");
   registration.service(core);
   check(core.game->dmaCallbacks.current(DmaChannel::Spu) == kSpuCallback,

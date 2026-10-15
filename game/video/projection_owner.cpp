@@ -1,8 +1,8 @@
-#include "projection_owner.h"
+#include "video/projection_owner.h"
 
 #include "core.h"
-#include "native_ownership.h"
 #include "proj_params.h"
+#include "title/native_ownership.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -19,7 +19,7 @@ int32_t signedHalf(uint16_t value) {
   return static_cast<int16_t>(value) / 2;
 }
 
-bool agrees(float actual, int32_t expected) {
+bool agrees(float actual, int64_t expected) {
   return std::fabs(actual - static_cast<float>(expected)) < 0.001f;
 }
 

@@ -87,6 +87,9 @@ translation workflow.
     title and the state-zero loop at `0x8003C934` could never leave. Its first argument is compared
     against 2 at `0x8001C7AC` (`andi $a0,$a0,0xFF; bne $a0,$v0` with `$v0 = 2`), which is why the
     declared `readyStatus` is 2 and not libcd's default 1.
+  - **CURRENT 2026-10-15.** `CD_cw` `0x8007BC38` calls `[0x8008C420]` on interrupt flag 4 (data ready) and
+    `[0x8008C41C]` on flag 2 (complete). `game/runtime/runtime.cpp` binds `GuestInterruptLibcd` to the
+    data-ready slot `0x8008C420` (callback `0x8001C7FC`) with status 1; the complete slot has no binding.
 
 ## Native ownership and enhancements
 
@@ -99,7 +102,7 @@ translation workflow.
   view offsets `+0x20/+0x22/+0x18` and is called at `0x80024CCC`, `0x8003BD2C`, and
   `0x8003F5C0`. Ghidra independently identified `[0x80024C4C,0x80025138)` as a lens-flare
   primitive producer and `0x80025138` as its callback registrar.
-- where: `game/execution/platform_hle_plan.*`, `game/video/projection_owner.*`, `game/video/geometry_projection_owner.*`,
+- where: `game/runtime/runtime.cpp` (`StockLibgte`), `game/video/projection_owner.*`, `game/video/geometry_projection_owner.*`,
   and the recorded binary evidence in this entry
 - gap: Follow the view object to simulation-owned camera/transforms, and attribute the 2D layers
   that bound the drawn band (see below). The ten geometry submitters are attributed; their packet-build
@@ -183,8 +186,8 @@ translation workflow.
   complete typed result through the production propagation seam. Exact BF0225/BF0226/BF0233 reads
   were authenticated against the verified archive and published after their retail callbacks in a
   current Lightrec run, which crossed the former `0x800B0B38` image-identity stop.
-- where: `external/psxport/runtime/cpu/`, `game/{entry/ctr_runtime,frame/frame_driver,title/native_ownership}.*`,
-  `tests/ctr_execution_exit.cpp`
+- where: `external/psxport/runtime/cpu/`, `game/{execution/guest_turns,frame/frame_driver,title/native_ownership}.*`,
+  `tests/execution_exit_test.cpp`
 - gap: The `0x8006A57C` `budget-exhausted` exit was diagnosed as a finite guest quantum (110,766
   cycles, 5,215 blocks, 56,904 instructions from the synchronized exit PC to a typed
   `FrameBoundary` at `0x8003CEB4`), and the frame driver now resumes a synchronized positive-cycle
@@ -210,7 +213,7 @@ translation workflow.
   publishes a fresh bump-allocator address at game-state `+0x1C94`, so the pair's producer is the
   per-frame retail path, not the publisher.
 - where: native/Lightrec CTR product with the current CD, DMA, frame, projection, and presentation
-  owners; `game/entry/ctr_runtime.*`, `game/title/native_ownership.h`
+  owners; `game/runtime/runtime.*`, `game/title/native_ownership.h`
 - gap: Reach state 3 with the CD stream's end-of-stream completion delivered to the guest's registered
   ready callback `[0x8008C41C] = 0x8001C7A4`, then reproduce the boundary with nonzero Lightrec blocks,
   prove one native override plus a scoped original call, and demonstrate module replacement
@@ -231,10 +234,10 @@ translation workflow.
   the level table with it; 0x29 and 0x27/0x40 are tested as menu/overlay levels); `tracker+0` bit
   `0x40000000` is set when state 3 starts or a request is pending, cleared on the 1/2 transitions, and gates the
   gameplay update `FUN_80034D54` in state 3.
-- where: `game/video/scene_cut.*`, `CtrRuntime::sealedFrameIsCut`
+- where: `game/video/scene_cut.*`, `Runtime::sealedFrameIsCut`
 - gap: Race start (the flyby-to-race camera switch) has no identified guest variable yet, so it is not declared;
   nothing here has been checked against the cut values on the product yet (the product now presents; issue 0033).
-- notes: Unit-tested through `PresentationOwner::finishField` in `tests/ctr_field_owners.cpp`.
+- notes: Unit-tested through `PresentationOwner::finishField` in `tests/field_owners_test.cpp`.
 
 ### CTR-JIT-03 — Prove representative interactive gameplay
 - status: re-partial
@@ -244,6 +247,6 @@ translation workflow.
   1/256 units. The race clock `gGT+0x1D10` is in 1/960 s and `gGT+0x1D04` is the frame's dt. `FUN_80034D54` derives dt from
   `FUN_8004B41C` (root counter 1 through `FUN_80034AA4`, `gp+0xA1C`); the retail VSync callback `FUN_80034AA4` is the vblank callback libetc's ISR
   `FUN_8007C8D8` runs (it counts at `0x8008C754`); `[gp+0x348]` is its two-field countdown. Issues 0035, 0036, 0037.
-- where: `replays/gameplay/arcade-crash-cove-drive.pad`, `game/execution/platform_hle_plan.cpp`, psxport `Timing::hSyncCounterWrite`
+- where: `replays/gameplay/arcade-crash-cove-drive.pad`, `game/runtime/runtime.cpp` (`StockVSync`), psxport `Timing::hSyncCounterWrite`
 - gap: audio, a lap, and a deterministic-boundary comparison against an independent oracle are open.
 - notes: Boot, an FMV, a submitted frame, or a fallback-dominated run does not satisfy this gate.

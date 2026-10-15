@@ -1,6 +1,6 @@
 #pragma once
 
-#include "view_projection_plan.h"
+#include "video/view_projection_plan.h"
 
 #include <cstdint>
 #include <functional>
@@ -55,7 +55,7 @@ public:
   [[nodiscard]] const GteProjection &publishedProjection() const;
   [[nodiscard]] bool widenedLastPublication() const;
 
-  // Read-only for `CtrGeometryProjectionOwner`, so the plan has one home.
+  // Read-only for `GeometryProjectionOwner`, so the plan has one home.
   [[nodiscard]] bool planLatched() const {
     return planLatched_;
   }

@@ -1,11 +1,12 @@
 // Typed executor exit requests.
 
 #include "core.h"
-#include "ctr_runtime.h"
+#include "execution/guest_turns.h"
 #include "execution_control.h"
 #include "execution_exit.h"
 #include "game.h"
 #include "game_runtime.h"
+#include "runtime/runtime.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -25,20 +26,12 @@ void check(bool condition, const char *detail) {
 } // namespace
 
 int main() {
-  constexpr std::uint32_t kBootTarget = 0x80010000u;
-  ctr::CtrRuntime runtime(kBootTarget);
-  psxport_install_game(runtime);
-  auto game = std::make_unique<Game>();
-
-  constexpr std::uint32_t kPreBootPc = 0x80001234u;
-  game->core.pc = kPreBootPc;
-  runtime.bootInit(game->core);
-  check(game->core.pc == kPreBootPc, "bootInit entered CTR outside the cooperative frame driver");
-  check(!game->core.executionControl().pending(), "bootInit queued an execution exit before the first field");
+  ctr::Runtime runtime;
+  auto game = std::make_unique<Game>(runtime, psx::config::Config{});
 
   const psx::cpu::ExecutionResult expected{
       psx::cpu::ExecutionExitReason::FrameBoundary, 0x8003CEB4u, 73u, "nested retail frame boundary"};
-  runtime.propagateFrameBoundary(game->core, expected, "CTR execution-exit test");
+  ctr::guest::propagateFrameBoundary(game->core, expected, "CTR execution-exit test");
   const auto actual = game->core.executionControl().consume();
 
   check(actual.has_value(), "frame boundary was not published to the Core execution control");

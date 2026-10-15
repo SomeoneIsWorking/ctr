@@ -27,9 +27,9 @@ string(JSON CTR_EXECUTABLE_TEXT GET "${CTR_EXECUTABLE_MANIFEST}" header text_add
 string(JSON CTR_EXECUTABLE_TEXT_SIZE GET "${CTR_EXECUTABLE_MANIFEST}" header text_size)
 string(JSON CTR_EXECUTABLE_STACK GET "${CTR_EXECUTABLE_MANIFEST}" header stack_address)
 string(JSON CTR_EXECUTABLE_STACK_OFFSET GET "${CTR_EXECUTABLE_MANIFEST}" header stack_offset)
-configure_file(game/entry/executable_identity.h.in identity/executable_identity.h @ONLY)
+configure_file(game/product/executable_identity.h.in identity/executable_identity.h @ONLY)
 
-set(CTR_OVERLAY_CATALOG "${CMAKE_CURRENT_BINARY_DIR}/identity/ctr_overlay_catalog.h")
+set(CTR_OVERLAY_CATALOG "${CMAKE_CURRENT_BINARY_DIR}/identity/overlay_catalog.h")
 add_custom_command(
   OUTPUT "${CTR_OVERLAY_CATALOG}"
   COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/extract_overlays.py"
@@ -39,16 +39,17 @@ add_custom_command(
   VERBATIM
 )
 
+# The title's owners; the product and every test link them.
 add_library(
-  ctr_runtime STATIC
+  ctr_game STATIC
   "${CTR_OVERLAY_CATALOG}"
   game/boot/startup_audio_wait.cpp
   game/boot/startup_resource_load.cpp
   game/boot/startup_resource_pump.cpp
   game/disc/async_disc_owner.cpp
   game/disc/overlay_image_owner.cpp
-  game/entry/ctr_runtime.cpp
-  game/execution/platform_hle_plan.cpp
+  game/execution/guest_turns.cpp
+  game/execution/platform_leaves.cpp
   game/execution/spu_dma_callback_registration.cpp
   game/frame/field_boundary.cpp
   game/frame/field_override_scope.cpp
@@ -57,6 +58,8 @@ add_library(
   game/frame/frame_suffix.cpp
   game/frame/retail_return.cpp
   game/frame/vsync_bridge.cpp
+  game/runtime/runtime.cpp
+  game/runtime/session.cpp
   game/video/presentation_owner.cpp
   game/video/geometry_projection_owner.cpp
   game/video/projection_owner.cpp
@@ -64,91 +67,33 @@ add_library(
   game/video/widescreen_owner.cpp
   game/video/view_projection_plan.cpp
 )
-target_include_directories(
-  ctr_runtime
-  PUBLIC
-    "${CMAKE_CURRENT_SOURCE_DIR}/game/boot"
-    "${CMAKE_CURRENT_SOURCE_DIR}/game/disc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/game/entry"
-    "${CMAKE_CURRENT_SOURCE_DIR}/game/execution"
-    "${CMAKE_CURRENT_SOURCE_DIR}/game/frame"
-    "${CMAKE_CURRENT_SOURCE_DIR}/game/title"
-    "${CMAKE_CURRENT_SOURCE_DIR}/game/video"
-    "${CMAKE_CURRENT_BINARY_DIR}/identity"
-)
-target_compile_features(ctr_runtime PUBLIC cxx_std_20)
-target_link_libraries(ctr_runtime PUBLIC psxport)
+target_include_directories(ctr_game PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/game" "${CMAKE_CURRENT_BINARY_DIR}")
+target_compile_features(ctr_game PUBLIC cxx_std_20)
+target_link_libraries(ctr_game PUBLIC psxport)
 
 psxport_add_product(
   ctr_port
   CATALOG ctr::createCatalog
-  HEADER ctr_catalog.h
-  SOURCES game/entry/ctr_catalog.cpp
-  LIBRARIES ctr_runtime
+  HEADER product/catalog.h
+  SOURCES game/product/catalog.cpp
+  LIBRARIES ctr_game
 )
 target_compile_features(ctr_port PRIVATE cxx_std_20)
 set_target_properties(ctr_port PROPERTIES ENABLE_EXPORTS ON)
 add_dependencies(ctr_port gen_gpu_shaders)
 
 if(BUILD_TESTING)
-  add_executable(ctr_execution_exit_test tests/ctr_execution_exit.cpp)
-  target_compile_features(ctr_execution_exit_test PRIVATE cxx_std_20)
-  target_link_libraries(ctr_execution_exit_test PRIVATE ctr_runtime)
-  add_test(NAME ctr_execution_exit COMMAND ctr_execution_exit_test)
+  foreach(test_name
+          disc_ownership execution_exit field_owners frame_callback_owner frame_execution geometry_projection_owner
+          overlay_image_owner platform_bindings projection_owner widescreen_owner)
+    add_executable(ctr_${test_name}_test tests/${test_name}_test.cpp)
+    target_link_libraries(ctr_${test_name}_test PRIVATE ctr_game psxport_test_support)
+    add_test(NAME ctr_${test_name} COMMAND ctr_${test_name}_test)
+    set_tests_properties(ctr_${test_name} PROPERTIES TIMEOUT 20)
+  endforeach()
 
-  add_executable(ctr_disc_ownership_test tests/ctr_disc_ownership.cpp)
-  target_compile_features(ctr_disc_ownership_test PRIVATE cxx_std_20)
-  target_link_libraries(ctr_disc_ownership_test PRIVATE ctr_runtime)
-  add_test(NAME ctr_disc_ownership COMMAND ctr_disc_ownership_test)
-
-  add_executable(ctr_overlay_image_owner_test tests/ctr_overlay_image_owner.cpp)
-  target_compile_features(ctr_overlay_image_owner_test PRIVATE cxx_std_20)
-  target_link_libraries(ctr_overlay_image_owner_test PRIVATE ctr_runtime)
-  add_test(NAME ctr_overlay_image_owner COMMAND ctr_overlay_image_owner_test)
-
-  # The projection owner publishes `ofx` and `H`; its test pins the offsets it reads and the centre halving.
-  add_executable(ctr_projection_owner_test tests/ctr_projection_owner.cpp)
-  target_compile_features(ctr_projection_owner_test PRIVATE cxx_std_20)
-  target_link_libraries(ctr_projection_owner_test PRIVATE ctr_runtime)
-  add_test(NAME ctr_projection_owner COMMAND ctr_projection_owner_test)
-
-  add_executable(ctr_geometry_projection_owner_test tests/ctr_geometry_projection_owner.cpp)
-  target_compile_features(ctr_geometry_projection_owner_test PRIVATE cxx_std_20)
-  target_link_libraries(ctr_geometry_projection_owner_test PRIVATE ctr_runtime)
-  add_test(NAME ctr_geometry_projection_owner COMMAND ctr_geometry_projection_owner_test)
-  add_executable(ctr_widescreen_owner_test tests/ctr_widescreen_owner.cpp)
-  target_compile_features(ctr_widescreen_owner_test PRIVATE cxx_std_20)
-  target_link_libraries(ctr_widescreen_owner_test PRIVATE ctr_runtime)
-  add_test(NAME ctr_widescreen_owner COMMAND ctr_widescreen_owner_test)
-
-  add_executable(ctr_frame_execution_test tests/ctr_frame_execution.cpp)
-  target_compile_features(ctr_frame_execution_test PRIVATE cxx_std_20)
-  target_link_libraries(ctr_frame_execution_test PRIVATE ctr_runtime)
-  add_test(NAME ctr_frame_execution COMMAND ctr_frame_execution_test)
-  set_tests_properties(ctr_frame_execution PROPERTIES TIMEOUT 20)
-
-  # Each owner extracted from CtrFrameDriver is constructed directly.
-  add_executable(ctr_field_owners_test tests/ctr_field_owners.cpp)
-  target_compile_features(ctr_field_owners_test PRIVATE cxx_std_20)
-  target_link_libraries(ctr_field_owners_test PRIVATE ctr_runtime)
-  add_test(NAME ctr_field_owners COMMAND ctr_field_owners_test)
-  set_tests_properties(ctr_field_owners PROPERTIES TIMEOUT 20)
-
-  add_executable(ctr_platform_hle_plan_test tests/ctr_platform_hle_plan.cpp)
-  target_compile_features(ctr_platform_hle_plan_test PRIVATE cxx_std_20)
-  target_link_libraries(ctr_platform_hle_plan_test PRIVATE ctr_runtime)
-  add_test(NAME ctr_platform_hle_plan COMMAND ctr_platform_hle_plan_test)
-  set_tests_properties(ctr_platform_hle_plan PROPERTIES TIMEOUT 20)
-
-  add_executable(ctr_frame_callback_owner_test tests/ctr_frame_callback_owner.cpp)
-  target_compile_features(ctr_frame_callback_owner_test PRIVATE cxx_std_20)
-  target_link_libraries(ctr_frame_callback_owner_test PRIVATE ctr_runtime)
-  add_test(NAME ctr_frame_callback_owner COMMAND ctr_frame_callback_owner_test)
-  set_tests_properties(ctr_frame_callback_owner PROPERTIES TIMEOUT 20)
-
-  add_executable(ctr_frame_budget_test tests/ctr_frame_budget.cpp)
-  target_compile_features(ctr_frame_budget_test PRIVATE cxx_std_20)
-  target_link_libraries(ctr_frame_budget_test PRIVATE ctr_runtime)
+  add_executable(ctr_frame_budget_test tests/frame_budget_test.cpp)
+  target_link_libraries(ctr_frame_budget_test PRIVATE ctr_game psxport_test_support)
   # The zero-cycle host loop is a negative test: the driver aborts, so the test binary forks and
   # exits 77 when the host has no fork.
   add_test(NAME ctr_frame_budget
@@ -191,7 +136,7 @@ add_custom_target(
     "${Python3_EXECUTABLE}" "${PSXPORT_DIR}/tools/check_cpp_style.py"
     --root "${CMAKE_CURRENT_SOURCE_DIR}"
     --compile-commands "${CMAKE_BINARY_DIR}"
-  DEPENDS ctr_runtime ctr_port
+  DEPENDS ctr_game ctr_port
   USES_TERMINAL
   VERBATIM
 )

@@ -1,12 +1,12 @@
-#include "async_disc_owner.h"
+#include "disc/async_disc_owner.h"
 
-#include "cd_control.h"
 #include "cd_drive_timing.h"
 #include "core.h"
-#include "ctr_runtime.h"
-#include "frame_driver.h"
+#include "execution/guest_turns.h"
 #include "game.h"
-#include "native_ownership.h"
+#include "runtime/runtime.h"
+#include "runtime/session.h"
+#include "title/native_ownership.h"
 
 #include <cstdlib>
 #include <lucent/log.h>
@@ -39,13 +39,13 @@ void DiscReadOwner::noteTransferComplete(Core &core,
   dueTicks_ = core.game->timing.emulatedCpuTicks() + uint64_t{sectors} * cd_drive_sector_period_cpu_ticks(mode);
 }
 
-void DiscReadOwner::deliverIfDue(Core &core, const CtrRuntime &runtime) {
+void DiscReadOwner::deliverIfDue(Core &core) {
   if (pending_ && core.game->timing.emulatedCpuTicks() >= dueTicks_) {
-    deliverPending(core, runtime);
+    deliverPending(core);
   }
 }
 
-void DiscReadOwner::deliverPending(Core &core, const CtrRuntime &runtime) {
+void DiscReadOwner::deliverPending(Core &core) {
   if (!pending_) {
     return;
   }
@@ -62,28 +62,18 @@ void DiscReadOwner::deliverPending(Core &core, const CtrRuntime &runtime) {
   const R3000 interrupted = static_cast<const R3000 &>(core);
   core.r[4] = native::kCdlComplete;
   core.r[5] = 0u; // libcd result bytes; no CTR callback reads them
-  runtime.callToReturn(core, callback, "CTR libcd completion callback");
+  guest::callToReturn(core, callback, "CTR libcd completion callback");
   overlayImages_.publishAfterCallback(core, imageCandidate);
   static_cast<R3000 &>(core) = interrupted;
   ++deliveredCallbacks_;
   lucent::info("ctr-disc", "delivered libcd read-completion callback {} -> 0x{:08X}", deliveredCallbacks_, callback);
 }
 
-DiscReadOwner &discReadOwner(Core &core) {
-  return ctrFrameDriver(core).discReadOwner();
-}
-
-void cdReadWithCompletionCallback(Core *core) {
-  const GameRuntime *runtime = core->game ? core->game->runtime : nullptr;
-  if (runtime == nullptr) {
-    lucent::error("ctr-disc", "native CdRead has no bound CTR runtime to dispatch the completion callback");
-    std::abort();
-  }
-  const CtrRuntime &ctrRuntime = *static_cast<const CtrRuntime *>(runtime);
-  auto &completion = discReadOwner(*core);
-  completion.deliverPending(*core, ctrRuntime);
+void readWithCompletionCallback(Core *core) {
+  auto &completion = session(*core).discRead;
+  completion.deliverPending(*core);
   const CompletedDiscRead read{static_cast<uint32_t>(core->game->cd.setloc_lba), core->r[4], core->r[5], core->r[6]};
-  cd_read_stock_sync(core);
+  Runtime::from(*core).libcd().read(*core);
   if (core->r[2] == 0u) {
     // No drive to retry on an unreadable sector; stop rather than wait on a completion that cannot come.
     lucent::error("ctr-disc", "native CdRead failed; the retail completion callback cannot be delivered");

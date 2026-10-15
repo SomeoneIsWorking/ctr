@@ -1,12 +1,12 @@
-#include "startup_resource_load.h"
+#include "boot/startup_resource_load.h"
 
 #include "core.h"
-#include "ctr_runtime.h"
+#include "execution/guest_turns.h"
 #include "execution_services.h"
-#include "field_boundary.h"
-#include "native_ownership.h"
-#include "retail_return.h"
-#include "vsync_bridge.h"
+#include "frame/field_boundary.h"
+#include "frame/retail_return.h"
+#include "frame/vsync_bridge.h"
+#include "title/native_ownership.h"
 
 #include <cstdlib>
 #include <lucent/log.h>
@@ -66,8 +66,7 @@ inline constexpr uint32_t kOmittedVSyncFields = 1u;
 
 } // namespace
 
-StartupResourceLoad::StartupResourceLoad(CtrRuntime &runtime, FieldBoundary &field)
-    : runtime_(runtime), field_(field) {}
+StartupResourceLoad::StartupResourceLoad(FieldBoundary &field) : field_(field) {}
 
 bool StartupResourceLoad::ownsSuffix() const {
   return suffixAddress_ != 0;
@@ -84,7 +83,7 @@ bool StartupResourceLoad::consumeWaitedField() {
 void StartupResourceLoad::begin(Core &core) {
   const uint32_t callerStack = core.r[29];
   if (core.mem_r32(callerStack + kCallerFifthArgumentSlot) != kSynchronousFifthArgument) {
-    runtime_.callOriginalToReturn(core, native::kBootResourceWait, "CTR boot-resource wait");
+    guest::callOriginalToReturn(core, native::kBootResourceWait, "CTR boot-resource wait");
     return;
   }
   if (ownsSuffix() || waitedFields_ != 0) {
@@ -118,7 +117,7 @@ void StartupResourceLoad::begin(Core &core) {
   if (core.r[20] == 0) {
     core.r[31] = kPreWaitHelperReturn;
     psx::cpu::accountGuestInstructions(core, kOmittedCallInstructionCount);
-    runtime_.callToReturn(core, kPreWaitHelperCall, "CTR pre-resource-wait helper");
+    guest::callToReturn(core, kPreWaitHelperCall, "CTR pre-resource-wait helper");
   }
 
   core.r[2] = kFirstLoadedValue;
@@ -137,7 +136,7 @@ void StartupResourceLoad::begin(Core &core) {
   core.r[31] = kResourceSetupReturn;
   storeWord(kUnattributedZeroedWordSlot, 0u);
   psx::cpu::accountGuestInstructions(core, kSetupCallInstructionCount);
-  runtime_.callToReturn(core, kResourceSetupCall, "CTR resource setup");
+  guest::callToReturn(core, kResourceSetupCall, "CTR resource setup");
 
   storeWord(kBlockWord3SetupResultSlot, core.r[2]);
   core.r[2] = core.mem_r32(core.r[19]);
@@ -146,7 +145,7 @@ void StartupResourceLoad::begin(Core &core) {
   core.r[31] = kResourceCommitReturn;
   storeWord(kBlockWord4Slot, core.r[2]);
   psx::cpu::accountGuestInstructions(core, kCommitCallInstructionCount);
-  runtime_.callToReturn(core, kResourceCommitCall, "CTR resource commit");
+  guest::callToReturn(core, kResourceCommitCall, "CTR resource commit");
 
   core.r[31] = native::kBootResourceWaitReturn;
   core.r[4] = kOmittedVSyncMode;
@@ -165,22 +164,22 @@ void StartupResourceLoad::resume(Core &core) {
       caller != native::kBootResourceWaitRaceCaller) {
     refuseUnexpectedRetailReturn("state-zero resource wait", native::kBootResourceWaitFirstCaller, caller);
   }
-  runtime_.callToContinuation(core, suffix, caller, "CTR resource-wait suffix");
+  guest::callToContinuation(core, suffix, caller, "CTR resource-wait suffix");
   if (caller != native::kBootResourceWaitRaceCaller) {
-    runtime_.propagateFrameBoundary(core, runtime_.dispatch(core, caller), "CTR resource continuation");
+    guest::propagateFrameBoundary(core, guest::dispatch(core, caller), "CTR resource continuation");
     return;
   }
   // The race/menu caller is an interior suffix of 0x80033610 and returns to its sole direct caller.
-  const auto raceCaller = runtime_.dispatchHop(core, caller, native::kBootResourceWaitRaceResume);
+  const auto raceCaller = guest::dispatchHop(core, caller, native::kBootResourceWaitRaceResume);
   if (!raceCaller.returned()) {
-    runtime_.propagateFrameBoundary(core, raceCaller, "CTR race resource caller");
+    guest::propagateFrameBoundary(core, raceCaller, "CTR race resource caller");
     return;
   }
   if (core.r[31] != native::kBootResourceWaitRaceResume) {
     refuseUnexpectedRetailReturn("state-zero race resource suffix", native::kBootResourceWaitRaceResume, core.r[31]);
   }
-  runtime_.propagateFrameBoundary(
-      core, runtime_.dispatch(core, native::kBootResourceWaitRaceResume), "CTR race resource continuation");
+  guest::propagateFrameBoundary(
+      core, guest::dispatch(core, native::kBootResourceWaitRaceResume), "CTR race resource continuation");
 }
 
 } // namespace ctr

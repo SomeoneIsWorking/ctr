@@ -1,4 +1,4 @@
-#include "overlay_image_owner.h"
+#include "disc/overlay_image_owner.h"
 
 #include "core.h"
 #include "disc.h"
@@ -33,23 +33,23 @@ bool overlaps(GuestAddressRange lhs, GuestAddressRange rhs) {
 OverlayImageOwner::OverlayImageOwner(std::span<const OverlayDescriptor> descriptors, std::optional<uint32_t> archiveLba)
     : descriptors_(descriptors), archiveLba_(archiveLba), active_(descriptors.size()) {}
 
-bool OverlayImageOwner::locateArchive(Core &core) {
+std::optional<uint32_t> OverlayImageOwner::locateArchive(Core &core) {
   if (archiveLba_) {
-    return true;
+    return archiveLba_;
   }
   if (!core.game) {
     lucent::error("ctr-overlay", "BIGFILE lookup has no bound Game disc");
-    return false;
+    return std::nullopt;
   }
   uint32_t lba = 0;
   uint32_t bytes = 0;
   if (!disc_find_file(&core.game->disc, "BIGFILE.BIG", &lba, &bytes) || bytes != kBigfileBytes) {
     lucent::error("ctr-overlay", "BIGFILE.BIG is absent or has the wrong byte size (found {})", bytes);
-    return false;
+    return std::nullopt;
   }
   archiveLba_ = lba;
   lucent::info("ctr-overlay", "BIGFILE.BIG located at LBA {} ({} bytes)", lba, bytes);
-  return true;
+  return archiveLba_;
 }
 
 void OverlayImageOwner::retireOverwritten(Core &core, GuestAddressRange written) {
@@ -86,12 +86,13 @@ bool OverlayImageOwner::observeCompletedRead(Core &core, CompletedDiscRead read,
     retireOverwritten(core, written.value_or(GuestAddressRange{}));
   }
 
-  if (!locateArchive(core)) {
+  const std::optional<uint32_t> archiveLba = locateArchive(core);
+  if (!archiveLba) {
     return false;
   }
   for (std::size_t index = 0; index < descriptors_.size(); ++index) {
     const auto &module = descriptors_[index];
-    const uint64_t expectedLba = static_cast<uint64_t>(*archiveLba_) + module.sectorOffset;
+    const uint64_t expectedLba = static_cast<uint64_t>(*archiveLba) + module.sectorOffset;
     if (read.lba != expectedLba || read.sectors != (module.byteSize + kSectorBytes - 1u) / kSectorBytes) {
       continue;
     }
@@ -144,14 +145,15 @@ void OverlayImageOwner::publishAfterCallback(Core &core, std::optional<std::size
     std::abort();
   }
   const uint64_t identity = contentIdentity({core.ram + range->begin, module.byteSize});
-  if (active_[*candidate]) {
-    if (!core.imageCatalog().deactivate(active_[*candidate]->identity)) {
+  std::optional<ActiveImage> &slot = active_[*candidate];
+  if (slot.has_value()) {
+    if (!core.imageCatalog().deactivate(slot->identity)) {
       lucent::error("ctr-overlay", "{} old generation was already missing at publication", module.name);
       std::abort();
     }
   }
   const auto active = core.imageCatalog().activate(module.name, *range, identity);
-  active_[*candidate] = ActiveImage{active, *range};
+  slot = ActiveImage{active, *range};
   lucent::info("ctr-overlay",
                "published {} generation {} as [{:08X},{:08X})",
                module.name,

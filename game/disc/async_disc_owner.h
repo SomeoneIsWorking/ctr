@@ -1,15 +1,13 @@
 #pragma once
 
-#include "overlay_image_owner.h"
+#include "disc/overlay_image_owner.h"
 
 #include <cstdint>
 #include <optional>
 
-struct Core;
+class Core;
 
 namespace ctr {
-
-class CtrRuntime;
 
 // Stock libcd ends CdRead from the CD interrupt via the callback at 0x800771B0 (slot 0x8008AD10);
 // psxport transfers synchronously, so that completion is owed until the issuing call unwinds.
@@ -21,11 +19,11 @@ public:
                             uint32_t sectors = 0,
                             uint8_t mode = 0x80u);
 
-  void deliverPending(Core &core, const CtrRuntime &runtime);
+  void deliverPending(Core &core);
 
   // Mid-field delivery for a guest that polls for its completion: the drive's read time must have elapsed,
   // so the loader that issued the read has published its state first.
-  void deliverIfDue(Core &core, const CtrRuntime &runtime);
+  void deliverIfDue(Core &core);
 
   [[nodiscard]] bool hasPendingCompletion() const {
     return pending_;
@@ -45,9 +43,7 @@ private:
   uint32_t polledReads_ = 0;
 };
 
-DiscReadOwner &discReadOwner(Core &core);
-
-// PlatformHle binding for the stock libcd CdRead leaf: shared synchronous transfer, then an owed callback.
-void cdReadWithCompletionCallback(Core *core);
+// The CdRead leaf: the stock synchronous transfer, then an owed completion callback.
+void readWithCompletionCallback(Core *core);
 
 } // namespace ctr

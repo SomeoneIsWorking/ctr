@@ -1,15 +1,15 @@
-#include "frame_driver.h"
+#include "frame/frame_driver.h"
 
-#include "cfg.h"
 #include "core.h"
-#include "ctr_runtime.h"
+#include "execution/guest_turns.h"
 #include "execution_control.h"
 #include "execution_exit.h"
-#include "field_override_scope.h"
+#include "frame/field_override_scope.h"
+#include "frame/retail_return.h"
+#include "frame/vsync_bridge.h"
 #include "game.h"
-#include "native_ownership.h"
-#include "retail_return.h"
-#include "vsync_bridge.h"
+#include "runtime/session.h"
+#include "title/native_ownership.h"
 
 #include <array>
 #include <cstdlib>
@@ -28,12 +28,11 @@ constexpr VsyncBridge kShutdownVSyncBridge{
 
 } // namespace
 
-CtrFrameDriver::CtrFrameDriver(CtrRuntime &runtime)
-    : runtime_(runtime), presentation_(runtime.sceneCut()), field_(presentation_), resourceLoad_(runtime, field_),
-      resourcePump_(runtime, field_), startupAudio_(runtime, field_), spuDmaRegistration_(runtime),
-      frameSuffix_(runtime, field_) {}
+FrameDriver::FrameDriver(Game &game)
+    : discReadOwner_(session(game.core).discRead), presentation_(session(game.core).sceneCut), field_(presentation_),
+      resourceLoad_(field_), resourcePump_(field_), startupAudio_(field_), frameSuffix_(field_) {}
 
-void CtrFrameDriver::stepFrame(Core &core, uint32_t frame) {
+void FrameDriver::stepFrame(Core &core, uint32_t frame) {
   if (!core.game) {
     lucent::error("ctr-frame", "frame {} has no bound Game", frame);
     std::abort();
@@ -70,12 +69,12 @@ void CtrFrameDriver::stepFrame(Core &core, uint32_t frame) {
   core.game->timing.logicFrame = frame;
   core.rsub.otAttr.beginLogicFrame(frame);
   core.game->timing.frameTick();
-  frameCallbacks_.deliverField(core, runtime_);
+  frameCallbacks_.deliverField(core);
   core.game->pad.serviceFrame();
   // XA playback is pull-driven; state zero waits on the clip task at 0x8008D708.
   core.game->spu_audio.frame();
   // Retail delivers this from the CD interrupt, and the loader stores its buffer only after the read returns.
-  discReadOwner_.deliverPending(core, runtime_);
+  discReadOwner_.deliverPending(core);
 
   if (!field_.pending(core)) {
     resumeOwedContinuation(core);
@@ -90,9 +89,9 @@ void CtrFrameDriver::stepFrame(Core &core, uint32_t frame) {
     resourceLoad_.resume(core);
   } else if (!bootEntered_) {
     bootEntered_ = true;
-    execution = dispatchField(core, frame, runtime_.bootTarget());
+    execution = dispatchField(core, core.pc);
   } else {
-    execution = dispatchField(core, frame, native::kFrameLoopResume);
+    execution = dispatchField(core, native::kFrameLoopResume);
   }
   if (field_.pending(core) || (execution && execution->reason == psx::cpu::ExecutionExitReason::FrameBoundary)) {
     field_.finishField(core, frame);
@@ -103,7 +102,7 @@ void CtrFrameDriver::stepFrame(Core &core, uint32_t frame) {
 }
 
 // The continuation ladder; only one continuation can be owed at a time.
-void CtrFrameDriver::resumeOwedContinuation(Core &core) {
+void FrameDriver::resumeOwedContinuation(Core &core) {
   if (frameSuffix_.isPending()) {
     frameSuffix_.resume(core);
   } else if (startupAudio_.ownsContinuation()) {
@@ -115,9 +114,9 @@ void CtrFrameDriver::resumeOwedContinuation(Core &core) {
   }
 }
 
-void CtrFrameDriver::refuseUnfinishedField(Core &core,
-                                           uint32_t frame,
-                                           const std::optional<psx::cpu::ExecutionResult> &execution) {
+void FrameDriver::refuseUnfinishedField(Core &core,
+                                        uint32_t frame,
+                                        const std::optional<psx::cpu::ExecutionResult> &execution) {
   if (execution) {
     lucent::error("ctr-frame",
                   "retail execution left frame {} at 0x{:08X} with {}: {}",
@@ -131,15 +130,15 @@ void CtrFrameDriver::refuseUnfinishedField(Core &core,
   std::abort();
 }
 
-psx::cpu::ExecutionResult CtrFrameDriver::dispatchField(Core &core, uint32_t frame, uint32_t entry) {
-  auto result = runtime_.dispatch(core, entry);
+psx::cpu::ExecutionResult FrameDriver::dispatchField(Core &core, uint32_t entry) {
+  auto result = guest::dispatch(core, entry);
   while (result.reason == psx::cpu::ExecutionExitReason::BudgetExhausted) {
     // A field has no return boundary: a budget exit that consumed cycles is the same
     // field, one that consumed none made no progress and is refused.
     if (result.guestPc != core.pc || result.cycles == 0) {
       lucent::error("ctr-frame",
                     "frame {} cannot resume budget exit {} at 0x{:08X}: Core PC=0x{:08X}, cycles={}",
-                    frame,
+                    core.game->timing.logicFrame,
                     budgetExitsThisField_ + 1u,
                     result.guestPc,
                     core.pc,
@@ -148,42 +147,38 @@ psx::cpu::ExecutionResult CtrFrameDriver::dispatchField(Core &core, uint32_t fra
     }
     ++budgetExitsThisField_;
     // Retail raises the CD interrupt asynchronously; a guest polling for it never reaches a field start.
-    discReadOwner_.deliverIfDue(core, runtime_);
-    result = runtime_.dispatch(core, result.guestPc);
+    discReadOwner_.deliverIfDue(core);
+    result = guest::dispatch(core, result.guestPc);
   }
   return result;
 }
 
-uint32_t CtrFrameDriver::completedFrames() const {
+uint32_t FrameDriver::completedFrames() const {
   return field_.completedFields();
 }
 
-uint64_t CtrFrameDriver::budgetExitsForLastField() const {
+uint64_t FrameDriver::budgetExitsForLastField() const {
   return budgetExitsThisField_;
 }
 
-const ProjectionOwner &CtrFrameDriver::projection() const {
+const ProjectionOwner &FrameDriver::projection() const {
   return projection_;
 }
 
-const CtrWidescreen &CtrFrameDriver::widescreen() const {
+const WidescreenOwner &FrameDriver::widescreen() const {
   return widescreen_;
 }
 
-const PresentationOwner &CtrFrameDriver::presentation() const {
+const PresentationOwner &FrameDriver::presentation() const {
   return presentation_;
 }
 
-DiscReadOwner &CtrFrameDriver::discReadOwner() {
-  return discReadOwner_;
-}
-
-CtrFrameDriver &ctrFrameDriver(Core &core) {
+FrameDriver &FrameDriver::from(Core &core) {
   if (!core.game || !core.game->frameDriver) {
     lucent::error("ctr-frame", "guest override has no Core with a bound CTR frame driver");
     std::abort();
   }
-  auto *driver = dynamic_cast<CtrFrameDriver *>(core.game->frameDriver.get());
+  auto *driver = dynamic_cast<FrameDriver *>(core.game->frameDriver.get());
   if (!driver) {
     lucent::error("ctr-frame", "guest override reached a frame driver this title does not own");
     std::abort();
@@ -191,66 +186,63 @@ CtrFrameDriver &ctrFrameDriver(Core &core) {
   return *driver;
 }
 
-void CtrFrameDriver::onStartupGpuVSync(Core *core) {
-  CtrFrameDriver &driver = ctrFrameDriver(*core);
-  runVsyncBridge(*core, driver.runtime_, kStartupGpuVSyncBridge);
+void FrameDriver::onStartupGpuVSync(Core *core) {
+  runVsyncBridge(*core, kStartupGpuVSyncBridge);
 }
 
-void CtrFrameDriver::onStartupDisplayVSync(Core *core) {
-  CtrFrameDriver &driver = ctrFrameDriver(*core);
-  runVsyncBridge(*core, driver.runtime_, kStartupDisplayVSyncBridge);
+void FrameDriver::onStartupDisplayVSync(Core *core) {
+  runVsyncBridge(*core, kStartupDisplayVSyncBridge);
 }
 
-void CtrFrameDriver::onShutdownVSync(Core *core) {
-  CtrFrameDriver &driver = ctrFrameDriver(*core);
-  runVsyncBridge(*core, driver.runtime_, kShutdownVSyncBridge);
+void FrameDriver::onShutdownVSync(Core *core) {
+  runVsyncBridge(*core, kShutdownVSyncBridge);
 }
 
-void CtrFrameDriver::onBootResourceWait(Core *core) {
-  ctrFrameDriver(*core).resourceLoad_.begin(*core);
+void FrameDriver::onBootResourceWait(Core *core) {
+  from(*core).resourceLoad_.begin(*core);
 }
 
-void CtrFrameDriver::onBootResourcePump(Core *core) {
-  ctrFrameDriver(*core).resourcePump_.begin(*core);
+void FrameDriver::onBootResourcePump(Core *core) {
+  from(*core).resourcePump_.begin(*core);
 }
 
-void CtrFrameDriver::onStartupAudioService(Core *core) {
-  ctrFrameDriver(*core).startupAudio_.service(*core);
+void FrameDriver::onStartupAudioService(Core *core) {
+  from(*core).startupAudio_.service(*core);
 }
 
-void CtrFrameDriver::onDmaCallbackRegistration(Core *core) {
-  ctrFrameDriver(*core).spuDmaRegistration_.service(*core);
+void FrameDriver::onDmaCallbackRegistration(Core *core) {
+  from(*core).spuDmaRegistration_.service(*core);
 }
 
-void CtrFrameDriver::onFrameTiming(Core *core) {
-  CtrFrameDriver &driver = ctrFrameDriver(*core);
+void FrameDriver::onFrameTiming(Core *core) {
+  FrameDriver &driver = from(*core);
   if (core->r[31] == native::kFrameTimingReturn) {
     driver.frameSuffix_.completeFieldTiming(*core);
     return;
   }
   if (core->r[31] == native::kFrameTimingQueryReturn) {
-    driver.runtime_.callOriginalToReturn(*core, native::kFrameTiming, "CTR frame-timing query");
+    guest::callOriginalToReturn(*core, native::kFrameTiming, "CTR frame-timing query");
     return;
   }
   refuseUnexpectedRetailReturn("frame timing owner", native::kFrameTimingReturn, core->r[31]);
 }
 
-void CtrFrameDriver::onProjectionProducer(Core *core) {
-  ctrFrameDriver(*core).publishMeasuredProjection(*core);
+void FrameDriver::onProjectionProducer(Core *core) {
+  from(*core).publishMeasuredProjection(*core);
 }
 
-void CtrFrameDriver::publishMeasuredProjection(Core &core) {
+void FrameDriver::publishMeasuredProjection(Core &core) {
   const uint32_t returnAddress = core.r[31];
   const ProjectionOwner::Source source = classifyProjectionSource(returnAddress);
   projection_.publish(
       core,
-      [this](Core &projectionCore) {
-        runtime_.callOriginalToReturn(projectionCore, native::kProjectionProducer, "CTR projection producer");
+      [](Core &projectionCore) {
+        guest::callOriginalToReturn(projectionCore, native::kProjectionProducer, "CTR projection producer");
       },
       source);
 }
 
-ProjectionOwner::Source CtrFrameDriver::classifyProjectionSource(uint32_t returnAddress) {
+ProjectionOwner::Source FrameDriver::classifyProjectionSource(uint32_t returnAddress) {
   // The three return addresses are the identity; this is the single list of them.
   if (returnAddress == native::kProjectionReturnLensflare) {
     return ProjectionOwner::Source::LensFlare;

@@ -30,7 +30,7 @@ escape through JIT frames is forbidden. The execution boundary is:
 2. Lightrec observes the request and returns normally at a safe dispatcher boundary after
    synchronizing architectural state. The result carries a typed reason; no C++ exception crosses
    emitted host code.
-3. `CtrFrameDriver::stepFrame` validates the result, lets scoped driver/override ownership unwind
+3. `FrameDriver::stepFrame` validates the result, lets scoped driver/override ownership unwind
    normally, finishes exactly one field/render-list/presentation fence, and increments its
    field counter. An unexpected normal return, stale continuation, or unknown reason aborts.
 4. Required focused positive/negative coverage includes every former throw site, nested/repeated service cases,
@@ -41,7 +41,7 @@ Whole-field dispatch uses PSXPort's `dispatchGuestUntilExit`, which continues af
 pending work, and syscalls while preserving typed exit/fault/budget results. A function's incoming
 `ra` cannot delimit a field. Interior suffixes that restore another caller instead pass their
 measured continuation explicitly to `executeFunction`; resource waits obtain it from their owned
-saved frame. Native helper calls that must return normally continue to use `dispatchToReturn`.
+saved frame. Native helper calls that must return normally use `guest::callToReturn` (`game/execution/guest_turns.*`).
 
 ## Ordered migration
 

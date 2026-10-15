@@ -1,11 +1,10 @@
-// CtrWidescreen aspect answer and plan-driven projection publication.
+// WidescreenOwner aspect answer and plan-driven projection publication.
 
 #include "core.h"
-#include "ctr_runtime.h"
 #include "game.h"
-#include "hw_bind.h"
-#include "projection_owner.h"
-#include "widescreen_owner.h"
+#include "runtime/runtime.h"
+#include "video/projection_owner.h"
+#include "video/widescreen_owner.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -40,10 +39,16 @@ constexpr uint32_t kScreenDistanceOffset = 0x18u;
 constexpr uint32_t kWidthOffset = 0x20u;
 constexpr uint32_t kHeightOffset = 0x22u;
 
-void writeView(Core &core, uint32_t view, uint16_t width, uint16_t height, uint32_t screenDistance) {
-  core.mem_w32(view + kScreenDistanceOffset, screenDistance);
-  core.mem_w16(view + kWidthOffset, width);
-  core.mem_w16(view + kHeightOffset, height);
+struct ViewFacts {
+  uint16_t width = 0;
+  uint16_t height = 0;
+  uint32_t screenDistance = 0;
+};
+
+void writeView(Core &core, uint32_t view, const ViewFacts &facts) {
+  core.mem_w32(view + kScreenDistanceOffset, facts.screenDistance);
+  core.mem_w16(view + kWidthOffset, facts.width);
+  core.mem_w16(view + kHeightOffset, facts.height);
 }
 
 void publishAgreeing(Core &core) {
@@ -55,11 +60,16 @@ void publishAgreeing(Core &core) {
 }
 
 void test_aspect_answer_follows_the_settings_value() {
-  ctr::CtrRuntime runtime(0x80010000u);
-  psxport_install_game(runtime);
-  auto game = std::make_unique<Game>();
+  ctr::Runtime runtime;
+  auto game = std::make_unique<Game>(runtime, psx::config::Config{});
   Core &core = game->core;
-  ctr::CtrWidescreen wide;
+  ctr::WidescreenOwner wide;
+  // A null guest projection would resolve every plan to 4:3.
+  const GuestWidescreenProjection *projection = runtime.guestWidescreenProjection();
+  check(projection != nullptr, "the runtime returned no guest projection");
+  if (projection == nullptr) {
+    return;
+  }
 
   struct Case {
     int setting;
@@ -74,27 +84,21 @@ void test_aspect_answer_follows_the_settings_value() {
   };
   for (const Case &entry : cases) {
     game->mods.aspect = entry.setting;
-    check(wide.presentationAspect(core) == entry.expected, entry.name);
+    check(projection->presentationAspect(core) == entry.expected, entry.name);
   }
-  check(runtime.guestWidescreenProjection() == &runtime.widescreen(),
-        "the runtime hands back CTR's own guest projection, not the base nullptr");
-  check(runtime.guestWidescreenProjection() != nullptr,
-        "a null guest projection is the defect; null must never be what the runtime returns");
-  check(!runtime.widescreen().latched(), "the plan is resolved on the first publication, not at construction");
+  check(!wide.latched(), "the plan is resolved on the first publication, not at construction");
 }
 
 void test_plan_source_widens_from_the_guests_own_view() {
-  ctr::CtrRuntime runtime(0x80010000u);
-  psxport_install_game(runtime);
-  auto game = std::make_unique<Game>();
+  ctr::Runtime runtime;
+  auto game = std::make_unique<Game>(runtime, psx::config::Config{});
   Core &core = game->core;
-  gte_bind(&core);
   constexpr uint32_t kView = 0x800A0000u;
-  writeView(core, kView, 512, 216, 0x2000u);
+  writeView(core, kView, {512, 216, 0x2000u});
   core.r[4] = kView;
 
   ctr::ProjectionOwner owner;
-  ctr::CtrWidescreen wide;
+  ctr::WidescreenOwner wide;
   int asked = 0;
   owner.setPlanSource([&asked](Core &, const ctr::GuestViewProjection &view) {
     ++asked;
@@ -127,13 +131,11 @@ void test_plan_source_widens_from_the_guests_own_view() {
 }
 
 void test_a_plan_narrower_than_the_view_does_not_widen() {
-  ctr::CtrRuntime runtime(0x80010000u);
-  psxport_install_game(runtime);
-  auto game = std::make_unique<Game>();
+  ctr::Runtime runtime;
+  auto game = std::make_unique<Game>(runtime, psx::config::Config{});
   Core &core = game->core;
-  gte_bind(&core);
   constexpr uint32_t kView = 0x800A0000u;
-  writeView(core, kView, 512, 216, 0x2000u);
+  writeView(core, kView, {512, 216, 0x2000u});
   core.r[4] = kView;
 
   ctr::ProjectionOwner owner;

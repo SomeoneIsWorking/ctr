@@ -1,8 +1,8 @@
-#include "presentation_owner.h"
+#include "video/presentation_owner.h"
 
 #include "core.h"
 #include "game.h"
-#include "scene_cut.h"
+#include "video/scene_cut.h"
 
 #include <cstdlib>
 #include <lucent/log.h>

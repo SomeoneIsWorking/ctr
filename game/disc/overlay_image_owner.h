@@ -1,7 +1,7 @@
 #pragma once
 
-#include "ctr_overlay_catalog.h"
-#include "guest_program_image.h"
+#include "guest_address_range.h"
+#include "identity/overlay_catalog.h"
 #include "image_identity.h"
 
 #include <cstddef>
@@ -10,7 +10,7 @@
 #include <span>
 #include <vector>
 
-struct Core;
+class Core;
 
 namespace ctr {
 
@@ -39,7 +39,8 @@ private:
     GuestAddressRange range;
   };
 
-  bool locateArchive(Core &core);
+  // The BIGFILE.BIG start sector, found once; empty when the disc has no matching archive.
+  std::optional<uint32_t> locateArchive(Core &core);
   void retireOverwritten(Core &core, GuestAddressRange written);
 
   std::span<const OverlayDescriptor> descriptors_;

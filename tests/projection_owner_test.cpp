@@ -1,10 +1,9 @@
 // ProjectionOwner: view capture, centre derivation, sequence and previous().
 
 #include "core.h"
-#include "ctr_runtime.h"
 #include "game.h"
-#include "hw_bind.h"
-#include "projection_owner.h"
+#include "runtime/runtime.h"
+#include "video/projection_owner.h"
 
 #include <cstdio>
 #include <memory>
@@ -31,10 +30,16 @@ constexpr uint32_t kScreenDistanceOffset = 0x18u;
 constexpr uint32_t kWidthOffset = 0x20u;
 constexpr uint32_t kHeightOffset = 0x22u;
 
-void writeView(Core &core, uint32_t view, uint16_t width, uint16_t height, uint32_t screenDistance) {
-  core.mem_w32(view + kScreenDistanceOffset, screenDistance);
-  core.mem_w16(view + kWidthOffset, width);
-  core.mem_w16(view + kHeightOffset, height);
+struct ViewFacts {
+  uint16_t width = 0;
+  uint16_t height = 0;
+  uint32_t screenDistance = 0;
+};
+
+void writeView(Core &core, uint32_t view, const ViewFacts &facts) {
+  core.mem_w32(view + kScreenDistanceOffset, facts.screenDistance);
+  core.mem_w16(view + kWidthOffset, facts.width);
+  core.mem_w16(view + kHeightOffset, facts.height);
 }
 
 void publishAgreeing(Core &core) {
@@ -46,13 +51,11 @@ void publishAgreeing(Core &core) {
 }
 
 void test_publication_carries_the_views_own_numbers() {
-  ctr::CtrRuntime runtime(0x80010000u);
-  psxport_install_game(runtime);
-  auto game = std::make_unique<Game>();
+  ctr::Runtime runtime;
+  auto game = std::make_unique<Game>(runtime, psx::config::Config{});
   Core &core = game->core;
-  gte_bind(&core);
   constexpr uint32_t kView = 0x800A0000u;
-  writeView(core, kView, 320, 240, 0x1000u);
+  writeView(core, kView, {320, 240, 0x1000u});
   core.r[4] = kView;
 
   ctr::ProjectionOwner owner;
@@ -81,20 +84,18 @@ void test_publication_carries_the_views_own_numbers() {
 }
 
 void test_previous_lags_and_the_sequence_advances() {
-  ctr::CtrRuntime runtime(0x80010000u);
-  psxport_install_game(runtime);
-  auto game = std::make_unique<Game>();
+  ctr::Runtime runtime;
+  auto game = std::make_unique<Game>(runtime, psx::config::Config{});
   Core &core = game->core;
-  gte_bind(&core);
   constexpr uint32_t kView = 0x800A0000u;
   ctr::ProjectionOwner owner;
 
-  writeView(core, kView, 320, 240, 0x1000u);
+  writeView(core, kView, {320, 240, 0x1000u});
   core.r[4] = kView;
   owner.publish(core, publishAgreeing, ctr::ProjectionOwner::Source::LensFlare);
   check(!owner.previous().valid(), "previous() is still empty after exactly one publication");
 
-  writeView(core, kView, 368, 240, 0x1200u);
+  writeView(core, kView, {368, 240, 0x1200u});
   owner.publish(core, publishAgreeing, ctr::ProjectionOwner::Source::LensFlare);
   checkEq(owner.previous().nativeWidth, 320, "previous() holds the FIRST publication's width");
   checkEq(owner.previous().screenDistance, 0x1000, "previous() holds the FIRST publication's H");
@@ -109,13 +110,11 @@ void test_previous_lags_and_the_sequence_advances() {
 }
 
 void test_publication_requires_a_body_and_accepts_one() {
-  ctr::CtrRuntime runtime(0x80010000u);
-  psxport_install_game(runtime);
-  auto game = std::make_unique<Game>();
+  ctr::Runtime runtime;
+  auto game = std::make_unique<Game>(runtime, psx::config::Config{});
   Core &core = game->core;
-  gte_bind(&core);
   constexpr uint32_t kView = 0x800A0000u;
-  writeView(core, kView, 256, 224, 0x0F00u);
+  writeView(core, kView, {256, 224, 0x0F00u});
   core.r[4] = kView;
   ctr::ProjectionOwner owner;
   ctr::ProjectionOwner::RetailBody body = publishAgreeing;
@@ -138,13 +137,11 @@ makePlan(int nativeWidth, int nativeHeight, GuestPresentationExtent sink, Presen
 }
 
 void test_without_a_plan_publication_is_retail() {
-  ctr::CtrRuntime runtime(0x80010000u);
-  psxport_install_game(runtime);
-  auto game = std::make_unique<Game>();
+  ctr::Runtime runtime;
+  auto game = std::make_unique<Game>(runtime, psx::config::Config{});
   Core &core = game->core;
-  gte_bind(&core);
   constexpr uint32_t kView = 0x800A0000u;
-  writeView(core, kView, 320, 240, 0x140u);
+  writeView(core, kView, {320, 240, 0x140u});
   core.r[4] = kView;
 
   ctr::ProjectionOwner owner;
@@ -161,13 +158,11 @@ void test_without_a_plan_publication_is_retail() {
 }
 
 void test_a_standard_aspect_plan_stays_retail() {
-  ctr::CtrRuntime runtime(0x80010000u);
-  psxport_install_game(runtime);
-  auto game = std::make_unique<Game>();
+  ctr::Runtime runtime;
+  auto game = std::make_unique<Game>(runtime, psx::config::Config{});
   Core &core = game->core;
-  gte_bind(&core);
   constexpr uint32_t kView = 0x800A0000u;
-  writeView(core, kView, 320, 240, 0x140u);
+  writeView(core, kView, {320, 240, 0x140u});
   core.r[4] = kView;
 
   const GuestProjectionPlan plan = makePlan(320, 240, {1280, 720}, PresentationAspect::Standard4x3);
@@ -182,16 +177,14 @@ void test_a_standard_aspect_plan_stays_retail() {
 }
 
 void test_a_wide_plan_widens_the_gte_and_not_the_guest() {
-  ctr::CtrRuntime runtime(0x80010000u);
-  psxport_install_game(runtime);
-  auto game = std::make_unique<Game>();
+  ctr::Runtime runtime;
+  auto game = std::make_unique<Game>(runtime, psx::config::Config{});
   Core &core = game->core;
-  gte_bind(&core);
   constexpr uint32_t kView = 0x800A0000u;
   constexpr uint16_t kWidth = 320;
   constexpr uint16_t kHeight = 240;
   constexpr uint32_t kDistance = 320;
-  writeView(core, kView, kWidth, kHeight, kDistance);
+  writeView(core, kView, {kWidth, kHeight, kDistance});
   core.r[4] = kView;
 
   const GuestProjectionPlan plan = makePlan(kWidth, kHeight, {1280, 720}, PresentationAspect::Wide16x9);
@@ -237,13 +230,11 @@ void test_a_wide_plan_widens_the_gte_and_not_the_guest() {
 }
 
 void test_the_retail_comparison_sees_retail_not_the_plan() {
-  ctr::CtrRuntime runtime(0x80010000u);
-  psxport_install_game(runtime);
-  auto game = std::make_unique<Game>();
+  ctr::Runtime runtime;
+  auto game = std::make_unique<Game>(runtime, psx::config::Config{});
   Core &core = game->core;
-  gte_bind(&core);
   constexpr uint32_t kView = 0x800A0000u;
-  writeView(core, kView, 320, 240, 320);
+  writeView(core, kView, {320, 240, 320});
   core.r[4] = kView;
 
   const GuestProjectionPlan plan = makePlan(320, 240, {1280, 720}, PresentationAspect::Wide16x9);

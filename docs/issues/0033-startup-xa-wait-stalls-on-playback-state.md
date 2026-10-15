@@ -15,7 +15,7 @@ runs in the BIOS HookEntryInt context (`bios_interrupt_enter_handler_context`).
 Third cause (next stall): the SPU channel-4 DMA completion was consumed by the generic IRQ path because the
 framework registry held no callback. `SpuDmaCallbackRegistration` publishes the guest's slot.
 
-Tests: `tests/test_cdc_xa_filter.cpp` (route, drive level), `tests/ctr_field_owners.cpp` (registration).
+Tests: `tests/test_cdc_xa_filter.cpp` (route, drive level), `tests/field_owners_test.cpp` (registration).
 
 Fourth cause (2026-10-08): `psxport/runtime/psx/cd/cdc_native.cpp: write_request_register` dropped the sector buffer
 on a BFRD clear and never emptied the FIFO on a re-assert; Beetle flushes the FIFO on a request write without

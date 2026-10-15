@@ -6,7 +6,6 @@ class Core;
 
 namespace ctr {
 
-class CtrRuntime;
 class FieldBoundary;
 
 // The three guest words the retail frame suffix at 0x80037880 waits on.
@@ -24,7 +23,7 @@ struct FrameSuffixWait {
 // The per-field frame-timing bridge and the retail suffix that closes the field.
 class FrameSuffix final {
 public:
-  FrameSuffix(CtrRuntime &runtime, FieldBoundary &field);
+  FrameSuffix(FieldBoundary &field);
 
   [[nodiscard]] bool isPending() const;
 
@@ -36,7 +35,6 @@ public:
 private:
   [[nodiscard]] FrameSuffixWait readWaitState(Core &core) const;
 
-  CtrRuntime &runtime_;
   FieldBoundary &field_;
   bool pending_ = false;
 };

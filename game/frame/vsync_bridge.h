@@ -6,8 +6,6 @@ class Core;
 
 namespace ctr {
 
-class CtrRuntime;
-
 struct VsyncBridge {
   uint32_t calleeAddress = 0;
   // Any other return address is refused.
@@ -21,6 +19,6 @@ struct VsyncBridge {
 inline constexpr uint32_t kOmittedCallInstructionCount = 2u;
 
 // Runs the retail callee without its guest VSync call and resumes at the continuation; must end in a frame boundary.
-void runVsyncBridge(Core &core, CtrRuntime &runtime, const VsyncBridge &bridge);
+void runVsyncBridge(Core &core, const VsyncBridge &bridge);
 
 } // namespace ctr

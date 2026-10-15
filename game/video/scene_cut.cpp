@@ -1,7 +1,7 @@
-#include "scene_cut.h"
+#include "video/scene_cut.h"
 
 #include "core.h"
-#include "native_ownership.h"
+#include "title/native_ownership.h"
 
 namespace ctr {
 

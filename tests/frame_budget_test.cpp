@@ -1,16 +1,17 @@
 // Frame-driver execution budget against hand-assembled guest code.
 
-#include "async_disc_owner.h"
 #include "cd_drive_timing.h"
 #include "core.h"
-#include "ctr_runtime.h"
+#include "disc/async_disc_owner.h"
 #include "execution_control.h"
-#include "frame_driver.h"
+#include "frame/frame_driver.h"
 #include "game.h"
 #include "image_identity.h"
 #include "lightrec_executor.h"
 #include "native_dispatch.h"
-#include "native_ownership.h"
+#include "runtime/runtime.h"
+#include "runtime/session.h"
+#include "title/native_ownership.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -56,8 +57,15 @@ constexpr std::uint32_t call(std::uint32_t address) {
   return 0x0C000000u | ((address >> 2u) & 0x03ffffffu);
 }
 
-// A spin of `extra` iterations beyond one turn plus one cycle, so a field must take a budget exit before the boundary.
-bool writeSpinLoop(Core &core, std::uint32_t at, std::uint64_t extra = 0) {
+// A spin of `extraIterations` beyond one turn plus one cycle, so a field must take a budget exit before the boundary.
+struct SpinLoop {
+  std::uint32_t at = 0;
+  std::uint64_t extraIterations = 0;
+};
+
+bool writeSpinLoop(Core &core, const SpinLoop &loop) {
+  const std::uint32_t at = loop.at;
+  const std::uint64_t extra = loop.extraIterations;
   auto allowance = psx::cpu::ExecutionBudget::currentTurn(core).cycles;
   if (allowance + extra >= std::numeric_limits<std::uint32_t>::max()) {
     std::puts("FAIL: synthetic loop cannot represent the current turn allowance");
@@ -76,8 +84,8 @@ void returnToEntry(Core *core) {
   core->r[31] = kEntry;
 }
 
-int runFinite(Core &core, ctr::CtrFrameDriver &driver) {
-  if (!writeSpinLoop(core, kEntry)) {
+int runFinite(Core &core, ctr::FrameDriver &driver) {
+  if (!writeSpinLoop(core, {.at = kEntry})) {
     return 1;
   }
   installFrameBoundary(core);
@@ -101,18 +109,18 @@ int runFinite(Core &core, ctr::CtrFrameDriver &driver) {
 std::uint32_t readSectors = 1;
 
 void startRead(Core *core) {
-  ctr::discReadOwner(*core).noteTransferComplete(*core, std::nullopt, readSectors, 0x80u);
+  ctr::session(*core).discRead.noteTransferComplete(*core, std::nullopt, readSectors, 0x80u);
 }
 
 // A read finishes inside the field and the guest then spins on its callback, never reaching a field start.
 // The callback may arrive only once the drive would have spent the read's time.
-int runCompletion(Core &core, ctr::CtrFrameDriver &driver, std::uint32_t sectors, bool expectDelivered) {
+int runCompletion(Core &core, ctr::FrameDriver &driver, std::uint32_t sectors, bool expectDelivered) {
   readSectors = sectors;
   core.mem_w32(kEntry, call(kReadStart));
   core.mem_w32(kEntry + 4u, 0u);
   core.mem_w32(kEntry + 8u, 0x3C1F8003u);  // lui ra, 0x8003
   core.mem_w32(kEntry + 12u, 0x37FF785Cu); // ori ra, ra, 0x785c: kFrameTimingReturn, clobbered by the call
-  if (!writeSpinLoop(core, kEntry + 16u, 4u * cd_drive_sector_period_cpu_ticks(0x80u))) {
+  if (!writeSpinLoop(core, {.at = kEntry + 16u, .extraIterations = 4u * cd_drive_sector_period_cpu_ticks(0x80u)})) {
     return 1;
   }
   core.mem_w32(kCompletionCallback, 0x3C088001u);       // lui t0, 0x8001
@@ -127,7 +135,7 @@ int runCompletion(Core &core, ctr::CtrFrameDriver &driver, std::uint32_t sectors
   }
 
   driver.stepFrame(core, 0u);
-  auto &owner = driver.discReadOwner();
+  auto &owner = ctr::session(core).discRead;
   const bool delivered =
       owner.deliveredCallbacks() == 1u && !owner.hasPendingCompletion() && core.mem_r32(kDeliveredWord) == 1u;
   const bool owed =
@@ -140,7 +148,7 @@ int runCompletion(Core &core, ctr::CtrFrameDriver &driver, std::uint32_t sectors
   return pass ? 0 : 1;
 }
 
-int runStalled(Core &core, ctr::CtrFrameDriver &driver, ctr::CtrRuntime &runtime) {
+int runStalled(Core &core, ctr::FrameDriver &driver) {
   core.r[31] = kEntry;
   if (!psx::cpu::tryInstallNativeOverride(core, kEntry, "zero-cycle return-to-entry", returnToEntry).has_value()) {
     std::puts("FAIL: zero-cycle host loop override was not installed");
@@ -168,13 +176,13 @@ int runStalledExpectingRefusal() {
     ::dup2(channel[1], STDOUT_FILENO);
     ::dup2(channel[1], STDERR_FILENO);
     ::close(channel[1]);
-    ctr::CtrRuntime runtime(kEntry);
-    psxport_install_game(runtime);
-    auto game = std::make_unique<Game>();
+    ctr::Runtime runtime;
+    auto game = std::make_unique<Game>(runtime, psx::config::Config{});
     Core &core = game->core;
-    core.imageCatalog().activate("ctr-frame-budget", {0x00010000u, 0x0008d800u}, 1u);
-    auto &driver = static_cast<ctr::CtrFrameDriver &>(*game->frameDriver);
-    ::_exit(runStalled(core, driver, runtime));
+    core.imageCatalog().activate("ctr-frame-budget", ctr::native::kResidentText, 1u);
+    auto &driver = static_cast<ctr::FrameDriver &>(*game->frameDriver);
+    core.pc = kEntry;
+    ::_exit(runStalled(core, driver));
   }
 
   ::close(channel[1]);
@@ -223,12 +231,13 @@ int main(int argc, char **argv) {
   if (std::string_view(argv[1]) == "stalled") {
     return runStalledExpectingRefusal();
   }
-  ctr::CtrRuntime runtime(kEntry);
-  psxport_install_game(runtime);
-  auto game = std::make_unique<Game>();
+  ctr::Runtime runtime;
+  auto game = std::make_unique<Game>(runtime, psx::config::Config{});
   Core &core = game->core;
-  core.imageCatalog().activate("ctr-frame-budget", {0x00010000u, 0x0008d800u}, 1u);
-  auto &driver = static_cast<ctr::CtrFrameDriver &>(*game->frameDriver);
+  core.imageCatalog().activate("ctr-frame-budget", ctr::native::kResidentText, 1u);
+  // The first field enters at the PC the admitted header set.
+  core.pc = kEntry;
+  auto &driver = static_cast<ctr::FrameDriver &>(*game->frameDriver);
   if (mode == "completion") {
     return runCompletion(core, driver, 1u, true);
   }

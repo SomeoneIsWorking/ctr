@@ -1,8 +1,7 @@
-#include "ctr_catalog.h"
+#include "product/catalog.h"
 
-#include "ctr_runtime.h"
-#include "executable_identity.h"
-#include "native_ownership.h"
+#include "identity/executable_identity.h"
+#include "runtime/runtime.h"
 #include "single_title_catalog.h"
 
 namespace ctr {
@@ -27,8 +26,7 @@ constexpr psx::host::TitleIdentity kTitleIdentity{
 } // namespace
 
 std::unique_ptr<psx::host::TitleCatalog> createCatalog() {
-  return std::make_unique<psx::host::SingleTitleCatalog>(
-      kTitleIdentity, "scratch/raw", std::make_unique<CtrRuntime>(native::kExecutableEntry));
+  return std::make_unique<psx::host::SingleTitleCatalog>(kTitleIdentity, "scratch/raw", std::make_unique<Runtime>());
 }
 
 } // namespace ctr

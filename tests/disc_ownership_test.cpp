@@ -1,11 +1,12 @@
 // Disc read ownership.
 
-#include "async_disc_owner.h"
 #include "core.h"
-#include "ctr_runtime.h"
+#include "disc/async_disc_owner.h"
 #include "game.h"
 #include "game_runtime.h"
-#include "native_ownership.h"
+#include "runtime/runtime.h"
+#include "runtime/session.h"
+#include "title/native_ownership.h"
 
 #include <cstdio>
 #include <memory>
@@ -24,13 +25,12 @@ void check(bool condition, const char *detail) {
 } // namespace
 
 int main() {
-  ctr::CtrRuntime runtime(0x80010000u);
-  psxport_install_game(runtime);
-  auto game = std::make_unique<Game>();
-  auto otherGame = std::make_unique<Game>();
+  ctr::Runtime runtime;
+  auto game = std::make_unique<Game>(runtime, psx::config::Config{});
+  auto otherGame = std::make_unique<Game>(runtime, psx::config::Config{});
 
-  auto &completion = ctr::discReadOwner(game->core);
-  auto &otherCompletion = ctr::discReadOwner(otherGame->core);
+  auto &completion = ctr::session(game->core).discRead;
+  auto &otherCompletion = ctr::session(otherGame->core).discRead;
   check(&completion != &otherCompletion, "two Cores share one pending CD completion owner");
   game->core.mem_w32(ctr::native::kCdReadCompletionCallback, 0x80032110u);
   completion.noteTransferComplete(game->core);
@@ -40,7 +40,7 @@ int main() {
   check(otherCompletion.polledReads() == 1u, "second Core's polled read was not counted separately");
   check(completion.polledReads() == 0u, "second Core's polled read changed the first Core's count");
   game->core.mem_w32(ctr::native::kCdReadCompletionCallback, 0u);
-  completion.deliverPending(game->core, runtime);
+  completion.deliverPending(game->core);
   check(!completion.hasPendingCompletion(), "cancelled callback remained owed to the first Core");
   check(otherCompletion.polledReads() == 1u, "first Core's cancellation changed the second Core's count");
 

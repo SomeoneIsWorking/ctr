@@ -1,11 +1,11 @@
-#include "widescreen_owner.h"
+#include "video/widescreen_owner.h"
 
 #include "core.h"
 #include "game.h"
 #include "gpu_vk.h"
 #include "guest_widescreen_projection.h"
 #include "mods.h"
-#include "projection_owner.h"
+#include "video/projection_owner.h"
 
 #include <cstdlib>
 #include <lucent/log.h>
@@ -17,7 +17,7 @@ namespace {
 // never a constant.
 } // namespace
 
-GuestProjectionPlan CtrWidescreen::planFor(Core &core, const GuestViewProjection &view) {
+GuestProjectionPlan WidescreenOwner::planFor(Core &core, const GuestViewProjection &view) {
   if (!view.valid()) {
     lucent::error("wide",
                   "CTR widescreen cannot widen an unusable guest view: {}x{} H={}",
@@ -42,7 +42,7 @@ GuestProjectionPlan CtrWidescreen::planFor(Core &core, const GuestViewProjection
   return plan;
 }
 
-void CtrWidescreen::report(const GuestViewProjection &view) const {
+void WidescreenOwner::report(const GuestViewProjection &view) const {
   lucent::info("wide",
                "CTR widescreen owner resolved from the GUEST'S OWN published view ({}x{}, the view "
                "descriptor's own +0x20/+0x22): aspect={} native presentation {}x{} -> presentation "
@@ -70,11 +70,11 @@ void CtrWidescreen::report(const GuestViewProjection &view) const {
                                   : "This plan does NOT widen: the published triple is retail's own.");
 }
 
-bool CtrWidescreen::latched() const {
+bool WidescreenOwner::latched() const {
   return latched_;
 }
 
-const char *CtrWidescreen::aspectName(PresentationAspect aspect) {
+const char *WidescreenOwner::aspectName(PresentationAspect aspect) {
   switch (aspect) {
   case PresentationAspect::Standard4x3:
     return "4:3";

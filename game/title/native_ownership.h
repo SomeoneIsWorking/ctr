@@ -1,16 +1,20 @@
 #pragma once
 
-#include "executable_identity.h"
+#include "guest_address_range.h"
+#include "identity/executable_identity.h"
 
 #include <cstdint>
 
 namespace ctr::native {
 
 // SCUS_944.26 guest addresses, image offsets and game-state offsets the native owners key on.
-inline constexpr uint32_t kExecutableEntry = identity::kEntry;
 inline constexpr uint32_t kGuestMain = 0x8003C58Cu;
 inline constexpr uint32_t kLoopTop = 0x8003C5D0u;
 inline constexpr uint32_t kInitializerEvidenceFrontier = 0x800772E0u;
+
+// The resident text in physical addresses; a field callback outside it is refused.
+inline constexpr GuestAddressRange kResidentText{identity::kTextAddress & 0x1FFFFFFFu,
+                                                 (identity::kTextAddress & 0x1FFFFFFFu) + identity::kTextBytes};
 
 // Retail calls that precede a guest VSync, and the continuations after it.
 inline constexpr uint32_t kStartupGpuInit = 0x8003D7D8u;
@@ -103,7 +107,6 @@ inline constexpr uint32_t kBigfileCompletionCallback = 0x80032110u;
 inline constexpr uint32_t kCdlComplete = 2u;
 inline constexpr uint32_t kSetGeomScreen = 0x8007781Cu;
 inline constexpr uint32_t kSetGeomOffset = 0x8007782Cu;
-inline constexpr uint32_t kProjectionWindowEnd = 0x80077844u;
 
 // State zero publishes a literal projection (OFX=256, OFY=120, H=320) by fall-through, so it is not an override key.
 inline constexpr uint32_t kStartupLiteralPublication = 0x8003C84Cu;
@@ -114,9 +117,9 @@ inline constexpr int32_t kStartupProjectionH = 320;
 inline constexpr uint32_t kStartupProjectionOfyDelay = 0x8003C854u;
 inline constexpr uint32_t kStartupProjectionHDelay = 0x8003C85Cu;
 
-// Stock libcd leaves reached by CdInit; the PC CD model completes synchronously, so they report that result.
+// libcd's CdSync, which CdInit polls; the PC CD model completes synchronously.
 inline constexpr uint32_t kCdSync = 0x8007B6F0u;
-inline constexpr uint32_t kCdControl = 0x8007BC38u;
-inline constexpr uint32_t kCdControlWindowEnd = 0x8007C044u;
+// libcd's CD_cw(com, param, result, async): 0 once the command is acknowledged.
+inline constexpr uint32_t kCdCommand = 0x8007BC38u;
 
 } // namespace ctr::native

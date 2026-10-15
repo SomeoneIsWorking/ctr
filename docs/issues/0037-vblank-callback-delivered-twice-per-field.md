@@ -20,7 +20,7 @@ callback call instead of polling the interrupt at the seam where no guest code r
 Fix at the owner: `deliverField` polls `Hle::irqPoll` when the IRQ gate is armed, so the guest's own ISR runs the callback once per
 edge; the direct callback, its registration override (`onVblankCallback`) and `kVblankCallbackInstall` are deleted.
 
-Test: `tests/ctr_frame_callback_owner.cpp` (`ctr_frame_callback_owner`) latches a vblank with an ISR element on the chain; before the
+Test: `tests/frame_callback_owner_test.cpp` (`ctr_frame_callback_owner`) latches a vblank with an ISR element on the chain; before the
 fix the element was never called, after it is called once per edge and not again once acknowledged.
 
 After: `gGT+0x1CE4` and `0x8008C754` both rise 1 per field; `gGT+0x1CEC` (game frames) rises 1 per two fields; dt is 33-34 (retail

@@ -1,10 +1,10 @@
 // Overlay image owner.
 
 #include "core.h"
-#include "ctr_runtime.h"
+#include "disc/overlay_image_owner.h"
 #include "game.h"
 #include "game_runtime.h"
-#include "overlay_image_owner.h"
+#include "runtime/runtime.h"
 
 #include <array>
 #include <cstdio>
@@ -30,10 +30,9 @@ void writeBytes(Core &core, uint32_t destination, std::span<const uint8_t> bytes
 } // namespace
 
 int main() {
-  ctr::CtrRuntime runtime(0x80010000u);
-  psxport_install_game(runtime);
-  auto game = std::make_unique<Game>();
-  auto otherGame = std::make_unique<Game>();
+  ctr::Runtime runtime;
+  auto game = std::make_unique<Game>(runtime, psx::config::Config{});
+  auto otherGame = std::make_unique<Game>(runtime, psx::config::Config{});
   Core &core = game->core;
   constexpr uint32_t firstAddress = 0x800A0000u;
   constexpr std::array firstBytes{

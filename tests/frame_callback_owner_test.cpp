@@ -1,11 +1,12 @@
 // FrameCallbackOwner: the field seam delivers a pending vblank to the guest's own interrupt chain, once per edge.
 
 #include "core.h"
-#include "ctr_runtime.h"
-#include "frame_callback_owner.h"
+#include "frame/frame_callback_owner.h"
 #include "game.h"
 #include "image_identity.h"
 #include "native_dispatch.h"
+#include "runtime/runtime.h"
+#include "title/native_ownership.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -22,7 +23,6 @@ void check(bool condition, const char *detail) {
   }
 }
 
-constexpr std::uint32_t kEntry = 0x80010000u;
 constexpr std::uint32_t kHandler = 0x80020000u;
 constexpr std::uint32_t kElement = 0x80100010u;
 constexpr std::uint32_t kStack = 0x801FFF00u;
@@ -43,12 +43,11 @@ void raiseVblank(Game &game) {
 } // namespace
 
 int main() {
-  ctr::CtrRuntime runtime(kEntry);
-  psxport_install_game(runtime);
-  auto game = std::make_unique<Game>();
+  ctr::Runtime runtime;
+  auto game = std::make_unique<Game>(runtime, psx::config::Config{});
   Core &core = game->core;
   core.r[29] = kStack;
-  const auto image = core.imageCatalog().activate("ctr-frame-callback-owner", {0x00010000u, 0x0008d800u}, 1u);
+  const auto image = core.imageCatalog().activate("ctr-frame-callback-owner", ctr::native::kResidentText, 1u);
   check(core.nativeDispatcher().install({{image, kHandler}, "vblank isr", isr}), "could not install the ISR stand-in");
   core.mem_w32(kElement + 4u, kHandler);
   core.mem_w32(kElement + 8u, 0u);
@@ -57,12 +56,12 @@ int main() {
 
   ctr::FrameCallbackOwner owner;
   raiseVblank(*game);
-  owner.deliverField(core, runtime);
+  owner.deliverField(core);
   check(handlerCalls == 1, "a pending vblank did not reach the guest's interrupt chain at the field seam");
-  owner.deliverField(core, runtime);
+  owner.deliverField(core);
   check(handlerCalls == 1, "an acknowledged vblank was delivered again");
   raiseVblank(*game);
-  owner.deliverField(core, runtime);
+  owner.deliverField(core);
   check(handlerCalls == 2, "the next field's vblank was not delivered");
   return failures == 0 ? 0 : 1;
 }

@@ -48,8 +48,10 @@ Not covered: `game/video/projection_owner.cpp` refuses a publication disagreemen
 coverage. The offsets the owner reads are pinned against its own source, not against the retail
 image.
 Frame boot and control channel: `verified` 2026-10-14 — the product is a one-title catalog
-(`game/entry/ctr_catalog.cpp`) run by the framework main: `ProductHost` provisions and authenticates
-`SCUS_944.26`, `TitleSession` boots it (`bootEntry=DriverOwned`, binds, overrides, control channel,
-clear display) and runs the fields, and `PSXPORT_NATIVE_FRAMES` caps a run. Override install and
+(`game/product/catalog.cpp`) run by the framework main: `ProductHost` provisions and authenticates
+`SCUS_944.26`, `TitleSession` boots it (admits the executable at its header entry, binds, overrides, control
+channel, clear display) and runs the fields, and `PSXPORT_NATIVE_FRAMES` caps a run. 2026-10-15, on `ctr::Runtime`
+with the stock VSync/libgte/libcd classes: the hidden-window replay of `arcade-crash-cove-drive.pad` loads the race
+(BF0226 + BF0231) and all 7,001 presents of 7,000 fields match the device at 4:3 1x (`recordcheck` `mismatched=0`). Override install and
 removal both go through `psx::cpu::{tryInstallNativeOverride,removeNativeOverride}`, and the title
 owns no `(image identity, address)` keying.
