@@ -91,6 +91,7 @@ void FrameDriver::stepFrame(Core &core, uint32_t frame) {
     bootEntered_ = true;
     execution = dispatchField(core, core.pc);
   } else {
+    warp_.apply(core);
     execution = dispatchField(core, native::kFrameLoopResume);
   }
   if (field_.pending(core) || (execution && execution->reason == psx::cpu::ExecutionExitReason::FrameBoundary)) {
@@ -171,6 +172,10 @@ const WidescreenOwner &FrameDriver::widescreen() const {
 
 const PresentationOwner &FrameDriver::presentation() const {
   return presentation_;
+}
+
+std::string FrameDriver::armWarp(Core &core, const char *line) {
+  return warp_.arm(line, core);
 }
 
 FrameDriver &FrameDriver::from(Core &core) {

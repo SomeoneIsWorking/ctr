@@ -10,6 +10,7 @@
 #include <lucent/log.h>
 
 #include <cstdlib>
+#include <cstring>
 
 namespace ctr {
 namespace {
@@ -57,6 +58,18 @@ bool Runtime::sealedFrameIsCut(Core &core) const {
 
 const GuestWidescreenProjection *Runtime::guestWidescreenProjection() const {
   return &widescreen_;
+}
+
+bool Runtime::titleCommand(Core &core, const psx::game::TitleCommandLine &input, std::FILE *reply) {
+  if (std::strcmp(input.command, "warp") != 0) {
+    return false;
+  }
+  auto *driver = dynamic_cast<FrameDriver *>(core.game->frameDriver.get());
+  std::fprintf(reply,
+               "%s\n",
+               driver == nullptr ? "refused: no CTR frame driver is running"
+                                 : driver->armWarp(core, input.line).c_str());
+  return true;
 }
 
 } // namespace ctr

@@ -7,6 +7,7 @@
 #include "stock_vsync.h"
 
 #include <cstdint>
+#include <cstdio>
 #include <memory>
 
 class Core;
@@ -28,6 +29,8 @@ public:
   bool sealedFrameIsCut(Core &core) const override;
   // The base nullptr would resolve every plan to 4:3.
   const GuestWidescreenProjection *guestWidescreenProjection() const override;
+  // `warp <level-hex>`.
+  bool titleCommand(Core &core, const psx::game::TitleCommandLine &input, std::FILE *reply) override;
 
   [[nodiscard]] const psx::cd::StockLibcd &libcd() const {
     return libcd_;

@@ -46,6 +46,7 @@ add_library(
   game/boot/startup_audio_wait.cpp
   game/boot/startup_resource_load.cpp
   game/boot/startup_resource_pump.cpp
+  game/debug/level_warp.cpp
   game/disc/async_disc_owner.cpp
   game/disc/overlay_image_owner.cpp
   game/execution/guest_turns.cpp
@@ -85,7 +86,7 @@ add_dependencies(ctr_port gen_gpu_shaders)
 if(BUILD_TESTING)
   foreach(test_name
           disc_ownership execution_exit field_owners frame_callback_owner frame_execution geometry_projection_owner
-          overlay_image_owner platform_bindings projection_owner widescreen_owner)
+          level_warp overlay_image_owner platform_bindings projection_owner widescreen_owner)
     add_executable(ctr_${test_name}_test tests/${test_name}_test.cpp)
     target_link_libraries(ctr_${test_name}_test PRIVATE ctr_game psxport_test_support)
     add_test(NAME ctr_${test_name} COMMAND ctr_${test_name}_test)

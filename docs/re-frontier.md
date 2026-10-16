@@ -247,6 +247,9 @@ translation workflow.
   1/256 units. The race clock `gGT+0x1D10` is in 1/960 s and `gGT+0x1D04` is the frame's dt. `FUN_80034D54` derives dt from
   `FUN_8004B41C` (root counter 1 through `FUN_80034AA4`, `gp+0xA1C`); the retail VSync callback `FUN_80034AA4` is the vblank callback libetc's ISR
   `FUN_8007C8D8` runs (it counts at `0x8008C754`); `[gp+0x348]` is its two-field countdown. Issues 0035, 0036, 0037.
+  2026-10-16: `0x8003CFC0(level)` (ModSDK `MainRaceTrack_RequestLoad`) writes the load request `[gp+0x18C] = -4` and the
+  level `[gp+0x190]`; main-loop state 3 (`FUN_8003C58C`) sees -4 and calls `0x8003CF7C(level)` to load it, and `-1` is no
+  request. Level ids 0..0x11 are the race tracks, 0x27 the main menu. The `warp` command calls it during a race.
 - where: `replays/gameplay/arcade-crash-cove-drive.pad`, `game/runtime/runtime.cpp` (`StockVSync`), psxport `Timing::hSyncCounterWrite`
 - gap: audio, a lap, and a deterministic-boundary comparison against an independent oracle are open.
 - notes: Boot, an FMV, a submitted frame, or a fallback-dominated run does not satisfy this gate.

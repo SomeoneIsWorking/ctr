@@ -76,6 +76,13 @@ inline constexpr uint32_t kMainStateGpOffset = 0x188u;
 inline constexpr uint32_t kTrackerLevelIdOffset = 0x1A10u;
 inline constexpr uint32_t kTrackerGameModeOffset = 0u;
 inline constexpr uint32_t kGameModeLoading = 0x40000000u;
+inline constexpr uint32_t kMainStateRunning = 3u;
+// 0x8003CFC0(level) sets the load request [gp+0x18C] = -4 and the level [gp+0x190]; state 3 loads it.
+inline constexpr uint32_t kRequestLevelLoad = 0x8003CFC0u;
+inline constexpr uint32_t kLoadRequestGpOffset = 0x18Cu;
+inline constexpr uint32_t kNoLoadRequest = 0xFFFFFFFFu;
+// Level ids 0..0x11 are the race tracks; the mode the menu set up for one track holds for another.
+inline constexpr uint32_t kLastRaceTrackLevel = 0x11u;
 
 // The three return addresses are the only admitted entries to the projection owner.
 inline constexpr uint32_t kProjectionProducer = 0x80042910u;

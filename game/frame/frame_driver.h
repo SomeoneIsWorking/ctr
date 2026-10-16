@@ -3,6 +3,7 @@
 #include "boot/startup_audio_wait.h"
 #include "boot/startup_resource_load.h"
 #include "boot/startup_resource_pump.h"
+#include "debug/level_warp.h"
 #include "disc/async_disc_owner.h"
 #include "execution/spu_dma_callback_registration.h"
 #include "execution_exit.h"
@@ -17,6 +18,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 
 class Core;
 class Game;
@@ -36,6 +38,9 @@ public:
   [[nodiscard]] const ProjectionOwner &projection() const;
   [[nodiscard]] const WidescreenOwner &widescreen() const;
   [[nodiscard]] const PresentationOwner &presentation() const;
+
+  // Arms a `warp <level>` request; the next field raises it through the guest's own level-load request.
+  std::string armWarp(Core &core, const char *line);
 
   // A missing or foreign driver is refused.
   static FrameDriver &from(Core &core);
@@ -71,6 +76,7 @@ private:
   StartupAudioWait startupAudio_;
   SpuDmaCallbackRegistration spuDmaRegistration_;
   FrameSuffix frameSuffix_;
+  LevelWarp warp_;
   uint64_t budgetExitsThisField_ = 0;
   bool bootEntered_ = false;
   // The host loop's number for the previous field; the base is the loop's, consecutiveness is ours.

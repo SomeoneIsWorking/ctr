@@ -42,6 +42,7 @@ psxport's Lightrec executor.
 | `StartupResourceLoad` | `game/boot/startup_resource_load.*` | The −1 branch of `0x80031FDC`: retail setup and commit, the field its omitted `VSync(2)` owed, the caller it resumes |
 | `StartupResourcePump` | `game/boot/startup_resource_pump.*` | The two `0x8002DD24` poll loops, one host field per false poll |
 | `StartupAudioWait` | `game/boot/startup_audio_wait.*` | The post-archive XA wait on `0x8008D708`, one audio field per service call |
+| `LevelWarp` | `game/debug/level_warp.*` | The `warp <level-hex>` control command: armed during a race with no load pending, applied at the next field start through the guest's own level-load request `0x8003CFC0`; reached from `Runtime::titleCommand` through `FrameDriver::armWarp` |
 | `DiscReadOwner`, `readWithCompletionCallback` | `game/disc/async_disc_owner.*` | The title's `CdRead`: the stock synchronous transfer, then the libcd completion callback owed once the drive's read time has passed |
 | `OverlayImageOwner` | `game/disc/overlay_image_owner.*` | An exact BIGFILE entry read as an image candidate, published after the retail callback relocates it |
 | `ProjectionOwner` | `game/video/projection_owner.*` | The pre-GTE publication `0x80042910`: capture the view, compare the retail libgte state, apply the plan |
@@ -62,6 +63,7 @@ psxport's Lightrec executor.
 | field entry | `FrameDriver::stepFrame`: `ScopedGteProjectionObservation`, `FieldOverrideScope`, `FieldBoundary::beginField` |
 | host work | `Timing::frameTick`, `FrameCallbackOwner::deliverField`, `Pad::serviceFrame`, `SpuAudio::frame`, `DiscReadOwner::deliverPending` |
 | owed continuation | `FrameSuffix` → `StartupAudioWait` → `StartupResourcePump` → `StartupResourceLoad`, one at a time |
+| debug warp | `LevelWarp::apply` before the loop resumes, when no continuation is owed |
 | guest | `FrameDriver::dispatchField` → `guest::dispatch` → Lightrec; a budget exit resumes at the same PC, one that consumed nothing is refused |
 | field end | `FieldBoundary::finishField` → `PresentationOwner::finishField` → `presentation.commit` |
 | refusal | `FrameDriver::refuseUnfinishedField` logs and stops; never an exception or `longjmp` |
@@ -75,5 +77,6 @@ psxport's Lightrec executor.
 | A stock library binding or a platform leaf | `Runtime::registerOverrides`, `game/execution/platform_leaves.*` |
 | A field override or a per-field decision | `ctr::FrameDriver` and the smallest owner in its ladder |
 | Per-Core state | a member of `ctr::Session` or the frame driver |
+| A debug route to a screen or level | `game/debug/`, armed by `Runtime::titleCommand` and applied by the frame driver at a field start |
 | Projection, widening or the presentation fence | `game/video/`, one owner per decision |
 | Executor, input, audio, disc transfer, presentation | psxport |
